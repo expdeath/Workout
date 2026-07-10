@@ -1,0 +1,612 @@
+/* ── COACH Design System ──────────────────────────────────────────
+   Dark, minimal, gym-ready UI. Amber accent, teal success.
+   Fonts: Barlow Condensed (headings), IBM Plex Mono (data),
+          Archivo (body).
+   ──────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=Archivo:wght@400;500;600&display=swap');
+
+/* ── Tokens ─────────────────────────────────────────────────────── */
+:root {
+  --bg:         #10141C;
+  --bg-card:    #161C28;
+  --bg-input:   #10141C;
+  --bg-pill:    #1A2130;
+  --border:     #232B3A;
+  --border-dim: #2A3242;
+  --text:       #E8ECF4;
+  --text-body:  #C7CEDC;
+  --muted:      #8A93A6;
+  --dim:        #4A5468;
+  --amber:      #F5A623;
+  --amber-bg:   #241F14;
+  --teal:       #39D0B8;
+  --teal-bg:    #0F2B26;
+  --red:        #F26D5B;
+  --red-bg:     #241614;
+  --font-head:  'Barlow Condensed', sans-serif;
+  --font-mono:  'IBM Plex Mono', monospace;
+  --font-body:  'Archivo', sans-serif;
+  --radius:     10px;
+  --radius-sm:  8px;
+}
+
+/* ── Reset ──────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+}
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input, textarea {
+  font-family: var(--font-mono);
+}
+
+input:focus, textarea:focus, button:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+a {
+  color: var(--teal);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* ── Layout ─────────────────────────────────────────────────────── */
+.app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.frame {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 16px 18px 32px;
+}
+
+.center-fill {
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+/* ── Header ─────────────────────────────────────────────────────── */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 14px;
+  margin-bottom: 8px;
+}
+
+.header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* ── Brand ──────────────────────────────────────────────────────── */
+.brand {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 40px;
+  letter-spacing: 0.35em;
+  color: var(--amber);
+  padding-left: 0.35em;
+}
+
+.brand-sm {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 0.3em;
+  color: var(--amber);
+}
+
+/* ── Typography ─────────────────────────────────────────────────── */
+.h1 {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 42px;
+  line-height: 1.02;
+  letter-spacing: 0.01em;
+}
+
+.h1--accent {
+  color: var(--amber);
+}
+
+.h2 {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 30px;
+  margin: 10px 0 18px;
+}
+
+.subtitle {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.5;
+  margin-top: 10px;
+}
+
+.body {
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: var(--text-body);
+}
+
+.body--warn {
+  color: var(--red);
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+}
+
+.foot-note {
+  margin-top: 22px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dim);
+  font-family: var(--font-mono);
+}
+
+.link {
+  color: var(--teal);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Hero ───────────────────────────────────────────────────────── */
+.hero {
+  margin: 18px 0 10px;
+}
+
+/* ── Cards ──────────────────────────────────────────────────────── */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+}
+
+.card__label {
+  font-family: var(--font-head);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 13px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.card__detail {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ex-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 16px;
+  margin-top: 14px;
+  border-left: 3px solid var(--amber);
+}
+
+.ex-name {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 21px;
+  letter-spacing: 0.02em;
+}
+
+.ex-meta {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.ex-prescription {
+  font-size: 13px;
+  color: var(--teal);
+  margin: 4px 0 2px;
+}
+
+.ex-notes {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.ex-alt {
+  font-size: 12px;
+  color: var(--dim);
+  margin-top: 8px;
+}
+
+/* ── Utility rows ───────────────────────────────────────────────── */
+.row-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+/* ── Buttons ────────────────────────────────────────────────────── */
+.big-btn {
+  width: 100%;
+  padding: 18px;
+  border: none;
+  border-radius: var(--radius);
+  background: var(--amber);
+  color: var(--bg);
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 20px;
+  transition: transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 0 0 0 transparent;
+}
+
+.big-btn:hover {
+  box-shadow: 0 4px 20px rgba(245, 166, 35, 0.25);
+}
+
+.big-btn:active {
+  transform: scale(0.98);
+}
+
+.big-btn--danger {
+  background: var(--red);
+  color: #fff;
+}
+.big-btn--danger:hover {
+  box-shadow: 0 4px 20px rgba(242, 109, 91, 0.25);
+}
+
+.ghost-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-head);
+  font-size: 16px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 6px 4px;
+  transition: color 0.15s;
+}
+
+.ghost-btn:hover {
+  color: var(--text);
+}
+
+/* ── Pill (toggle) ──────────────────────────────────────────────── */
+.pill {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 15px 18px;
+  border-radius: var(--radius);
+  margin-bottom: 10px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.pill-on {
+  border-color: var(--amber);
+  background: var(--amber-bg);
+  color: var(--amber);
+}
+
+.pill-warn {
+  border-color: var(--red);
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+/* ── Number buttons (energy, RPE) ───────────────────────────────── */
+.energy-row {
+  display: flex;
+  gap: 6px;
+}
+
+.num-btn {
+  flex: 1;
+  aspect-ratio: 1;
+  min-width: 0;
+  border-radius: var(--radius-sm);
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.num-on {
+  background: var(--amber);
+  border-color: var(--amber);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* ── Segmented control ──────────────────────────────────────────── */
+.seg-group {
+  display: flex;
+  gap: 8px;
+}
+
+.seg-btn {
+  flex: 1;
+  padding: 13px 6px;
+  border-radius: var(--radius);
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: 15px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.seg-on {
+  border-color: var(--amber);
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-weight: 600;
+}
+
+/* ── Set logging ────────────────────────────────────────────────── */
+.sets-list {
+  margin-top: 10px;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.set-chk {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  flex-shrink: 0;
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.set-chk-on {
+  background: var(--teal-bg);
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.set-input {
+  width: 78px;
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-input);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-size: 15px;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+
+.set-input:focus {
+  border-color: var(--teal);
+}
+
+.set-x {
+  color: var(--dim);
+}
+
+.sets-counter {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+/* ── Inputs ─────────────────────────────────────────────────────── */
+.input {
+  width: 100%;
+  padding: 13px 14px;
+  border-radius: var(--radius);
+  margin-top: 10px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-size: 14.5px;
+  transition: border-color 0.2s;
+}
+
+.input:focus {
+  border-color: var(--teal);
+}
+
+.textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+.q-label {
+  font-family: var(--font-head);
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 13px;
+  color: var(--muted);
+  margin: 22px 0 8px;
+}
+
+/* ── Settings ───────────────────────────────────────────────────── */
+.settings-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ── Readiness bar ──────────────────────────────────────────────── */
+.readiness-bar__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+
+.readiness-bar__label {
+  font-family: var(--font-head);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.readiness-bar__value {
+  font-family: var(--font-mono);
+  font-size: 22px;
+}
+
+.readiness-bar__track {
+  display: flex;
+  gap: 3px;
+}
+
+.readiness-bar__seg {
+  flex: 1;
+  height: 22px;
+  border-radius: 2px;
+  transition: background 0.3s;
+}
+
+/* ── Error box ──────────────────────────────────────────────────── */
+.err-box {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: var(--radius);
+  font-size: 13.5px;
+  background: var(--red-bg);
+  border: 1px solid var(--red);
+  color: var(--red);
+}
+
+/* ── Generating screen ──────────────────────────────────────────── */
+.generating-msg {
+  color: var(--muted);
+  margin-top: 24px;
+  font-size: 14px;
+}
+
+/* ── Animations ─────────────────────────────────────────────────── */
+.pulse {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+.screen--fade-in {
+  animation: fadeIn 0.35s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.screen--slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.card--animate {
+  animation: cardIn 0.4s ease-out both;
+}
+
+@keyframes cardIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Stagger card animations */
+.card--animate:nth-child(2) { animation-delay: 0.05s; }
+.card--animate:nth-child(3) { animation-delay: 0.1s; }
+.card--animate:nth-child(4) { animation-delay: 0.15s; }
+.card--animate:nth-child(5) { animation-delay: 0.2s; }
+.card--animate:nth-child(6) { animation-delay: 0.25s; }
+.card--animate:nth-child(7) { animation-delay: 0.3s; }
+.card--animate:nth-child(8) { animation-delay: 0.35s; }
+
+/* ── Reduced motion ─────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .pulse { animation: none; }
+  * { transition: none !important; animation: none !important; }
+}
+
+/* ── Mobile tweaks ──────────────────────────────────────────────── */
+@media (max-width: 400px) {
+  .h1 { font-size: 34px; }
+  .frame { padding: 12px 14px 24px; }
+  .set-input { width: 64px; padding: 8px; font-size: 14px; }
+}
