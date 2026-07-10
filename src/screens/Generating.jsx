@@ -8,7 +8,7 @@ const MESSAGES = [
   'Building the session…',
 ];
 
-export default function Generating({ readiness }) {
+export default function Generating({ readiness, statusMsg }) {
   const [msg, setMsg] = useState(0);
 
   useEffect(() => {
@@ -22,7 +22,9 @@ export default function Generating({ readiness }) {
       <div style={{ marginTop: 28, width: '100%', maxWidth: 320 }}>
         <ReadinessBar value={readiness} label="Readiness (initial estimate)" />
       </div>
-      <div className="mono generating-msg">{MESSAGES[msg]}</div>
+      <div className="mono generating-msg">
+        {statusMsg || MESSAGES[msg]}
+      </div>
     </div>
   );
 }

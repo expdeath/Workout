@@ -109,10 +109,17 @@ ${WORKOUT_DB}
 Decide the right session for today and build it. ${JSON_SPEC}`;
 }
 
+// Models to try in order — if one is overloaded, try the next
+const MODELS = [
+  'gemini-3.1-flash-lite',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+];
+
 /**
  * Call Google Gemini API to generate a workout plan.
  */
-async function callGemini(checkin, history) {
+async function callGemini(checkin, history, model = MODELS[0]) {
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error('No Gemini API key set. Go to Settings to add one.');
@@ -120,28 +127,84 @@ async function callGemini(checkin, history) {
 
   const userMsg = buildUserMessage(checkin, history);
 
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        system_instruction: {
-          parts: [{ text: COACH_RULES }],
+  // 60-second timeout for the API call
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60000);
+
+  let response;
+  try {
+    console.log(`[COACH] Calling Gemini API (model: ${model})...`);
+    response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-goog-api-key': apiKey,
         },
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: userMsg }],
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{ text: COACH_RULES }],
           },
-        ],
-        generationConfig: {
-          maxOutputTokens: 1000,
-          temperature: 0.7,
-        },
-      }),
+          contents: [
+            {
+              role: 'user',
+              parts: [{ text: userMsg }],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: 1000,
+            temperature: 0.7,
+          },
+        }),
+      }
+    );
+    console.log('[COACH] Got response:', response.status);
+  } catch (fetchErr) {
+    clearTimeout(timeout);
+    if (fetchErr.name === 'AbortError') {
+      throw new Error('Request timed out after 60 seconds. The AI might be overloaded — try again.');
     }
-  );
+    throw new Error(`Network error: ${fetchErr.message}`);
+  }
+  clearTimeout(timeout);
+
+  // Handle rate limiting
+  if (response.status === 429) {
+    let errData;
+    try {
+      errData = await response.json();
+    } catch {
+      errData = {};
+    }
+    const msg = errData?.error?.message || '';
+
+    // Detect permanent quota block (limit: 0 = key is blocked or free tier exhausted)
+    if (msg.includes('limit: 0')) {
+      throw new Error(
+        'Your API key has no quota (limit: 0). This usually means your key is an old standard key that Google has blocked since June 2026. ' +
+        'Go to aistudio.google.com → API Keys → Create a NEW API key (it will be an auth key automatically). Then paste it in Settings.'
+      );
+    }
+
+    // Temporary rate limit — extract retry delay
+    let retryDelay = 45;
+    const match = msg.match(/retry in ([\d.]+)s/i);
+    if (match) retryDelay = Math.ceil(parseFloat(match[1]));
+    retryDelay = Math.min(retryDelay, 90);
+
+    const err = new Error(`RATE_LIMIT:${retryDelay}`);
+    err.retryDelay = retryDelay;
+    throw err;
+  }
+
+  // Handle 503 overloaded — mark for model fallback
+  if (response.status === 503) {
+    const err = new Error(`MODEL_OVERLOADED:${model}`);
+    err.overloaded = true;
+    throw err;
+  }
 
   if (!response.ok) {
     let errMsg;
@@ -184,13 +247,61 @@ async function callGemini(checkin, history) {
 }
 
 /**
- * Generate a workout plan with one retry on failure.
+ * Sleep helper
  */
-export async function generateWorkoutPlan(checkin, history) {
-  try {
-    return await callGemini(checkin, history);
-  } catch (firstErr) {
-    console.warn('First attempt failed, retrying once', firstErr);
-    return await callGemini(checkin, history);
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Generate a workout plan with automatic retry for rate limits.
+ * @param {object} checkin - Check-in data
+ * @param {Array} history - Session history
+ * @param {function} onStatus - Optional callback for status messages
+ */
+export async function generateWorkoutPlan(checkin, history, onStatus) {
+  // Try each model in order — fallback on overload/503
+  for (let mi = 0; mi < MODELS.length; mi++) {
+    const model = MODELS[mi];
+    try {
+      if (onStatus && mi > 0) onStatus(`Trying ${model}…`);
+      return await callGemini(checkin, history, model);
+    } catch (err) {
+      // Model overloaded — try next model
+      if (err.overloaded && mi < MODELS.length - 1) {
+        console.warn(`[COACH] ${model} overloaded, trying next model`);
+        if (onStatus) onStatus(`${model} is busy — switching model…`);
+        await sleep(1000);
+        continue;
+      }
+
+      // Rate limit — wait and retry same model
+      if (err.message?.startsWith('RATE_LIMIT:')) {
+        const waitSec = err.retryDelay || 45;
+        if (onStatus) onStatus(`Rate limited — waiting ${waitSec}s…`);
+        for (let s = waitSec; s > 0; s--) {
+          if (onStatus) onStatus(`Rate limited — retrying in ${s}s…`);
+          await sleep(1000);
+        }
+        // Retry same model once after waiting
+        try {
+          return await callGemini(checkin, history, model);
+        } catch (retryErr) {
+          if (retryErr.overloaded && mi < MODELS.length - 1) continue;
+          if (retryErr.message?.startsWith('RATE_LIMIT:')) {
+            throw new Error('Rate limit hit twice. Wait a minute and try again.');
+          }
+          throw retryErr;
+        }
+      }
+
+      // Other errors — try next model on first failure
+      if (mi < MODELS.length - 1) {
+        console.warn(`[COACH] ${model} failed, trying next`, err);
+        continue;
+      }
+
+      throw err;
+    }
   }
 }

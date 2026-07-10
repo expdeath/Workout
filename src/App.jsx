@@ -23,6 +23,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [todayPlan, setTodayPlan] = useState(null);
   const [error, setError] = useState('');
+  const [statusMsg, setStatusMsg] = useState('');
 
   // Check-in state — pre-filled with a "normal day"
   const [ci, setCi] = useState({
@@ -65,9 +66,10 @@ export default function App() {
   async function generateWorkout(checkin) {
     setScreen('generating');
     setError('');
+    setStatusMsg('');
 
     try {
-      const plan = await generateWorkoutPlan(checkin, history);
+      const plan = await generateWorkoutPlan(checkin, history, setStatusMsg);
       const log = (plan.exercises || []).map((ex) =>
         Array.from({ length: Number(ex.sets) || 3 }, () => ({
           weight: '',
@@ -162,7 +164,7 @@ export default function App() {
         )}
 
         {screen === 'generating' && (
-          <Generating readiness={quickReadiness(ci)} />
+          <Generating readiness={quickReadiness(ci)} statusMsg={statusMsg} />
         )}
 
         {screen === 'workout' && todayPlan && (
