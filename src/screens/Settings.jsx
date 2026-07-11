@@ -264,20 +264,22 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           (HRV, resting heart rate, steps) from Health and hands them to the
           app automatically — your next check-in arrives pre-filled.
           <br /><br />
-          1. On your iPhone, tap:{' '}
-          <a className="link" href="gym-checkin.shortcut" download>
-            Install the Gym Check-in shortcut
-          </a>
+          1. Delete any older "gym-checkin" copies from the Shortcuts app
           <br />
-          2. Open the downloaded file → <b>Add Shortcut</b>
+          2. On your iPhone, tap:{' '}
+          <a className="link" href="gym-checkin-v3.shortcut" download>
+            Install the Gym Check-in v3 shortcut
+          </a>{' '}
+          → <b>Add Shortcut</b>
           <br />
           3. Run it once from the Shortcuts app and allow the Health access
           prompts (first run only)
           <br /><br />
           Make it automatic: Shortcuts → Automation → + → Time of Day (your
           usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
-          pick "Gym Check-in". The app then opens with your Watch data
-          already loaded — you'll see "⌚ Received" on the check-in.
+          pick <b>"Gym Check-in v3"</b>. If you reinstall the shortcut later,
+          re-point the automation at the new copy — automations keep running
+          the exact copy they were created with.
         </p>
         <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: todaysHealth() ? 'var(--teal)' : 'var(--dim)' }}>
           {todaysHealth()
