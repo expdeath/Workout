@@ -7,9 +7,12 @@
 // (enforced by the CSP).
 
 import { exportAll, replaceAll, sessionId } from './db.js';
+import { sessionVolume, weekStats } from '../utils/stats.js';
+import { setLogged, fmtDate } from '../utils/helpers.js';
 
 const API = 'https://api.github.com';
 const FILE = 'coach-backup.json';
+const README = 'README.md';
 const BRANCH = 'main';
 
 // ── Config ───────────────────────────────────────────────────────
@@ -69,13 +72,14 @@ function b64encode(str) {
   return btoa(bin);
 }
 
-/** Blob sha of the backup file on the remote, or null if absent. */
-async function remoteSha(cfg) {
+/** Blob shas of our files on the remote ({ backup, readme }), or nulls. */
+async function remoteShas(cfg) {
   const res = await gh(cfg, `/repos/${cfg.repo}/git/trees/${BRANCH}`);
-  if (res.status === 404 || res.status === 409) return null; // no branch yet
+  if (res.status === 404 || res.status === 409) return { backup: null, readme: null };
   if (!res.ok) throw new Error(`GitHub error ${res.status} reading repo tree`);
   const tree = await res.json();
-  return tree.tree?.find((t) => t.path === FILE)?.sha ?? null;
+  const shaOf = (p) => tree.tree?.find((t) => t.path === p)?.sha ?? null;
+  return { backup: shaOf(FILE), readme: shaOf(README) };
 }
 
 /** Download + parse the remote backup. Raw media type dodges the 1MB JSON cap. */
@@ -97,12 +101,21 @@ async function fetchRemote(cfg) {
   }
 }
 
+function commitMessage(backup) {
+  const active = (backup.sessions || []).filter((s) => !s.deleted);
+  const last = active[active.length - 1];
+  return last
+    ? `sync: ${active.length} sessions · latest ${last.date} ${last.plan?.sessionType || ''}`.trim()
+    : 'sync: no sessions yet';
+}
+
 async function pushRemote(cfg, backup, sha) {
   const res = await gh(cfg, `/repos/${cfg.repo}/contents/${FILE}`, {
     method: 'PUT',
     body: JSON.stringify({
-      message: `coach sync ${new Date().toISOString()}`,
-      content: b64encode(JSON.stringify(backup)),
+      message: commitMessage(backup),
+      // pretty-printed: GitHub renders it readably and diffs stay small
+      content: b64encode(JSON.stringify(backup, null, 2)),
       branch: BRANCH,
       ...(sha ? { sha } : {}),
     }),
@@ -116,6 +129,64 @@ async function pushRemote(cfg, backup, sha) {
     throw new Error('GitHub token rejected — check it in Settings (needs Contents read/write on your data repo).');
   }
   if (!res.ok) throw new Error(`GitHub error ${res.status} pushing backup`);
+}
+
+// ── Repo README: human-readable training log for GitHub ─────────
+
+export function buildReadme(sessions) {
+  const active = (sessions || []).filter((s) => !s.deleted && s.date);
+  const { thisWeek, streak } = weekStats(active);
+  const rows = active
+    .slice(-20)
+    .reverse()
+    .map((s) => {
+      const vol = sessionVolume(s);
+      const best = (s.plan?.exercises || [])
+        .map((ex, i) => {
+          const sets = (s.log?.[i] || []).filter(setLogged);
+          if (!sets.length) return null;
+          const top = sets.reduce((a, b) =>
+            (parseFloat(b.weight) || 0) > (parseFloat(a.weight) || 0) ? b : a
+          );
+          return `${ex.name} ${top.weight || '?'}×${top.reps || '?'}`;
+        })
+        .filter(Boolean)
+        .join(' · ');
+      return `| ${fmtDate(s.date)} | ${s.plan?.sessionType || '?'} | ${s.fin?.rpe ?? '—'} | ${vol ? vol.toLocaleString() + ' kg' : '—'} | ${best || '—'} |`;
+    })
+    .join('\n');
+
+  return `# 🏋️ COACH — Training Data
+
+Auto-synced by the [COACH app](https://expdeath.github.io/Workout/). Don't edit by hand — the app owns this repo.
+
+**${active.length} sessions** · **${thisWeek} this week** · **${streak}-week streak** (≥3/week)
+
+## Recent sessions
+
+| Date | Session | RPE | Volume | Top sets |
+|---|---|---|---|---|
+${rows || '| — | — | — | — | — |'}
+
+<sub>Full data (including the event log) lives in [\`coach-backup.json\`](./coach-backup.json). Updated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC.</sub>
+`;
+}
+
+async function pushReadme(cfg, sessions, sha) {
+  try {
+    const res = await gh(cfg, `/repos/${cfg.repo}/contents/${README}`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: 'docs: update training log',
+        content: b64encode(buildReadme(sessions)),
+        branch: BRANCH,
+        ...(sha ? { sha } : {}),
+      }),
+    });
+    if (!res.ok) console.warn('[COACH] README update skipped', res.status);
+  } catch (e) {
+    console.warn('[COACH] README update failed', e); // cosmetic — never fatal
+  }
 }
 
 // ── Merge ────────────────────────────────────────────────────────
@@ -186,18 +257,28 @@ export async function syncNow({ replaceRemote = false } = {}) {
   const local = normalizeBackup(await exportAll());
 
   if (replaceRemote) {
-    await pushRemote(cfg, local, await remoteSha(cfg));
+    const shas = await remoteShas(cfg);
+    await pushRemote(cfg, local, shas.backup);
+    await pushReadme(cfg, local.sessions, (await remoteShas(cfg)).readme);
     setLastSync({ status: 'ok', sessions: local.sessions.length });
     return { status: 'pushed', changedLocal: false, sessions: local.sessions.length };
   }
 
   const doPass = async () => {
     const remote = await fetchRemote(cfg);
-    const merged = mergeBackups(local, remote ? normalizeBackup(remote) : null);
+    const remoteNorm = remote ? normalizeBackup(remote) : null;
+    const merged = mergeBackups(local, remoteNorm);
     const changedLocal = !same(merged, local);
     if (changedLocal) await replaceAll(merged);
-    if (!remote || !same(merged, normalizeBackup(remote))) {
-      await pushRemote(cfg, merged, await remoteSha(cfg));
+    if (!remote || !same(merged, remoteNorm)) {
+      const shas = await remoteShas(cfg);
+      await pushRemote(cfg, merged, shas.backup);
+      // refresh the human-readable log when sessions changed (or README missing)
+      const sessionsChanged =
+        !remoteNorm || !same(merged.sessions, remoteNorm.sessions);
+      if (sessionsChanged || !shas.readme) {
+        await pushReadme(cfg, merged.sessions, (await remoteShas(cfg)).readme);
+      }
     }
     return { status: 'ok', changedLocal, sessions: merged.sessions.length };
   };
