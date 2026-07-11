@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { loadKey, saveKey } from './utils/storage';
-import { todayStr, quickReadiness } from './utils/helpers';
+import { todayStr, quickReadiness, cleanWeight, cleanReps } from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
 import { lastWeekSummary, mondayOf } from './utils/stats';
 import {
@@ -267,6 +267,8 @@ export default function App() {
 
   // ── Set logging ──
   const updateSet = (exI, setI, field, val) => {
+    if (field === 'weight') val = cleanWeight(val);
+    if (field === 'reps') val = cleanReps(val);
     const t = {
       ...todayPlan,
       log: todayPlan.log.map((a) => a.map((s) => ({ ...s }))),

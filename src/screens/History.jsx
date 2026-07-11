@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { fmtDate, setLogged } from '../utils/helpers';
+import { fmtDate, setLogged, cleanWeight, cleanReps } from '../utils/helpers';
 
 const sid = (s) => s.id || s.date;
 
@@ -17,6 +17,8 @@ export default function History({ history, onBack, onDelete, onUpdate }) {
   };
 
   const setDraftSet = (exI, setI, field, val) => {
+    if (field === 'weight') val = cleanWeight(val);
+    if (field === 'reps') val = cleanReps(val);
     const d = JSON.parse(JSON.stringify(draft));
     d.log[exI][setI][field] = val;
     setDraft(d);
@@ -157,7 +159,10 @@ export default function History({ history, onBack, onDelete, onUpdate }) {
                   className="set-input"
                   inputMode="numeric"
                   value={draft.fin?.rpe ?? ''}
-                  onChange={(e) => setFin('rpe', e.target.value.replace(/\D/g, '').slice(0, 2))}
+                  onChange={(e) => {
+                    const n = e.target.value.replace(/\D/g, '');
+                    setFin('rpe', n ? String(Math.min(parseInt(n, 10), 10)) : '');
+                  }}
                 />
                 <input
                   className="input"
