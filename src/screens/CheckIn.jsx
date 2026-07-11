@@ -3,12 +3,26 @@ import Pill from '../components/Pill';
 import Seg from '../components/Seg';
 import ReadinessBar from '../components/ReadinessBar';
 import { quickReadiness } from '../utils/helpers';
+import { storeTodaysHealth } from '../utils/healthIngest';
 
 export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
   // Auto-open the health section when the Watch Shortcut pre-filled it
-  const [autoFilled] = useState(!!ci.health);
+  const [autoFilled, setAutoFilled] = useState(!!ci.health);
   const [showHealth, setShowHealth] = useState(!!ci.health);
   const set = (patch) => setCi({ ...ci, ...patch });
+
+  const pasteHealth = async () => {
+    try {
+      const text = (await navigator.clipboard.readText())?.trim().slice(0, 2000);
+      if (!text) return;
+      storeTodaysHealth(text);
+      set({ health: text });
+      setAutoFilled(true);
+      setShowHealth(true);
+    } catch {
+      setShowHealth(true); // permission declined — open the manual field
+    }
+  };
 
   return (
     <div className="screen screen--slide-in">
@@ -87,36 +101,29 @@ export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
         onChange={(v) => set({ timeAvail: v })}
       />
 
+      {!ci.health && (
+        <Pill on={false} style={{ marginTop: 22, marginBottom: 0 }} onClick={pasteHealth}>
+          ⌚ Paste Watch data from clipboard
+        </Pill>
+      )}
       <button
         className="ghost-btn"
-        style={{ marginTop: 22, padding: 0 }}
+        style={{ marginTop: ci.health ? 22 : 8, padding: 0 }}
         onClick={() => setShowHealth(!showHealth)}
       >
         {showHealth
           ? '− Hide health data'
-          : '+ Paste Apple Health data (optional)'}
+          : ci.health
+          ? '+ Show health data'
+          : '+ Type health data manually (optional)'}
       </button>
       {showHealth && (
         <>
           {autoFilled && (
             <p className="mono" style={{ fontSize: 12, color: 'var(--teal)', margin: '6px 0 0' }}>
-              ⌚ Received from your Apple Watch shortcut today
+              ⌚ Watch data loaded — the coach will read it
             </p>
           )}
-          <button
-            className="ghost-btn"
-            style={{ display: 'block', padding: '4px 0', color: 'var(--teal)' }}
-            onClick={async () => {
-              try {
-                const text = await navigator.clipboard.readText();
-                if (text) set({ health: text.slice(0, 2000) });
-              } catch {
-                /* clipboard permission denied — user can paste manually */
-              }
-            }}
-          >
-            ⎘ Paste from clipboard
-          </button>
           <textarea
             className="input textarea"
             placeholder={

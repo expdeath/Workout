@@ -3,7 +3,13 @@ import { loadKey, saveKey } from './utils/storage';
 import { todayStr, quickReadiness } from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
 import { lastWeekSummary, mondayOf } from './utils/stats';
-import { ingestHealthFromUrl, todaysHealth, pruneOldHealth } from './utils/healthIngest';
+import {
+  ingestHealthFromUrl,
+  todaysHealth,
+  pruneOldHealth,
+  storeTodaysHealth,
+  looksLikeHealthData,
+} from './utils/healthIngest';
 import { getApiKey } from './utils/storage';
 import {
   getAllSessions,
@@ -316,7 +322,19 @@ export default function App() {
             syncInfo={syncInfo}
             weeklyReview={weeklyReview}
             onProgress={() => setScreen('progress')}
-            onStart={() => {
+            onStart={async () => {
+              // The tap is a user gesture — if the Shortcut only managed to
+              // copy the data (clipboard route), grab it right now
+              let health = todaysHealth();
+              if (!health && navigator.clipboard?.readText) {
+                try {
+                  const clip = await navigator.clipboard.readText();
+                  if (looksLikeHealthData(clip)) {
+                    health = storeTodaysHealth(clip);
+                    logEvent('health_pasted_auto', { chars: health.length });
+                  }
+                } catch { /* paste declined — fine */ }
+              }
               setCi({
                 energy: 7,
                 sleep: 'OK',
@@ -324,7 +342,7 @@ export default function App() {
                 soreAreas: '',
                 backTight: false,
                 timeAvail: '60',
-                health: todaysHealth(), // pre-filled if the Shortcut ran today
+                health,
                 notes: '',
               });
               setError('');

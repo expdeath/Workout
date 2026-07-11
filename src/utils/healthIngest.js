@@ -45,6 +45,19 @@ export function todaysHealth(store = localStorage) {
   return store.getItem(KEY + todayStr()) || '';
 }
 
+/** Persist health text for today (clipboard paste path). */
+export function storeTodaysHealth(text, store = localStorage) {
+  const t = (text || '').trim().slice(0, 2000);
+  if (t) store.setItem(KEY + todayStr(), t);
+  return t;
+}
+
+/** Heuristic: does clipboard text look like Watch/Health data? */
+export function looksLikeHealthData(text) {
+  if (!text || text.length > 600) return false;
+  return /\b(hrv|rhr|steps|sleep|bpm|resting|heart)\b/i.test(text) && /\d/.test(text);
+}
+
 /** Drop stored payloads older than today (they're single-use). */
 export function pruneOldHealth(store = localStorage) {
   const today = KEY + todayStr();
