@@ -9,8 +9,9 @@ import {
   parseHealthNumbers,
   fatigueSignal,
   lastPerformance,
+  healthTrend,
 } from '../utils/stats.js';
-import { logEvent } from '../db/db.js';
+import { logEvent, getAllHealth } from '../db/db.js';
 
 // ── Workout database ─────────────────────────────────────────────
 const WORKOUT_DB = `
@@ -143,7 +144,7 @@ export function sanitizePlan(plan, history, checkin) {
 /**
  * Build the user message from check-in data and history.
  */
-function buildUserMessage(checkin, history) {
+function buildUserMessage(checkin, history, healthLog = []) {
   const recent = history.slice(-6);
   const histText = recent.length
     ? recent
@@ -187,9 +188,13 @@ ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 APPLE HEALTH DATA (pasted by user, may be empty):
 ${checkin.health || 'None provided today — rely on check-in + history.'}
 ${(() => {
+  const t = healthTrend(healthLog);
+  return t ? `WATCH DATA TREND (daily, most recent last):\n${t}` : '';
+})()}
+${(() => {
   if (!checkin.health) return '';
   const today = parseHealthNumbers(checkin.health);
-  const base = healthBaseline(history);
+  const base = healthBaseline(history, healthLog);
   const lines = [];
   if (today.hrv && base.hrv) {
     const d = Math.round(((today.hrv - base.hrv) / base.hrv) * 100);
@@ -232,13 +237,13 @@ const MODELS = [
 /**
  * Call Google Gemini API to generate a workout plan.
  */
-async function callGemini(checkin, history, model = MODELS[0]) {
+async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error('No Gemini API key set. Go to Settings to add one.');
   }
 
-  const userMsg = buildUserMessage(checkin, history);
+  const userMsg = buildUserMessage(checkin, history, healthLog);
 
   // 60-second timeout for the API call
   const controller = new AbortController();
@@ -494,12 +499,13 @@ LIFTS THAT MOVED UP: ${summary.progressions}`,
  * @param {function} onStatus - Optional callback for status messages
  */
 export async function generateWorkoutPlan(checkin, history, onStatus) {
+  const healthLog = await getAllHealth().catch(() => []);
   // Try each model in order — fallback on overload/503
   for (let mi = 0; mi < MODELS.length; mi++) {
     const model = MODELS[mi];
     try {
       if (onStatus && mi > 0) onStatus(`Trying ${model}…`);
-      return await callGemini(checkin, history, model);
+      return await callGemini(checkin, history, model, healthLog);
     } catch (err) {
       // Model overloaded — try next model
       if (err.overloaded && mi < MODELS.length - 1) {
@@ -519,7 +525,7 @@ export async function generateWorkoutPlan(checkin, history, onStatus) {
         }
         // Retry same model once after waiting
         try {
-          return await callGemini(checkin, history, model);
+          return await callGemini(checkin, history, model, healthLog);
         } catch (retryErr) {
           if (retryErr.overloaded && mi < MODELS.length - 1) continue;
           if (retryErr.message?.startsWith('RATE_LIMIT:')) {

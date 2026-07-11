@@ -301,14 +301,14 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         <p className="body" style={{ color: 'var(--muted)' }}>
           Apple only lets native apps talk to the Watch, but this one-time
           Shortcut gets you the same result: it reads your Watch's numbers
-          (HRV, resting heart rate, steps) from Health and hands them to the
+          (three-day HRV and resting-HR averages, today's steps) from Health and hands them to the
           app automatically — your next check-in arrives pre-filled.
           <br /><br />
           1. Delete any older "gym-checkin" copies from the Shortcuts app
           <br />
           2. On your iPhone, tap:{' '}
-          <a className="link" href="gym-checkin-v6.shortcut" download>
-            Install the Gym Check-in v6 shortcut
+          <a className="link" href="gym-checkin-v7.shortcut" download>
+            Install the Gym Check-in v7 shortcut
           </a>{' '}
           → <b>Add Shortcut</b>
           <br />
@@ -317,7 +317,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           <br /><br />
           Make it automatic: Shortcuts → Automation → + → Time of Day (your
           usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
-          pick <b>"Gym Check-in v6"</b>. If you reinstall the shortcut later,
+          pick <b>"Gym Check-in v7"</b>. If you reinstall the shortcut later,
           re-point the automation at the new copy — automations keep running
           the exact copy they were created with.
         </p>

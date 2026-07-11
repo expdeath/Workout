@@ -9,7 +9,8 @@
 const DB_NAME = 'coach-db';
 // v2: sessions keyed by unique id instead of date, so multiple
 // workouts on the same day no longer overwrite each other
-const DB_VERSION = 2;
+// v3: health store — one row per day of Watch data (HRV/RHR/steps)
+const DB_VERSION = 3;
 
 export const sessionId = (s) => s.id || s.date;
 
@@ -28,6 +29,9 @@ function openDb() {
         });
         evs.createIndex('ts', 'ts');
         evs.createIndex('type', 'type');
+      }
+      if (ev.oldVersion < 3 && !db.objectStoreNames.contains('health')) {
+        db.createObjectStore('health', { keyPath: 'date' });
       }
       if (ev.oldVersion < 2) {
         if (db.objectStoreNames.contains('sessions')) {
@@ -89,6 +93,18 @@ export function clearSessions() {
   return withStore('sessions', 'readwrite', (s) => s.clear());
 }
 
+// ── Health log (daily Watch data) ────────────────────────────────
+
+export function putHealth(entry) {
+  if (!entry?.date) return Promise.resolve();
+  return withStore('health', 'readwrite', (s) => s.put(entry));
+}
+
+export async function getAllHealth() {
+  const rows = await withStore('health', 'readonly', (s) => s.getAll());
+  return (rows || []).sort((a, b) => (a.date < b.date ? -1 : 1));
+}
+
 // ── Event log ────────────────────────────────────────────────────
 // Never throws — a logging failure must not break a workout.
 
@@ -121,9 +137,10 @@ async function getAllEvents() {
 import { getAISettings, restoreAISettings } from '../utils/storage.js';
 
 export async function exportAll() {
-  const [sessions, events] = await Promise.all([
+  const [sessions, events, health] = await Promise.all([
     getAllSessions(),
     getAllEvents(),
+    getAllHealth(),
   ]);
   return {
     app: 'coach',
@@ -131,6 +148,7 @@ export async function exportAll() {
     exportedAt: new Date().toISOString(),
     sessions,
     events,
+    health,
     aiSettings: getAISettings(),
   };
 }
@@ -146,6 +164,10 @@ export async function replaceAll(backup) {
   await withStore('events', 'readwrite', (s) => {
     s.clear();
     (backup.events || []).forEach(({ id, ...row }) => row && row.type && s.add(row));
+  });
+  await withStore('health', 'readwrite', (s) => {
+    s.clear();
+    (backup.health || []).forEach((row) => row && row.date && s.put(row));
   });
   if (backup.aiSettings && (backup.aiSettings.updatedAt || 0) > (getAISettings().updatedAt || 0)) {
     restoreAISettings(backup.aiSettings);

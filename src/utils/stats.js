@@ -177,24 +177,36 @@ export function progressionTargets(history, max = 10) {
   return out.join('\n');
 }
 
-/** Pull HRV / resting-HR numbers out of a free-form health string. */
+/** Pull HRV / resting-HR / steps numbers out of a free-form health string. */
 export function parseHealthNumbers(text) {
   const t = String(text || '');
-  const hrv = /hrv[^\d]{0,12}([\d.]+)/i.exec(t)?.[1];
-  const rhr = /(?:rhr|resting[^\d]{0,12}(?:heart[^\d]{0,8})?(?:rate)?)[^\d]{0,12}([\d.]+)/i.exec(t)?.[1];
+  const hrv = /hrv[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
+  const rhr = /(?:rhr|resting[^\d]{0,12}(?:heart[^\d]{0,8})?(?:rate)?)[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
+  const steps = /steps[^\d]{0,14}([\d,]+(?:\.\d+)?)/i.exec(t)?.[1];
   return {
     hrv: hrv ? parseFloat(hrv) : null,
     rhr: rhr ? parseFloat(rhr) : null,
+    steps: steps ? Math.round(parseFloat(steps.replace(/,/g, ''))) : null,
   };
 }
 
-/** 30-day HRV/RHR baselines from past check-ins (needs ≥3 samples). */
-export function healthBaseline(history, days = 30) {
+/**
+ * 30-day HRV/RHR baselines (needs ≥3 samples). Prefers the health
+ * store's daily rows; past check-in strings fill any gaps.
+ */
+export function healthBaseline(history, healthLog = [], days = 30) {
   const cutoff = Date.now() - days * DAY;
   const hrvs = [];
   const rhrs = [];
+  const seen = new Set();
+  for (const h of healthLog) {
+    if (dateMs(h.date) < cutoff) continue;
+    seen.add(h.date);
+    if (h.hrv && h.hrv > 5 && h.hrv < 300) hrvs.push(h.hrv);
+    if (h.rhr && h.rhr > 30 && h.rhr < 120) rhrs.push(h.rhr);
+  }
   for (const s of history) {
-    if (dateMs(s.date) < cutoff) continue;
+    if (dateMs(s.date) < cutoff || seen.has(s.date)) continue;
     const { hrv, rhr } = parseHealthNumbers(s.checkin?.health);
     if (hrv && hrv > 5 && hrv < 300) hrvs.push(hrv);
     if (rhr && rhr > 30 && rhr < 120) rhrs.push(rhr);
@@ -204,6 +216,21 @@ export function healthBaseline(history, days = 30) {
     hrv: hrvs.length >= 3 ? Math.round(avg(hrvs)) : null,
     rhr: rhrs.length >= 3 ? Math.round(avg(rhrs)) : null,
   };
+}
+
+/** Text block of the last n days of Watch data, for the AI prompt. */
+export function healthTrend(healthLog, n = 7) {
+  const rows = (healthLog || []).slice(-n);
+  if (rows.length < 2) return '';
+  return rows
+    .map((h) => {
+      const bits = [];
+      if (h.hrv) bits.push(`HRV ${h.hrv}ms`);
+      if (h.rhr) bits.push(`RHR ${h.rhr}`);
+      if (h.steps) bits.push(`${h.steps.toLocaleString()} steps`);
+      return `${h.date}: ${bits.join(' · ') || h.raw || '—'}`;
+    })
+    .join('\n');
 }
 
 /**

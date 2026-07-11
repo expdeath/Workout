@@ -224,10 +224,20 @@ export function mergeBackups(local, remote) {
   const rc = remote.aiSettings || {};
   const aiSettings = (rc.updatedAt || 0) > (lc.updatedAt || 0) ? rc : lc;
 
+  // health rows: union by date, freshest reading wins
+  const byDate = new Map();
+  for (const h of remote.health || []) if (h?.date) byDate.set(h.date, h);
+  for (const h of local.health || []) {
+    if (!h?.date) continue;
+    const r = byDate.get(h.date);
+    byDate.set(h.date, !r || (h.receivedAt || 0) >= (r.receivedAt || 0) ? h : r);
+  }
+
   return normalizeBackup({
     ...local,
     sessions: [...byId.values()],
     events,
+    health: [...byDate.values()],
     aiSettings,
   });
 }
@@ -238,6 +248,7 @@ export function normalizeBackup(b) {
     app: 'coach',
     version: b.version || 1,
     aiSettings: b.aiSettings || {},
+    health: [...(b.health || [])].sort((a, x) => (a.date < x.date ? -1 : 1)),
     sessions: (b.sessions || [])
       .map((s) => ({ ...s, id: sessionId(s) }))
       .sort((a, x) => (a.date + a.id).localeCompare(x.date + x.id)),

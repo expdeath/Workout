@@ -6,8 +6,27 @@
 // store it per-day, and pre-fill the next check-in with it.
 
 import { todayStr } from './helpers.js';
+import { parseHealthNumbers } from './stats.js';
+import { putHealth } from '../db/db.js';
 
 const KEY = 'coach:health-';
+
+/** Persist the day's parsed numbers into the health store (synced). */
+function recordHealth(text) {
+  try {
+    const { hrv, rhr, steps } = parseHealthNumbers(text);
+    if (hrv || rhr || steps) {
+      putHealth({
+        date: todayStr(),
+        hrv: hrv || null,
+        rhr: rhr || null,
+        steps: steps || null,
+        raw: text.slice(0, 300),
+        receivedAt: Date.now(),
+      }).catch(() => {});
+    }
+  } catch { /* parsing is best-effort */ }
+}
 
 /**
  * Parse health data from the URL — either ?health=… (query, survives
@@ -37,6 +56,7 @@ export function ingestHealthFromUrl(
   text = text.replace(/\+/g, ' ').trim().slice(0, 2000);
   if (!text) return null;
   store.setItem(KEY + todayStr(), text);
+  recordHealth(text);
   return text;
 }
 
@@ -48,7 +68,10 @@ export function todaysHealth(store = localStorage) {
 /** Persist health text for today (clipboard paste path). */
 export function storeTodaysHealth(text, store = localStorage) {
   const t = (text || '').trim().slice(0, 2000);
-  if (t) store.setItem(KEY + todayStr(), t);
+  if (t) {
+    store.setItem(KEY + todayStr(), t);
+    recordHealth(t);
+  }
   return t;
 }
 
