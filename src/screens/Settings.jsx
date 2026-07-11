@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { getApiKey, setApiKey } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync } from '../db/sync';
+import { todaysHealth } from '../utils/healthIngest';
 import { todayStr } from '../utils/helpers';
 
 export default function Settings({ onBack, onClearHistory, onDataImported, onSynced, sessionCount }) {
@@ -277,6 +278,11 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
           pick "Gym Check-in". The app then opens with your Watch data
           already loaded — you'll see "⌚ Received" on the check-in.
+        </p>
+        <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: todaysHealth() ? 'var(--teal)' : 'var(--dim)' }}>
+          {todaysHealth()
+            ? `⌚ Received today: ${todaysHealth()}`
+            : '⌚ Nothing received today yet — run the shortcut to test.'}
         </p>
       </div>
 

@@ -63,17 +63,10 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
-      // Watch data arriving via the Shortcut deep link (#health=…)
+      checkHealthHash();
       try {
-        const ingested = ingestHealthFromUrl();
-        if (ingested) {
-          window.history.replaceState(null, '', window.location.pathname + window.location.search);
-          logEvent('health_autoreceived', { chars: ingested.length });
-        }
         pruneOldHealth();
-      } catch (e) {
-        console.warn('[COACH] health ingest failed', e);
-      }
+      } catch { /* non-critical */ }
 
       await migrateFromLocalStorage();
       const h = await getAllSessions();
@@ -117,11 +110,38 @@ export default function App() {
     }
   }
 
+  // Watch data via the Shortcut deep link (#health=…). Must run not
+  // only at boot: when the tab is already open, iOS performs a
+  // fragment-only navigation (hashchange) or restores the page from
+  // the back-forward cache (pageshow) with no reload at all.
+  function checkHealthHash() {
+    try {
+      const ingested = ingestHealthFromUrl();
+      if (!ingested) return;
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      logEvent('health_autoreceived', { chars: ingested.length });
+      // If a check-in is on screen right now, fill it in live too
+      setCi((c) => ({ ...c, health: ingested }));
+    } catch (e) {
+      console.warn('[COACH] health ingest failed', e);
+    }
+  }
+
+  useEffect(() => {
+    window.addEventListener('hashchange', checkHealthHash);
+    window.addEventListener('pageshow', checkHealthHash);
+    return () => {
+      window.removeEventListener('hashchange', checkHealthHash);
+      window.removeEventListener('pageshow', checkHealthHash);
+    };
+  }, []);
+
   // Re-sync when the app regains focus (phones rarely reload the tab),
   // and every 5 minutes while it stays open. Throttled to 20s.
   useEffect(() => {
     const maybeSync = () => {
       if (document.visibilityState !== 'visible') return;
+      checkHealthHash();
       if (Date.now() - lastSyncAt.current < 20000) return;
       runSync();
     };
