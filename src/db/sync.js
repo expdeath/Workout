@@ -6,7 +6,7 @@
 // localStorage like the Gemini key. Only ever sent to api.github.com
 // (enforced by the CSP).
 
-import { exportAll, replaceAll } from './db.js';
+import { exportAll, replaceAll, sessionId } from './db.js';
 
 const API = 'https://api.github.com';
 const FILE = 'coach-backup.json';
@@ -134,10 +134,12 @@ const eventKey = (e) => `${e.iso}|${e.type}`;
 
 export function mergeBackups(local, remote) {
   if (!remote) return normalizeBackup(local);
-  const byDate = new Map();
-  for (const s of remote.sessions || []) if (s?.date) byDate.set(s.date, s);
+  // union by session id (legacy rows: id = date) — same-day workouts
+  // from different check-ins are distinct sessions and both survive
+  const byId = new Map();
+  for (const s of remote.sessions || []) if (s?.date) byId.set(sessionId(s), s);
   for (const s of local.sessions || []) {
-    if (s?.date) byDate.set(s.date, pickSession(s, byDate.get(s.date)));
+    if (s?.date) byId.set(sessionId(s), pickSession(s, byId.get(sessionId(s))));
   }
   const seen = new Set();
   const events = [];
@@ -148,7 +150,7 @@ export function mergeBackups(local, remote) {
   }
   return normalizeBackup({
     ...local,
-    sessions: [...byDate.values()],
+    sessions: [...byId.values()],
     events,
   });
 }
@@ -158,7 +160,9 @@ export function normalizeBackup(b) {
   return {
     app: 'coach',
     version: b.version || 1,
-    sessions: [...(b.sessions || [])].sort((a, x) => (a.date < x.date ? -1 : 1)),
+    sessions: (b.sessions || [])
+      .map((s) => ({ ...s, id: sessionId(s) }))
+      .sort((a, x) => (a.date + a.id).localeCompare(x.date + x.id)),
     events: (b.events || [])
       .map(({ id, ...e }) => e)
       .sort((a, x) => (eventKey(a) < eventKey(x) ? -1 : 1)),

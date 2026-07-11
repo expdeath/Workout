@@ -7,7 +7,11 @@
 // summarizes it so old data keeps informing new plans.
 
 const DB_NAME = 'coach-db';
-const DB_VERSION = 1;
+// v2: sessions keyed by unique id instead of date, so multiple
+// workouts on the same day no longer overwrite each other
+const DB_VERSION = 2;
+
+export const sessionId = (s) => s.id || s.date;
 
 let dbPromise = null;
 
@@ -15,18 +19,32 @@ function openDb() {
   if (dbPromise) return dbPromise;
   dbPromise = new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
-    req.onupgradeneeded = () => {
+    req.onupgradeneeded = (ev) => {
       const db = req.result;
-      if (!db.objectStoreNames.contains('sessions')) {
-        db.createObjectStore('sessions', { keyPath: 'date' });
-      }
       if (!db.objectStoreNames.contains('events')) {
-        const ev = db.createObjectStore('events', {
+        const evs = db.createObjectStore('events', {
           keyPath: 'id',
           autoIncrement: true,
         });
-        ev.createIndex('ts', 'ts');
-        ev.createIndex('type', 'type');
+        evs.createIndex('ts', 'ts');
+        evs.createIndex('type', 'type');
+      }
+      if (ev.oldVersion < 2) {
+        if (db.objectStoreNames.contains('sessions')) {
+          // re-key existing rows: date → id (legacy rows keep id = date)
+          const old = req.transaction.objectStore('sessions');
+          const getAll = old.getAll();
+          getAll.onsuccess = () => {
+            const rows = getAll.result || [];
+            db.deleteObjectStore('sessions');
+            const ns = db.createObjectStore('sessions', { keyPath: 'id' });
+            rows.forEach((r) => {
+              if (r && r.date) ns.put({ ...r, id: sessionId(r) });
+            });
+          };
+        } else {
+          db.createObjectStore('sessions', { keyPath: 'id' });
+        }
       }
     };
     req.onsuccess = () => resolve(req.result);
@@ -54,13 +72,16 @@ function withStore(storeName, mode, fn) {
 
 export async function getAllSessions() {
   const rows = await withStore('sessions', 'readonly', (s) => s.getAll());
-  return (rows || []).sort((a, b) => (a.date < b.date ? -1 : 1));
+  // chronological: by date, then by id (ids embed creation time)
+  return (rows || []).sort((a, b) =>
+    (a.date + sessionId(a)).localeCompare(b.date + sessionId(b))
+  );
 }
 
 export function putSession(session) {
   // updatedAt lets cloud sync pick the newer copy on merge conflicts
   return withStore('sessions', 'readwrite', (s) =>
-    s.put({ ...session, updatedAt: Date.now() })
+    s.put({ ...session, id: sessionId(session), updatedAt: Date.now() })
   );
 }
 
@@ -115,7 +136,9 @@ export async function exportAll() {
 export async function replaceAll(backup) {
   await withStore('sessions', 'readwrite', (s) => {
     s.clear();
-    (backup.sessions || []).forEach((row) => row && row.date && s.put(row));
+    (backup.sessions || []).forEach(
+      (row) => row && row.date && s.put({ ...row, id: sessionId(row) })
+    );
   });
   await withStore('events', 'readwrite', (s) => {
     s.clear();
@@ -146,7 +169,7 @@ export async function migrateFromLocalStorage() {
     const existing = await withStore('sessions', 'readonly', (s) => s.count());
     if (Array.isArray(old) && old.length && !existing) {
       await withStore('sessions', 'readwrite', (s) => {
-        old.forEach((row) => row && row.date && s.put(row));
+        old.forEach((row) => row && row.date && s.put({ ...row, id: sessionId(row) }));
       });
       await logEvent('migrated_from_localstorage', { sessions: old.length });
     }

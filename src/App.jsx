@@ -98,11 +98,13 @@ export default function App() {
   };
 
   // ── Cloud sync (no-op until configured in Settings) ──
+  const syncRetry = useRef(null);
   async function runSync(opts) {
     lastSyncAt.current = Date.now();
     setSyncInfo((s) => ({ ...(s || {}), state: 'syncing' }));
     try {
       const r = await syncNow(opts);
+      clearTimeout(syncRetry.current);
       if (r.status === 'unconfigured') {
         setSyncInfo(null);
         return;
@@ -113,6 +115,12 @@ export default function App() {
       console.warn('[COACH] sync failed', e);
       logEvent('sync_failed', { message: e.message });
       setSyncInfo({ state: 'error', message: e.message });
+      // iOS often aborts the fetch when the app is backgrounded right
+      // after opening ("Load failed") — retry once things settle
+      clearTimeout(syncRetry.current);
+      syncRetry.current = setTimeout(() => {
+        if (document.visibilityState === 'visible') runSync();
+      }, 20000);
     }
   }
 
@@ -193,7 +201,15 @@ export default function App() {
           done: false,
         }))
       );
-      const t = { date: todayStr(), checkin, plan, log, finished: false };
+      // unique id: same-day sessions are distinct and never overwrite
+      const t = {
+        id: `${todayStr()}#${Date.now()}`,
+        date: todayStr(),
+        checkin,
+        plan,
+        log,
+        finished: false,
+      };
       await persistToday(t);
       setScreen('workout');
     } catch (e) {
@@ -254,10 +270,12 @@ export default function App() {
     persistToday(t);
   };
 
+  const sid = (s) => s.id || s.date;
+
   // ── Finish session ──
   async function finishSession() {
     const t = { ...todayPlan, finished: true, fin };
-    const newHist = [...history.filter((h) => h.date !== t.date), t];
+    const newHist = [...history.filter((h) => sid(h) !== sid(t)), t];
     setHistory(newHist);
     await putSession(t);
     await persistToday(t);
@@ -278,7 +296,7 @@ export default function App() {
         const t2 = { ...t, debrief: text };
         await putSession(t2);
         await persistToday(t2);
-        setHistory((hs) => hs.map((s) => (s.date === t2.date ? t2 : s)));
+        setHistory((hs) => hs.map((s) => (sid(s) === sid(t2) ? t2 : s)));
         runSync();
       })
       .catch((e) => console.warn('[COACH] debrief failed', e));
