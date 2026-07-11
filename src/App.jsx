@@ -116,6 +116,15 @@ export default function App() {
   // the back-forward cache (pageshow) with no reload at all.
   function checkHealthHash() {
     try {
+      // Debug trail: record what the URL actually contained on arrival,
+      // shown in Settings → Apple Watch card to diagnose the Shortcut
+      if (window.location.search || window.location.hash) {
+        localStorage.setItem('coach:url-debug', JSON.stringify({
+          at: new Date().toISOString(),
+          search: window.location.search.slice(0, 120),
+          hash: window.location.hash.slice(0, 120),
+        }));
+      }
       const ingested = ingestHealthFromUrl();
       if (!ingested) return;
       window.history.replaceState(null, '', window.location.pathname);

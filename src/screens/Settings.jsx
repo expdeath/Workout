@@ -286,6 +286,20 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             ? `⌚ Received today: ${todaysHealth()}`
             : '⌚ Nothing received today yet — run the shortcut to test.'}
         </p>
+        {(() => {
+          try {
+            const d = JSON.parse(localStorage.getItem('coach:url-debug'));
+            if (!d) return null;
+            return (
+              <p className="mono" style={{ marginTop: 6, fontSize: 11.5, color: 'var(--dim)', wordBreak: 'break-all' }}>
+                debug — last URL payload ({new Date(d.at).toLocaleTimeString()}):
+                {' '}query "{d.search || '—'}" · fragment "{d.hash || '—'}"
+              </p>
+            );
+          } catch {
+            return null;
+          }
+        })()}
       </div>
 
       <div className="card">
