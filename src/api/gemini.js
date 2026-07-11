@@ -449,6 +449,75 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
 }
 
 /**
+ * Multi-turn "ask the coach" chat. messages: [{ role: 'user'|'coach', text }].
+ * Returns the coach's reply as plain text.
+ */
+export async function askCoach(messages, { history = [], todayPlan = null, healthLog = [] } = {}) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
+
+  const recent = history
+    .slice(-3)
+    .map((h) => `${h.date} ${h.plan?.sessionType} RPE ${h.fin?.rpe ?? '?'}${h.fin?.pain ? ' pain: ' + h.fin.pain : ''}`)
+    .join('; ');
+  const plan = todayPlan?.plan
+    ? `${todayPlan.plan.sessionType} — ${(todayPlan.plan.exercises || []).map((e) => e.name).join(', ')}${todayPlan.finished ? ' (finished)' : ' (in progress)'}`
+    : 'none generated yet';
+  const trend = healthTrend(healthLog, 4);
+
+  const system = `${coachRules()}
+You are now CHATTING with the athlete (often mid-workout, phone in hand). Answer in 2-5 short sentences, plain text, no markdown, immediately practical. If they mention pain, be conservative and suggest the safe variation.
+CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.${trend ? `\nWatch data:\n${trend}` : ''}`;
+
+  const contents = messages.slice(-12).map((m) => ({
+    role: m.role === 'user' ? 'user' : 'model',
+    parts: [{ text: m.text }],
+  }));
+
+  let lastErr;
+  for (const model of MODELS.slice(0, 2)) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: system }] },
+            contents,
+            generationConfig: {
+              maxOutputTokens: 1500,
+              temperature: 0.6,
+              ...(model.startsWith('gemini-3.5')
+                ? { thinkingConfig: { thinkingLevel: 'minimal' } }
+                : {}),
+            },
+          }),
+        }
+      );
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`status ${response.status}`);
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts
+        ?.filter((p) => p.text)
+        .map((p) => p.text)
+        .join(' ')
+        .trim();
+      if (!text) throw new Error('empty response');
+      logEvent('coach_chat', { model, chars: text.length });
+      return text;
+    } catch (e) {
+      clearTimeout(timeout);
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+/**
  * Two-sentence post-session debrief from the coach.
  */
 export function generateDebrief(session, history) {

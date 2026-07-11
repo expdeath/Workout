@@ -4,9 +4,20 @@
 // so the app opens (plan, logging, history) with no signal; sync
 // catches up when the network returns.
 
-const CACHE = 'coach-shell-v1';
+const CACHE = 'coach-shell-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
+
+// rest-timer notification tap → focus (or reopen) the app
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
+      for (const c of list) if ('focus' in c) return c.focus();
+      return clients.openWindow('./');
+    })
+  );
+});
 
 self.addEventListener('activate', (e) => {
   e.waitUntil(

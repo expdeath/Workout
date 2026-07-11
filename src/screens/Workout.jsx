@@ -13,7 +13,7 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, history = [], updateSet, swapExercise, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, onCoach, onBack, onFinish }) {
   const p = t.plan;
   const totalSets = t.log.reduce((a, ex) => a + ex.length, 0);
   const doneSets = t.log.reduce(
@@ -26,6 +26,34 @@ export default function Workout({ t, history = [], updateSet, swapExercise, onBa
   const [now, setNow] = useState(Date.now());
   const audioRef = useRef(null);
   const firedRef = useRef(false);
+  const wakeRef = useRef(null);
+
+  // Screen wake lock: a locked iPhone suspends web JS entirely, so we
+  // keep the screen awake while a rest timer runs — the countdown and
+  // buzz then always fire. Released as soon as the timer ends.
+  const acquireWake = async () => {
+    try {
+      wakeRef.current = await navigator.wakeLock?.request('screen');
+    } catch { /* low battery / unsupported — timer still works on-screen */ }
+  };
+  const releaseWake = () => {
+    try {
+      wakeRef.current?.release();
+    } catch { /* already released */ }
+    wakeRef.current = null;
+  };
+
+  // wake locks drop when the app is hidden — re-grab on return if resting
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && timer) acquireWake();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      releaseWake();
+    };
+  }, [timer]);
 
   useEffect(() => {
     if (!timer) return;
@@ -54,7 +82,19 @@ export default function Workout({ t, history = [], updateSet, swapExercise, onBa
         });
       }
     } catch { /* audio is best-effort */ }
-    const clear = setTimeout(() => setTimer(null), 4000);
+    // switched to another app? send a real notification
+    if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      navigator.serviceWorker?.ready
+        .then((reg) => reg.showNotification('⏱ Rest over — GO', {
+          body: `Next set: ${timer.exName}`,
+          tag: 'rest-timer',
+        }))
+        .catch(() => {});
+    }
+    const clear = setTimeout(() => {
+      setTimer(null);
+      releaseWake();
+    }, 4000);
     return () => clearTimeout(clear);
   }, [timer, remaining]);
 
@@ -74,6 +114,11 @@ export default function Workout({ t, history = [], updateSet, swapExercise, onBa
     const secs = parseRestSeconds(ex?.rest);
     firedRef.current = false;
     setTimer({ endsAt: Date.now() + secs * 1000, total: secs, exName: ex?.name });
+    acquireWake();
+    // one-time ask, from this tap's user gesture (installed app only)
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission().catch(() => {});
+    }
   };
 
   const fmtClock = (s) => `${Math.floor(Math.max(s, 0) / 60)}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
@@ -82,9 +127,12 @@ export default function Workout({ t, history = [], updateSet, swapExercise, onBa
     <div className="screen screen--slide-in">
       <header className="header">
         <button className="ghost-btn" onClick={onBack}>Home</button>
-        <span className="mono sets-counter">
-          {doneSets}/{totalSets} sets
-        </span>
+        <div className="header__actions">
+          <button className="ghost-btn" onClick={onCoach}>🗨 Coach</button>
+          <span className="mono sets-counter">
+            {doneSets}/{totalSets} sets
+          </span>
+        </div>
       </header>
 
       <div className="hero">
@@ -226,7 +274,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, onBa
             <span className="rest-bar__label">
               {remaining <= 0 ? `next set — ${timer.exName}` : `rest · ${timer.exName}`}
             </span>
-            <button className="ghost-btn" onClick={() => setTimer(null)}>
+            <button className="ghost-btn" onClick={() => { setTimer(null); releaseWake(); }}>
               Skip
             </button>
           </div>

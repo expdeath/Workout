@@ -707,6 +707,69 @@ a:hover {
   color: var(--teal);
 }
 
+/* ── Coach chat ─────────────────────────────────────────────────── */
+.chat-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100dvh - 120px);
+}
+
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 12px;
+}
+
+.chat-bubble {
+  max-width: 85%;
+  align-self: flex-start;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 14px 14px 14px 4px;
+  padding: 10px 14px;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--text-body);
+  white-space: pre-wrap;
+}
+
+.chat-bubble--user {
+  align-self: flex-end;
+  background: var(--amber-bg);
+  border-color: var(--amber);
+  border-radius: 14px 14px 4px 14px;
+  color: var(--text);
+}
+
+.chat-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-top: 10px;
+  position: sticky;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg);
+}
+
+.chat-send {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--amber);
+  color: var(--bg);
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.chat-send:disabled {
+  opacity: 0.4;
+}
+
 /* ── Error box ──────────────────────────────────────────────────── */
 .err-box {
   margin-top: 14px;

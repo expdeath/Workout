@@ -22,6 +22,7 @@ import { syncNow } from './db/sync';
 
 import Home from './screens/Home';
 import Progress from './screens/Progress';
+import Coach from './screens/Coach';
 import CheckIn from './screens/CheckIn';
 import Generating from './screens/Generating';
 import Workout from './screens/Workout';
@@ -419,6 +420,7 @@ export default function App() {
             onResume={() => setScreen('workout')}
             onHistory={() => setScreen('history')}
             onSettings={() => setScreen('settings')}
+            onCoach={() => setScreen('coach')}
           />
         )}
 
@@ -440,12 +442,21 @@ export default function App() {
           <Progress history={history} onBack={() => setScreen('home')} />
         )}
 
+        {screen === 'coach' && (
+          <Coach
+            history={history}
+            todayPlan={todayPlan}
+            onBack={() => setScreen(todayPlan && !todayPlan.finished ? 'workout' : 'home')}
+          />
+        )}
+
         {screen === 'workout' && todayPlan && (
           <Workout
             t={todayPlan}
             history={history}
             updateSet={updateSet}
             swapExercise={swapExercise}
+            onCoach={() => setScreen('coach')}
             onBack={() => setScreen('home')}
             onFinish={() => {
               setFin({ rpe: 7, pain: '', feedback: '' });
