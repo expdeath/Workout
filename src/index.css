@@ -87,6 +87,10 @@ a:hover {
   max-width: 520px;
   margin: 0 auto;
   padding: 16px 18px 32px;
+  /* keep content clear of the notch/status bar and home indicator
+     when installed as a home-screen web app */
+  padding-top: calc(16px + env(safe-area-inset-top, 0px));
+  padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
 }
 
 .center-fill {
@@ -609,7 +613,7 @@ a:hover {
   position: fixed;
   left: 50%;
   transform: translateX(-50%);
-  bottom: 14px;
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
   width: min(520px - 36px, calc(100vw - 28px));
   background: var(--bg-card);
   border: 1px solid var(--amber);
@@ -770,6 +774,10 @@ a:hover {
 /* ── Mobile tweaks ──────────────────────────────────────────────── */
 @media (max-width: 400px) {
   .h1 { font-size: 34px; }
-  .frame { padding: 12px 14px 24px; }
+  .frame {
+    padding: 12px 14px 24px;
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  }
   .set-input { width: 64px; padding: 8px; font-size: 14px; }
 }
