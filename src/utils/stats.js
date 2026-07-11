@@ -136,7 +136,9 @@ export function lastPerformance(history, exerciseName) {
     );
     if (exI === -1) continue;
     const sets = (s.log?.[exI] || []).filter(setLogged);
-    if (sets.length) return { date: s.date, sets };
+    if (sets.length) {
+      return { date: s.date, sets, repsRange: s.plan.exercises[exI].reps };
+    }
   }
   return null;
 }
@@ -154,6 +156,79 @@ export function suggestNextWeight(lastPerf, repsRange) {
   const allTopped = lastPerf.sets.every((s) => parseInt(s.reps, 10) >= top);
   if (!allTopped) return null;
   return Math.min(Math.max(...weights) + 2.5, 200);
+}
+
+/**
+ * Deterministic progression targets for the AI prompt: for the most
+ * trained exercises, last sets + whether the computed +2.5kg applies.
+ */
+export function progressionTargets(history, max = 10) {
+  const out = [];
+  for (const ex of exerciseSeries(history).slice(0, max)) {
+    const lp = lastPerformance(history, ex.name);
+    if (!lp) continue;
+    const repsRange = lp.repsRange;
+    const target = suggestNextWeight(lp, repsRange);
+    const lastTxt = lp.sets.map((s) => `${s.weight || '?'}×${s.reps || '?'}`).join(' · ');
+    out.push(
+      `- ${ex.name}: last ${lastTxt}${target ? ` → ready for ${target}kg (all reps at top of range)` : ' → hold weight, push reps'}`
+    );
+  }
+  return out.join('\n');
+}
+
+/** Pull HRV / resting-HR numbers out of a free-form health string. */
+export function parseHealthNumbers(text) {
+  const t = String(text || '');
+  const hrv = /hrv[^\d]{0,12}([\d.]+)/i.exec(t)?.[1];
+  const rhr = /(?:rhr|resting[^\d]{0,12}(?:heart[^\d]{0,8})?(?:rate)?)[^\d]{0,12}([\d.]+)/i.exec(t)?.[1];
+  return {
+    hrv: hrv ? parseFloat(hrv) : null,
+    rhr: rhr ? parseFloat(rhr) : null,
+  };
+}
+
+/** 30-day HRV/RHR baselines from past check-ins (needs ≥3 samples). */
+export function healthBaseline(history, days = 30) {
+  const cutoff = Date.now() - days * DAY;
+  const hrvs = [];
+  const rhrs = [];
+  for (const s of history) {
+    if (dateMs(s.date) < cutoff) continue;
+    const { hrv, rhr } = parseHealthNumbers(s.checkin?.health);
+    if (hrv && hrv > 5 && hrv < 300) hrvs.push(hrv);
+    if (rhr && rhr > 30 && rhr < 120) rhrs.push(rhr);
+  }
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  return {
+    hrv: hrvs.length >= 3 ? Math.round(avg(hrvs)) : null,
+    rhr: rhrs.length >= 3 ? Math.round(avg(rhrs)) : null,
+  };
+}
+
+/**
+ * Fatigue heuristic: volume AND average RPE rising across the last
+ * 3 completed training weeks → suggest easing off. Returns a message
+ * for the AI prompt, or null.
+ */
+export function fatigueSignal(history) {
+  const weeks = weeklyBuckets(history, 4).slice(0, 3); // 3 full weeks before current
+  if (!weeks.every((w) => w.count >= 2)) return null;
+  const rpeOf = (start) => {
+    const vals = history
+      .filter((s) => mondayOf(s.date) === start && s.finished && s.fin?.rpe != null)
+      .map((s) => Number(s.fin.rpe))
+      .filter((n) => !Number.isNaN(n));
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
+  const rpes = weeks.map((w) => rpeOf(w.start));
+  if (rpes.some((r) => r === null)) return null;
+  const volUp = weeks[0].volume < weeks[1].volume && weeks[1].volume < weeks[2].volume;
+  const rpeUp = rpes[0] < rpes[1] && rpes[1] < rpes[2];
+  if (volUp && rpeUp) {
+    return `Training volume and average session RPE have both risen for 3 consecutive weeks (volume ${weeks.map((w) => w.volume).join('→')}kg, RPE ${rpes.map((r) => r.toFixed(1)).join('→')}). Fatigue may be accumulating — consider a lighter session or deload if today's readiness is not clearly good.`;
+  }
+  return null;
 }
 
 /** Compact text summary of the last 7 days, for the AI weekly review. */

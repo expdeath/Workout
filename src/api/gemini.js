@@ -1,9 +1,16 @@
 // ── Gemini API integration ───────────────────────────────────────
-import { parsePlan } from '../utils/parser';
-import { getApiKey, getAISettings } from '../utils/storage';
-import { todayStr, setLogged } from '../utils/helpers';
-import { buildLongTermSummary } from '../utils/aiContext';
-import { logEvent } from '../db/db';
+import { parsePlan } from '../utils/parser.js';
+import { getApiKey, getAISettings } from '../utils/storage.js';
+import { todayStr, setLogged } from '../utils/helpers.js';
+import { buildLongTermSummary } from '../utils/aiContext.js';
+import {
+  progressionTargets,
+  healthBaseline,
+  parseHealthNumbers,
+  fatigueSignal,
+  lastPerformance,
+} from '../utils/stats.js';
+import { logEvent } from '../db/db.js';
 
 // ── Workout database ─────────────────────────────────────────────
 const WORKOUT_DB = `
@@ -62,6 +69,77 @@ const JSON_SPEC = `Respond with ONLY minified valid JSON — no markdown fences,
 "concerns":"max 12 words or empty"}
 Max 6 exercises. If Rest Day, exercises=[]. For Active Recovery put the circuit in exercises.`;
 
+// Enforced at the API level — malformed/truncated JSON can't happen
+const PLAN_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    sessionType: { type: 'STRING' },
+    title: { type: 'STRING' },
+    recoveryScore: { type: 'INTEGER' },
+    reasoning: { type: 'STRING' },
+    warmup: { type: 'ARRAY', items: { type: 'STRING' } },
+    exercises: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING' },
+          sets: { type: 'INTEGER' },
+          reps: { type: 'STRING' },
+          rpe: { type: 'STRING' },
+          rest: { type: 'STRING' },
+          notes: { type: 'STRING' },
+          alt: { type: 'STRING' },
+          suggestedWeight: { type: 'STRING' },
+        },
+        required: ['name', 'sets', 'reps'],
+      },
+    },
+    cardio: {
+      type: 'OBJECT',
+      nullable: true,
+      properties: { desc: { type: 'STRING' }, duration: { type: 'STRING' } },
+    },
+    cooldown: { type: 'ARRAY', items: { type: 'STRING' } },
+    estTimeMin: { type: 'INTEGER' },
+    concerns: { type: 'STRING' },
+  },
+  required: ['sessionType', 'exercises', 'estTimeMin'],
+};
+
+/**
+ * Deterministic guardrails on the model's plan: suggested weights stay
+ * within a plausible jump from logged history, session fits the time.
+ */
+export function sanitizePlan(plan, history, checkin) {
+  let changed = false;
+  if ((plan.exercises || []).length > 6) {
+    plan.exercises = plan.exercises.slice(0, 6);
+    changed = true;
+  }
+  for (const ex of plan.exercises || []) {
+    const m = /([\d.]+)/.exec(String(ex.suggestedWeight || ''));
+    if (!m) continue;
+    const w = parseFloat(m[1]);
+    const lp = lastPerformance(history, ex.name);
+    const lastW = lp
+      ? Math.max(...lp.sets.map((s) => parseFloat(s.weight)).filter((n) => !Number.isNaN(n)), 0)
+      : 0;
+    const cap = lastW ? Math.min(Math.max(lastW * 1.15, lastW + 2.5), 200) : 200;
+    if (w > cap) {
+      ex.suggestedWeight = `${Math.round((cap / 2.5)) * 2.5}kg`;
+      changed = true;
+    }
+  }
+  const avail = parseInt(checkin?.timeAvail, 10) || 60;
+  if (plan.estTimeMin > avail + 24 + 10) {
+    plan.estTimeMin = avail + 24;
+    changed = true;
+  }
+  if (changed) logEvent('plan_sanitized', { sessionType: plan.sessionType });
+  return plan;
+}
+
 /**
  * Build the user message from check-in data and history.
  */
@@ -108,6 +186,25 @@ ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 
 APPLE HEALTH DATA (pasted by user, may be empty):
 ${checkin.health || 'None provided today — rely on check-in + history.'}
+${(() => {
+  if (!checkin.health) return '';
+  const today = parseHealthNumbers(checkin.health);
+  const base = healthBaseline(history);
+  const lines = [];
+  if (today.hrv && base.hrv) {
+    const d = Math.round(((today.hrv - base.hrv) / base.hrv) * 100);
+    lines.push(`HRV ${today.hrv} vs 30-day avg ${base.hrv} (${d >= 0 ? '+' : ''}${d}%)${d <= -10 ? ' — recovery below normal' : ''}`);
+  }
+  if (today.rhr && base.rhr) {
+    const d = Math.round(((today.rhr - base.rhr) / base.rhr) * 100);
+    lines.push(`RHR ${today.rhr} vs 30-day avg ${base.rhr} (${d >= 0 ? '+' : ''}${d}%)${d >= 7 ? ' — elevated, possible fatigue/illness' : ''}`);
+  }
+  return lines.length ? 'Baseline comparison (computed): ' + lines.join('; ') : '';
+})()}
+${(() => { const f = fatigueSignal(history); return f ? `\nFATIGUE WATCH: ${f}` : ''; })()}
+
+PROGRESSION TARGETS (computed deterministically from the logs — anchor suggestedWeight on these):
+${progressionTargets(history) || 'No logged sets yet.'}
 
 LONG-TERM TRAINING SUMMARY (compressed from full history):
 ${buildLongTermSummary(history) || 'Not enough history yet — rely on the recent log below.'}
@@ -174,12 +271,13 @@ async function callGemini(checkin, history, model = MODELS[0]) {
           ],
           generationConfig: {
             maxOutputTokens: 4000,
-            temperature: 0.7,
-            // 3.5 Flash thinks at "medium" by default and can spend the
-            // whole budget reasoning before emitting the JSON — we want
-            // fast structured output, not deliberation
+            temperature: 0.5, // steadier progression decisions
+            responseMimeType: 'application/json',
+            responseSchema: PLAN_SCHEMA,
+            // "low" buys planning quality without the medium-default
+            // token burn that used to truncate responses
             ...(model.startsWith('gemini-3.5')
-              ? { thinkingConfig: { thinkingLevel: 'minimal' } }
+              ? { thinkingConfig: { thinkingLevel: 'low' } }
               : {}),
           },
         }),
@@ -281,7 +379,7 @@ async function callGemini(checkin, history, model = MODELS[0]) {
     raw: text,
   });
 
-  return parsePlan(text);
+  return sanitizePlan(parsePlan(text), history, checkin);
 }
 
 /**
