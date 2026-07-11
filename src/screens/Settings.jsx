@@ -267,8 +267,8 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           1. Delete any older "gym-checkin" copies from the Shortcuts app
           <br />
           2. On your iPhone, tap:{' '}
-          <a className="link" href="gym-checkin-v3.shortcut" download>
-            Install the Gym Check-in v3 shortcut
+          <a className="link" href="gym-checkin-v4.shortcut" download>
+            Install the Gym Check-in v4 shortcut
           </a>{' '}
           → <b>Add Shortcut</b>
           <br />
@@ -277,7 +277,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           <br /><br />
           Make it automatic: Shortcuts → Automation → + → Time of Day (your
           usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
-          pick <b>"Gym Check-in v3"</b>. If you reinstall the shortcut later,
+          pick <b>"Gym Check-in v4"</b>. If you reinstall the shortcut later,
           re-point the automation at the new copy — automations keep running
           the exact copy they were created with.
         </p>
