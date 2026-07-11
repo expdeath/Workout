@@ -114,11 +114,13 @@ ${WORKOUT_DB}
 Decide the right session for today and build it. ${JSON_SPEC}`;
 }
 
-// Models to try in order — if one is overloaded, try the next
+// Models to try in order — if one is overloaded, try the next.
+// 3.5 Flash is the strongest free-tier model (mid-2026); the lite
+// and 2.5 fallbacks have higher rate limits if it's busy.
 const MODELS = [
+  'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
-  'gemini-2.0-flash',
-  'gemini-2.0-flash-lite',
+  'gemini-2.5-flash',
 ];
 
 /**
