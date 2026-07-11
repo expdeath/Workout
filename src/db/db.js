@@ -58,7 +58,10 @@ export async function getAllSessions() {
 }
 
 export function putSession(session) {
-  return withStore('sessions', 'readwrite', (s) => s.put(session));
+  // updatedAt lets cloud sync pick the newer copy on merge conflicts
+  return withStore('sessions', 'readwrite', (s) =>
+    s.put({ ...session, updatedAt: Date.now() })
+  );
 }
 
 export function clearSessions() {
@@ -108,21 +111,24 @@ export async function exportAll() {
   };
 }
 
+/** Overwrite both stores with backup contents. No validation, no logging. */
+export async function replaceAll(backup) {
+  await withStore('sessions', 'readwrite', (s) => {
+    s.clear();
+    (backup.sessions || []).forEach((row) => row && row.date && s.put(row));
+  });
+  await withStore('events', 'readwrite', (s) => {
+    s.clear();
+    (backup.events || []).forEach(({ id, ...row }) => row && row.type && s.add(row));
+  });
+}
+
 /** Restore a backup, replacing current data. Throws on invalid shape. */
 export async function importAll(backup) {
   if (!backup || !Array.isArray(backup.sessions)) {
     throw new Error('Not a valid COACH backup file.');
   }
-  await withStore('sessions', 'readwrite', (s) => {
-    s.clear();
-    backup.sessions.forEach((row) => row && row.date && s.put(row));
-  });
-  if (Array.isArray(backup.events)) {
-    await withStore('events', 'readwrite', (s) => {
-      s.clear();
-      backup.events.forEach(({ id, ...row }) => row && row.type && s.add(row));
-    });
-  }
+  await replaceAll(backup);
   await logEvent('data_imported', {
     sessions: backup.sessions.length,
     events: backup.events?.length || 0,

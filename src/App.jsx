@@ -10,6 +10,7 @@ import {
   logEvent,
   migrateFromLocalStorage,
 } from './db/db';
+import { syncNow } from './db/sync';
 
 import Home from './screens/Home';
 import CheckIn from './screens/CheckIn';
@@ -56,6 +57,7 @@ export default function App() {
       setHistory(h);
       if (t && t.date === todayStr()) setTodayPlan(t);
       logEvent('app_open', { sessions: h.length });
+      runSync(); // background — pulls sessions logged on other devices
 
       // If no API key, go to settings first
       if (!getApiKey()) {
@@ -70,6 +72,17 @@ export default function App() {
     setTodayPlan(t);
     await saveKey('today', t);
   };
+
+  // ── Cloud sync (no-op until configured in Settings) ──
+  async function runSync(opts) {
+    try {
+      const r = await syncNow(opts);
+      if (r.changedLocal) setHistory(await getAllSessions());
+    } catch (e) {
+      console.warn('[COACH] sync failed', e);
+      logEvent('sync_failed', { message: e.message });
+    }
+  }
 
   // ── AI call ──
   async function generateWorkout(checkin) {
@@ -131,6 +144,7 @@ export default function App() {
       setsDone: (t.log || []).flat().filter((s) => s.done).length,
     });
     setScreen('home');
+    runSync(); // background — push today's session to the cloud
   }
 
   // ── Clear all history ──
@@ -140,9 +154,11 @@ export default function App() {
     await clearSessions();
     await saveKey('today', null);
     logEvent('history_cleared');
+    // overwrite the cloud too — a merge would resurrect the deleted data
+    runSync({ replaceRemote: true });
   }
 
-  // ── Reload after backup import ──
+  // ── Reload after backup import or manual sync ──
   async function reloadFromDb() {
     const h = await getAllSessions();
     setHistory(h);
@@ -229,7 +245,11 @@ export default function App() {
           <Settings
             onBack={() => setScreen('home')}
             onClearHistory={clearHistory}
-            onDataImported={reloadFromDb}
+            onDataImported={async () => {
+              await reloadFromDb();
+              runSync({ replaceRemote: true }); // restored backup becomes truth
+            }}
+            onSynced={reloadFromDb}
             sessionCount={history.length}
           />
         )}

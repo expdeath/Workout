@@ -10,7 +10,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // inline style attrs + Google Fonts CSS
   "font-src https://fonts.gstatic.com",
   "img-src 'self' data:",
-  "connect-src 'self' https://generativelanguage.googleapis.com",
+  "connect-src 'self' https://generativelanguage.googleapis.com https://api.github.com", // Gemini + cloud sync
+
   "base-uri 'none'",
   "form-action 'none'",
 ].join('; ');

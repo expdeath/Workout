@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getApiKey, setApiKey } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
+import { getSyncConfig, setSyncConfig, syncNow, getLastSync } from '../db/sync';
 import { todayStr } from '../utils/helpers';
 
-export default function Settings({ onBack, onClearHistory, onDataImported, sessionCount }) {
+export default function Settings({ onBack, onClearHistory, onDataImported, onSynced, sessionCount }) {
   const [key, setKey] = useState(getApiKey());
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -11,6 +12,42 @@ export default function Settings({ onBack, onClearHistory, onDataImported, sessi
   const [eventCount, setEventCount] = useState(null);
   const [dataMsg, setDataMsg] = useState('');
   const fileRef = useRef(null);
+
+  const [sync, setSync] = useState(getSyncConfig());
+  const [showToken, setShowToken] = useState(false);
+  const [syncSaved, setSyncSaved] = useState(false);
+  const [syncMsg, setSyncMsg] = useState(() => {
+    const last = getLastSync();
+    return last?.status === 'ok'
+      ? `Last synced ${new Date(last.at).toLocaleString()} (${last.sessions} sessions)`
+      : '';
+  });
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSyncSave = () => {
+    setSyncConfig(sync);
+    setSync(getSyncConfig());
+    setSyncSaved(true);
+    logEvent('sync_config_saved', { repo: sync.repo });
+    setTimeout(() => setSyncSaved(false), 2000);
+  };
+
+  const handleSyncNow = async () => {
+    setSyncing(true);
+    setSyncMsg('Syncing…');
+    try {
+      const r = await syncNow();
+      if (r.status === 'unconfigured') {
+        setSyncMsg('Add your token and repo first, then Save.');
+      } else {
+        if (r.changedLocal) await onSynced?.();
+        setSyncMsg(`✓ Synced — ${r.sessions} sessions in cloud`);
+      }
+    } catch (e) {
+      setSyncMsg(`Sync failed: ${e.message}`);
+    }
+    setSyncing(false);
+  };
 
   useEffect(() => {
     countEvents().then(setEventCount);
@@ -114,6 +151,62 @@ export default function Settings({ onBack, onClearHistory, onDataImported, sessi
           2. Click "Create API key"
           <br />
           3. Copy the key and paste it above
+        </p>
+      </div>
+
+      <div className="card">
+        <div className="card__label">Cloud Sync</div>
+        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
+          Syncs your full training log to a private GitHub repo you own, so
+          it survives this browser and follows you across devices. The app
+          syncs automatically when it opens and after each workout.
+        </p>
+        <input
+          className="input"
+          type="text"
+          placeholder="your-username/workout-data"
+          value={sync.repo}
+          onChange={(e) => setSync({ ...sync, repo: e.target.value })}
+          style={{ marginTop: 0 }}
+        />
+        <div className="settings-key-row" style={{ marginTop: 8 }}>
+          <input
+            className="input"
+            type={showToken ? 'text' : 'password'}
+            placeholder="github_pat_…"
+            value={sync.token}
+            onChange={(e) => setSync({ ...sync, token: e.target.value })}
+            style={{ marginTop: 0, flex: 1 }}
+          />
+          <button
+            className="ghost-btn"
+            onClick={() => setShowToken(!showToken)}
+            style={{ flexShrink: 0 }}
+          >
+            {showToken ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        <button className="big-btn" onClick={handleSyncSave} style={{ marginTop: 12 }}>
+          {syncSaved ? '✓ Saved' : 'Save sync settings'}
+        </button>
+        <button
+          className="big-btn"
+          onClick={handleSyncNow}
+          disabled={syncing}
+          style={{ marginTop: 8 }}
+        >
+          {syncing ? 'Syncing…' : 'Sync now'}
+        </button>
+        {syncMsg && (
+          <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
+            {syncMsg}
+          </p>
+        )}
+        <p className="body" style={{ marginTop: 12, color: 'var(--muted)', fontSize: 13 }}>
+          Token setup (once): github.com → Settings → Developer settings →
+          Fine-grained tokens → Generate. Repository access: only your data
+          repo. Permissions: Contents → Read and write. Paste the token here —
+          it stays in this browser and is only sent to api.github.com.
         </p>
       </div>
 
