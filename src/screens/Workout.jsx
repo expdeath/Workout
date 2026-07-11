@@ -1,14 +1,81 @@
-import React from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
 import { fmtDate } from '../utils/helpers';
 
-export default function Workout({ t, updateSet, onBack, onFinish }) {
+/** "90s" → 90 · "2min" → 120 · "1-2min" → 120 · fallback 90 */
+function parseRestSeconds(rest) {
+  const m = String(rest || '').match(/(\d+)(?:\s*-\s*(\d+))?\s*(s|sec|m|min)?/i);
+  if (!m) return 90;
+  const n = Number(m[2] || m[1]);
+  const unit = (m[3] || 's').toLowerCase();
+  const secs = unit.startsWith('m') ? n * 60 : n;
+  return Math.min(Math.max(secs, 15), 600);
+}
+
+export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }) {
   const p = t.plan;
   const totalSets = t.log.reduce((a, ex) => a + ex.length, 0);
   const doneSets = t.log.reduce(
     (a, ex) => a + ex.filter((s) => s.done).length,
     0
   );
+
+  // ── Rest timer ──
+  const [timer, setTimer] = useState(null); // { endsAt, total, exName }
+  const [now, setNow] = useState(Date.now());
+  const audioRef = useRef(null);
+  const firedRef = useRef(false);
+
+  useEffect(() => {
+    if (!timer) return;
+    const iv = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(iv);
+  }, [timer]);
+
+  const remaining = timer ? Math.ceil((timer.endsAt - now) / 1000) : 0;
+
+  useEffect(() => {
+    if (!timer || remaining > 0 || firedRef.current) return;
+    firedRef.current = true;
+    try {
+      navigator.vibrate?.([200, 100, 200]);
+      const ctx = audioRef.current;
+      if (ctx) {
+        [0, 0.25].forEach((delay) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.frequency.value = 880;
+          gain.gain.setValueAtTime(0.15, ctx.currentTime + delay);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.18);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(ctx.currentTime + delay);
+          osc.stop(ctx.currentTime + delay + 0.2);
+        });
+      }
+    } catch { /* audio is best-effort */ }
+    const clear = setTimeout(() => setTimer(null), 4000);
+    return () => clearTimeout(clear);
+  }, [timer, remaining]);
+
+  const toggleSet = (exI, setI, set) => {
+    const turningOn = !set.done;
+    updateSet(exI, setI, 'done', !set.done);
+    if (!turningOn) return;
+    // The tap is our user gesture — set up audio now so the buzz can play later
+    try {
+      if (!audioRef.current) {
+        const Ctor = window.AudioContext || window.webkitAudioContext;
+        if (Ctor) audioRef.current = new Ctor();
+      }
+      audioRef.current?.resume?.();
+    } catch { /* no audio */ }
+    const ex = p.exercises[exI];
+    const secs = parseRestSeconds(ex?.rest);
+    firedRef.current = false;
+    setTimer({ endsAt: Date.now() + secs * 1000, total: secs, exName: ex?.name });
+  };
+
+  const fmtClock = (s) => `${Math.floor(Math.max(s, 0) / 60)}:${String(Math.max(s, 0) % 60).padStart(2, '0')}`;
 
   return (
     <div className="screen screen--slide-in">
@@ -68,7 +135,7 @@ export default function Workout({ t, updateSet, onBack, onFinish }) {
               <div key={setI} className="set-row">
                 <button
                   className={'set-chk' + (set.done ? ' set-chk-on' : '')}
-                  onClick={() => updateSet(exI, setI, 'done', !set.done)}
+                  onClick={() => toggleSet(exI, setI, set)}
                 >
                   {set.done ? '✓' : setI + 1}
                 </button>
@@ -95,7 +162,9 @@ export default function Workout({ t, updateSet, onBack, onFinish }) {
             ))}
           </div>
           {ex.alt && (
-            <div className="mono ex-alt">Machine busy? → {ex.alt}</div>
+            <button className="swap-btn" onClick={() => swapExercise(exI)}>
+              ⇄ Machine busy? Swap to {ex.alt}
+            </button>
           )}
         </div>
       ))}
@@ -123,7 +192,26 @@ export default function Workout({ t, updateSet, onBack, onFinish }) {
       <button className="big-btn" onClick={onFinish}>
         Finish session
       </button>
-      <div style={{ height: 24 }} />
+      <div style={{ height: timer ? 84 : 24 }} />
+
+      {timer && (
+        <div className={'rest-bar' + (remaining <= 0 ? ' rest-bar--go' : '')}>
+          <div className="rest-bar__fill" style={{
+            width: `${Math.max(0, Math.min(100, (remaining / timer.total) * 100))}%`,
+          }} />
+          <div className="rest-bar__content">
+            <span className="mono rest-bar__time">
+              {remaining <= 0 ? 'GO' : fmtClock(remaining)}
+            </span>
+            <span className="rest-bar__label">
+              {remaining <= 0 ? `next set — ${timer.exName}` : `rest · ${timer.exName}`}
+            </span>
+            <button className="ghost-btn" onClick={() => setTimer(null)}>
+              Skip
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

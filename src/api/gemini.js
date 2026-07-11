@@ -274,6 +274,98 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ── Small plain-text calls (debrief, weekly review) ──────────────
+// Non-critical: single attempt + one model fallback, 20s timeout.
+
+async function callGeminiText(userMsg, maxTokens, eventType) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('No API key');
+
+  let lastErr;
+  for (const model of MODELS.slice(0, 2)) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-goog-api-key': apiKey,
+          },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: COACH_RULES }] },
+            contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.6 },
+          }),
+        }
+      );
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`status ${response.status}`);
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts
+        ?.filter((p) => p.text)
+        .map((p) => p.text)
+        .join(' ')
+        .trim();
+      if (!text) throw new Error('empty response');
+      logEvent(eventType, { model, latencyMs: Date.now() - startedAt, raw: text });
+      return text;
+    } catch (e) {
+      clearTimeout(timeout);
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+/**
+ * Two-sentence post-session debrief from the coach.
+ */
+export function generateDebrief(session, history) {
+  const sets = (session.plan?.exercises || [])
+    .map((ex, i) => {
+      const done = (session.log?.[i] || [])
+        .filter((s) => s.done)
+        .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
+        .join(', ');
+      return `${ex.name} [${done || 'skipped'}]`;
+    })
+    .join('; ');
+  const prev = history
+    .slice(-3)
+    .map((h) => `${h.date} ${h.plan?.sessionType} RPE ${h.fin?.rpe ?? '?'}`)
+    .join('; ');
+
+  return callGeminiText(
+    `The athlete just finished today's session. Give a debrief: EXACTLY 2 short sentences — one on what went well, one on what you'll adjust next time. Plain text, no markdown, max 45 words total. Direct, no hype.
+
+TODAY (${session.date}, ${session.plan?.sessionType}): ${sets}
+Session RPE ${session.fin?.rpe}${session.fin?.pain ? ' | pain: ' + session.fin.pain : ''}${session.fin?.feedback ? ' | athlete says: ' + session.fin.feedback : ''}
+RECENT: ${prev || 'first logged session'}`,
+    120,
+    'ai_debrief'
+  );
+}
+
+/**
+ * Short weekly review: what happened + a nudge for the coming week.
+ */
+export function generateWeeklyReview(summary) {
+  return callGeminiText(
+    `Write the athlete's weekly review: EXACTLY 2-3 short sentences — how the week went (sessions, progressions) and one concrete nudge for next week. Plain text, no markdown, max 55 words. Direct, no hype.
+
+THIS WEEK: ${summary.count} sessions
+${summary.lines}
+LIFTS THAT MOVED UP: ${summary.progressions}`,
+    140,
+    'ai_weekly_review'
+  );
+}
+
 /**
  * Generate a workout plan with automatic retry for rate limits.
  * @param {object} checkin - Check-in data

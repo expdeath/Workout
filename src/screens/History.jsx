@@ -61,6 +61,11 @@ export default function History({ history, onBack }) {
               {h.fin.feedback ? ` · ${h.fin.feedback}` : ''}
             </div>
           )}
+          {h.debrief && (
+            <p className="body" style={{ fontSize: 13, marginTop: 6, color: 'var(--muted)' }}>
+              🗨 {h.debrief}
+            </p>
+          )}
         </div>
       ))}
       <div style={{ height: 24 }} />

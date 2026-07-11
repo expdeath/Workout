@@ -256,6 +256,29 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
       </div>
 
       <div className="card">
+        <div className="card__label">Apple Health in one tap</div>
+        <p className="body" style={{ color: 'var(--muted)' }}>
+          Build this iOS Shortcut once, then run it before check-in — it copies
+          your health numbers so you can hit "Paste from clipboard" in the app:
+          <br /><br />
+          1. Shortcuts app → + → name it "Gym check-in"
+          <br />
+          2. Add <b>Find Health Samples</b> — Sleep, last 1 day
+          <br />
+          3. Repeat for Heart Rate Variability, Resting Heart Rate, Steps
+          <br />
+          4. Add <b>Text</b> — combine the results, e.g. "Sleep [Sleep] · HRV
+          [HRV] · RHR [RHR] · Steps [Steps]"
+          <br />
+          5. Add <b>Copy to Clipboard</b>, then <b>Open URL</b> →
+          this app's address
+          <br /><br />
+          Tip: add the shortcut to your home screen or an automation at your
+          usual gym time.
+        </p>
+      </div>
+
+      <div className="card">
         <div className="card__label">About</div>
         <p className="body" style={{ color: 'var(--muted)' }}>
           COACH is a personal workout planner powered by Google Gemini AI. It

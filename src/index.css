@@ -24,6 +24,10 @@
   --teal-bg:    #0F2B26;
   --red:        #F26D5B;
   --red-bg:     #241614;
+  /* Chart series hues — darker steps of the brand amber/teal,
+     validated for the dark card surface (contrast + CVD) */
+  --chart-amber: #C4790F;
+  --chart-teal:  #219B84;
   --font-head:  'Barlow Condensed', sans-serif;
   --font-mono:  'IBM Plex Mono', monospace;
   --font-body:  'Archivo', sans-serif;
@@ -520,6 +524,165 @@ a:hover {
   height: 22px;
   border-radius: 2px;
   transition: background 0.3s;
+}
+
+/* ── Stat tiles (Home / Progress) ───────────────────────────────── */
+.stat-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.stat-tile {
+  flex: 1;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+}
+
+.stat-tile__label {
+  font-family: var(--font-head);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stat-tile__value {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 26px;
+  margin-top: 2px;
+}
+
+.stat-tile__unit {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+}
+
+/* ── Progress screen ────────────────────────────────────────────── */
+.chip-row {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  margin-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.chip-row::-webkit-scrollbar { display: none; }
+
+.chip {
+  flex-shrink: 0;
+  padding: 7px 13px;
+  border-radius: 999px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--text-body);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.chip-on {
+  border-color: var(--amber);
+  background: var(--amber-bg);
+  color: var(--amber);
+  font-weight: 600;
+}
+
+.chart-table {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* ── Rest timer bar ─────────────────────────────────────────────── */
+.rest-bar {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 14px;
+  width: min(520px - 36px, calc(100vw - 28px));
+  background: var(--bg-card);
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  overflow: hidden;
+  z-index: 20;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+
+.rest-bar--go {
+  border-color: var(--teal);
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.rest-bar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--amber-bg);
+  transition: width 0.25s linear;
+}
+
+.rest-bar--go .rest-bar__fill {
+  background: var(--teal-bg);
+  width: 100% !important;
+}
+
+.rest-bar__content {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 6px 10px 16px;
+}
+
+.rest-bar__time {
+  font-size: 22px;
+  color: var(--amber);
+  min-width: 58px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rest-bar--go .rest-bar__time {
+  color: var(--teal);
+}
+
+.rest-bar__label {
+  flex: 1;
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Exercise swap ──────────────────────────────────────────────── */
+.swap-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--text-body);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.swap-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
 }
 
 /* ── Error box ──────────────────────────────────────────────────── */

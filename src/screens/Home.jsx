@@ -1,10 +1,15 @@
 import React from 'react';
 import { fmtDate } from '../utils/helpers';
+import { weekStats } from '../utils/stats';
 
-export default function Home({ todayPlan, history, syncInfo, onStart, onResume, onHistory, onSettings }) {
+const WEEK_MS = 7 * 86400000;
+
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, onStart, onResume, onHistory, onSettings, onProgress }) {
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
+  const { thisWeek, streak } = weekStats(history);
+  const showReview = weeklyReview?.text && Date.now() - (weeklyReview.at || 0) < WEEK_MS;
 
   return (
     <div className="screen screen--fade-in">
@@ -17,6 +22,7 @@ export default function Home({ todayPlan, history, syncInfo, onStart, onResume, 
               <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
             </svg>
           </button>
+          <button className="ghost-btn" onClick={onProgress}>Stats</button>
           <button className="ghost-btn" onClick={onHistory}>Log</button>
         </div>
       </header>
@@ -45,6 +51,23 @@ export default function Home({ todayPlan, history, syncInfo, onStart, onResume, 
         </p>
       </div>
 
+      {history.length > 0 && (
+        <div className="stat-row">
+          <div className="stat-tile">
+            <div className="stat-tile__label">This week</div>
+            <div className="stat-tile__value">
+              {thisWeek} <span className="stat-tile__unit">sessions</span>
+            </div>
+          </div>
+          <div className="stat-tile">
+            <div className="stat-tile__label">Week streak (≥3)</div>
+            <div className="stat-tile__value">
+              {streak} <span className="stat-tile__unit">wks</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {inProgress ? (
         <button className="big-btn" onClick={onResume}>
           Resume {todayPlan.plan.sessionType}
@@ -70,6 +93,24 @@ export default function Home({ todayPlan, history, syncInfo, onStart, onResume, 
               {last.fin.pain ? ` · pain: ${last.fin.pain}` : ''}
             </div>
           )}
+          {last.debrief && (
+            <p className="body" style={{ marginTop: 10, color: 'var(--text-body)' }}>
+              🗨 {last.debrief}
+            </p>
+          )}
+        </div>
+      )}
+
+      {showReview && (
+        <div className="card card--animate">
+          <div className="card__label">Weekly review</div>
+          <div className="mono card__detail" style={{ marginTop: 0 }}>
+            {weeklyReview.count} sessions
+            {weeklyReview.progressions && weeklyReview.progressions !== 'none'
+              ? ` · up: ${weeklyReview.progressions}`
+              : ''}
+          </div>
+          <p className="body" style={{ marginTop: 8 }}>{weeklyReview.text}</p>
         </div>
       )}
 

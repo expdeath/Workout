@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { loadKey, saveKey } from './utils/storage';
 import { todayStr, quickReadiness } from './utils/helpers';
-import { generateWorkoutPlan } from './api/gemini';
+import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
+import { lastWeekSummary, mondayOf } from './utils/stats';
 import { getApiKey } from './utils/storage';
 import {
   getAllSessions,
@@ -13,6 +14,7 @@ import {
 import { syncNow } from './db/sync';
 
 import Home from './screens/Home';
+import Progress from './screens/Progress';
 import CheckIn from './screens/CheckIn';
 import Generating from './screens/Generating';
 import Workout from './screens/Workout';
@@ -34,6 +36,13 @@ export default function App() {
   const [statusMsg, setStatusMsg] = useState('');
   const [syncInfo, setSyncInfo] = useState(null);
   const lastSyncAt = useRef(0);
+  const [weeklyReview, setWeeklyReview] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('coach:weekly-review'));
+    } catch {
+      return null;
+    }
+  });
 
   // Check-in state — pre-filled with a "normal day"
   const [ci, setCi] = useState({
@@ -60,6 +69,7 @@ export default function App() {
       if (t && t.date === todayStr()) setTodayPlan(t);
       logEvent('app_open', { sessions: h.length });
       runSync(); // background — pulls sessions logged on other devices
+      maybeWeeklyReview(h); // background — Sunday review generation
 
       // If no API key, go to settings first
       if (!getApiKey()) {
@@ -146,6 +156,46 @@ export default function App() {
     }
   }
 
+  // ── Weekly review: generated on Sundays, shown for the week after ──
+  async function maybeWeeklyReview(hist) {
+    try {
+      if (new Date().getDay() !== 0) return; // Sundays only
+      const cur = JSON.parse(localStorage.getItem('coach:weekly-review') || 'null');
+      if (cur?.week === mondayOf(todayStr())) return; // already done this week
+      const summary = lastWeekSummary(hist);
+      if (!summary || !getApiKey()) return;
+      const text = await generateWeeklyReview(summary);
+      const review = {
+        week: mondayOf(todayStr()),
+        at: Date.now(),
+        text,
+        count: summary.count,
+        progressions: summary.progressions,
+      };
+      localStorage.setItem('coach:weekly-review', JSON.stringify(review));
+      setWeeklyReview(review);
+    } catch (e) {
+      console.warn('[COACH] weekly review failed', e);
+    }
+  }
+
+  // ── Mid-workout exercise swap (machine busy → use the alternative) ──
+  function swapExercise(exI) {
+    const ex = todayPlan?.plan?.exercises?.[exI];
+    if (!ex?.alt) return;
+    const t = {
+      ...todayPlan,
+      plan: {
+        ...todayPlan.plan,
+        exercises: todayPlan.plan.exercises.map((e, i) =>
+          i === exI ? { ...e, name: e.alt, alt: e.name } : e
+        ),
+      },
+    };
+    logEvent('exercise_swapped', { from: ex.name, to: ex.alt });
+    persistToday(t);
+  }
+
   // ── Set logging ──
   const updateSet = (exI, setI, field, val) => {
     const t = {
@@ -173,6 +223,17 @@ export default function App() {
     });
     setScreen('home');
     runSync(); // background — push today's session to the cloud
+
+    // Background: coach debrief on the finished session
+    generateDebrief(t, history)
+      .then(async (text) => {
+        const t2 = { ...t, debrief: text };
+        await putSession(t2);
+        await persistToday(t2);
+        setHistory((hs) => hs.map((s) => (s.date === t2.date ? t2 : s)));
+        runSync();
+      })
+      .catch((e) => console.warn('[COACH] debrief failed', e));
   }
 
   // ── Clear all history ──
@@ -211,6 +272,8 @@ export default function App() {
             todayPlan={todayPlan}
             history={history}
             syncInfo={syncInfo}
+            weeklyReview={weeklyReview}
+            onProgress={() => setScreen('progress')}
             onStart={() => {
               setCi({
                 energy: 7,
@@ -245,10 +308,15 @@ export default function App() {
           <Generating readiness={quickReadiness(ci)} statusMsg={statusMsg} />
         )}
 
+        {screen === 'progress' && (
+          <Progress history={history} onBack={() => setScreen('home')} />
+        )}
+
         {screen === 'workout' && todayPlan && (
           <Workout
             t={todayPlan}
             updateSet={updateSet}
+            swapExercise={swapExercise}
             onBack={() => setScreen('home')}
             onFinish={() => {
               setFin({ rpe: 7, pain: '', feedback: '' });

@@ -96,6 +96,20 @@ export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
       </button>
       {showHealth && (
         <>
+          <button
+            className="ghost-btn"
+            style={{ display: 'block', padding: '4px 0', color: 'var(--teal)' }}
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText();
+                if (text) set({ health: text.slice(0, 2000) });
+              } catch {
+                /* clipboard permission denied — user can paste manually */
+              }
+            }}
+          >
+            ⎘ Paste from clipboard
+          </button>
           <textarea
             className="input textarea"
             placeholder={
