@@ -107,6 +107,7 @@ ${buildLongTermSummary(history) || 'Not enough history yet — rely on the recen
 TRAINING LOG (last sessions in detail, most recent last):
 ${histText}
 ${daysSince !== null ? `Days since last logged session: ${daysSince}${daysSince >= 7 ? ' — RETURNING FROM BREAK, apply reduced-volume rules.' : ''}` : ''}
+${recent.length && recent[recent.length - 1].debrief ? `\nYOUR OWN COACHING NOTE AFTER THE LAST SESSION (follow through on it): ${recent[recent.length - 1].debrief}` : ''}
 
 BASE WORKOUT DATABASE:
 ${WORKOUT_DB}
