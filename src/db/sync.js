@@ -253,9 +253,10 @@ export function mergeBackups(local, remote) {
 
 /** Deterministic shape so backups can be compared as JSON strings. */
 export function normalizeBackup(b) {
-  const DELETION_TTL = 30 * 86400000;
   // deletion log: legacy in-place tombstones (deleted:true rows) fold
-  // into it, sessions carry only real workouts
+  // into it, sessions carry only real workouts. Markers are kept
+  // permanently — a few bytes each, and no device can ever resurrect
+  // a deleted workout, however long it was offline.
   const dels = new Map((b.deletedIds || []).map((d) => [d.id, d.at || 0]));
   const sessions = [];
   for (const s of b.sessions || []) {
@@ -272,7 +273,6 @@ export function normalizeBackup(b) {
     version: b.version || 1,
     aiSettings: b.aiSettings || {},
     deletedIds: [...dels]
-      .filter(([, at]) => Date.now() - at < DELETION_TTL)
       .map(([id, at]) => ({ id, at }))
       .sort((a, x) => a.id.localeCompare(x.id)),
     health: [...(b.health || [])].sort((a, x) => (a.date < x.date ? -1 : 1)),

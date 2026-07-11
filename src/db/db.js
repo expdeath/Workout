@@ -96,8 +96,8 @@ export function clearSessions() {
 // ── Deletion log ─────────────────────────────────────────────────
 // Deleted sessions are REMOVED from the store; only their id+time go
 // on this list so the deletion propagates to other devices through
-// sync instead of the session resurrecting. Entries self-purge after
-// 30 days (every device will long since have synced).
+// sync instead of the session resurrecting. Markers are kept
+// permanently (a few bytes each).
 
 const DELETED_KEY = 'coach:deleted-ids';
 
