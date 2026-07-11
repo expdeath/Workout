@@ -118,7 +118,7 @@ export default function App() {
     try {
       const ingested = ingestHealthFromUrl();
       if (!ingested) return;
-      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      window.history.replaceState(null, '', window.location.pathname);
       logEvent('health_autoreceived', { chars: ingested.length });
       // If a check-in is on screen right now, fill it in live too
       setCi((c) => ({ ...c, health: ingested }));

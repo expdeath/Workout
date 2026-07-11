@@ -10,20 +10,29 @@ import { todayStr } from './helpers.js';
 const KEY = 'coach:health-';
 
 /**
- * Parse #health=… from the URL, store it for today, clean the URL.
- * Returns the ingested text, or null if the fragment wasn't present.
+ * Parse health data from the URL — either ?health=… (query, survives
+ * everything and forces a real page load) or #health=… (fragment,
+ * never sent to the server). Store it for today.
+ * Returns the ingested text, or null if neither was present.
  */
 export function ingestHealthFromUrl(
   hash = window.location.hash,
-  store = localStorage
+  store = localStorage,
+  search = typeof window !== 'undefined' ? window.location.search : ''
 ) {
+  let raw = null;
   const m = /^#health=(.+)$/.exec(hash || '');
-  if (!m) return null;
+  if (m) raw = m[1];
+  if (raw === null && search) {
+    const q = new URLSearchParams(search).get('health');
+    if (q) raw = encodeURIComponent(q); // URLSearchParams already decoded it
+  }
+  if (raw === null) return null;
   let text;
   try {
-    text = decodeURIComponent(m[1]);
+    text = decodeURIComponent(raw);
   } catch {
-    text = m[1];
+    text = raw;
   }
   text = text.replace(/\+/g, ' ').trim().slice(0, 2000);
   if (!text) return null;
