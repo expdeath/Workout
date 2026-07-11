@@ -28,3 +28,30 @@ export function getApiKey() {
 export function setApiKey(key) {
   localStorage.setItem('coach:gemini-api-key', key);
 }
+
+// ── AI coach setup (personal profile + base routine) ─────────────
+// Kept out of the public app code for privacy; travels with the
+// cloud backup (newest edit wins across devices).
+
+export function getAISettings() {
+  try {
+    return JSON.parse(localStorage.getItem('coach:ai-settings')) || {};
+  } catch {
+    return {};
+  }
+}
+
+export function setAISettings(patch) {
+  const cur = getAISettings();
+  localStorage.setItem(
+    'coach:ai-settings',
+    JSON.stringify({ ...cur, ...patch, updatedAt: Date.now() })
+  );
+}
+
+/** Raw restore (backup import / sync) — preserves updatedAt. */
+export function restoreAISettings(obj) {
+  if (obj && typeof obj === 'object') {
+    localStorage.setItem('coach:ai-settings', JSON.stringify(obj));
+  }
+}

@@ -11,7 +11,8 @@ const CSP = [
   "font-src https://fonts.gstatic.com",
   "img-src 'self' data:",
   "connect-src 'self' https://generativelanguage.googleapis.com https://api.github.com", // Gemini + cloud sync
-
+  "worker-src 'self'",   // service worker (offline)
+  "manifest-src 'self'", // PWA manifest
   "base-uri 'none'",
   "form-action 'none'",
 ].join('; ');

@@ -4,7 +4,7 @@ import { weekStats } from '../utils/stats';
 
 const WEEK_MS = 7 * 86400000;
 
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, onStart, onResume, onHistory, onSettings, onProgress }) {
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress }) {
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
@@ -73,9 +73,14 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, onSta
           Resume {todayPlan.plan.sessionType}
         </button>
       ) : (
-        <button className="big-btn" onClick={onStart}>
-          {doneToday ? 'Plan another session' : 'Start check-in'}
-        </button>
+        <>
+          <button className="big-btn" onClick={onStart}>
+            {doneToday ? 'Plan another session' : 'Start check-in'}
+          </button>
+          <button className="quick-btn" onClick={onQuickStart}>
+            ⚡ Quick start — normal day, skip the questions
+          </button>
+        </>
       )}
 
       {last && (

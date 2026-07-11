@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getApiKey, setApiKey } from '../utils/storage';
+import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync } from '../db/sync';
 import { todaysHealth } from '../utils/healthIngest';
@@ -13,6 +13,18 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
   const [eventCount, setEventCount] = useState(null);
   const [dataMsg, setDataMsg] = useState('');
   const fileRef = useRef(null);
+
+  const [ai, setAi] = useState(() => {
+    const s = getAISettings();
+    return { profile: s.profile || '', routine: s.routine || '' };
+  });
+  const [aiSaved, setAiSaved] = useState(false);
+  const handleAiSave = () => {
+    setAISettings({ profile: ai.profile.trim(), routine: ai.routine.trim() });
+    setAiSaved(true);
+    logEvent('ai_settings_saved');
+    setTimeout(() => setAiSaved(false), 2000);
+  };
 
   const [sync, setSync] = useState(getSyncConfig());
   const [showToken, setShowToken] = useState(false);
@@ -153,6 +165,34 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           <br />
           3. Copy the key and paste it above
         </p>
+      </div>
+
+      <div className="card">
+        <div className="card__label">Your Coach Setup</div>
+        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
+          Tell the coach about yourself and your base routine. This stays
+          private (synced through your own data repo, never in the app's
+          public code) and shapes every plan.
+        </p>
+        <div className="q-label" style={{ marginTop: 0 }}>About you</div>
+        <textarea
+          className="input textarea"
+          style={{ marginTop: 6, minHeight: 80 }}
+          placeholder="e.g. Desk job, long sitting. Goals: fat loss + muscle. Lower back gets tight — prefer supported/machine variations. Walk 12 min each way to the gym. Train after 4PM, 4-5x/week, 45-75 min."
+          value={ai.profile}
+          onChange={(e) => setAi({ ...ai, profile: e.target.value.slice(0, 1500) })}
+        />
+        <div className="q-label">Your base routine</div>
+        <textarea
+          className="input textarea"
+          style={{ marginTop: 6, minHeight: 120 }}
+          placeholder="Leave empty to use the built-in Push/Pull/Legs routine, or paste your own — exercises, sets × reps, alternatives, warm-ups."
+          value={ai.routine}
+          onChange={(e) => setAi({ ...ai, routine: e.target.value.slice(0, 4000) })}
+        />
+        <button className="big-btn" onClick={handleAiSave} style={{ marginTop: 12 }}>
+          {aiSaved ? '✓ Saved' : 'Save coach setup'}
+        </button>
       </div>
 
       <div className="card">

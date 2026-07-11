@@ -1,6 +1,6 @@
 // ── Gemini API integration ───────────────────────────────────────
 import { parsePlan } from '../utils/parser';
-import { getApiKey } from '../utils/storage';
+import { getApiKey, getAISettings } from '../utils/storage';
 import { todayStr, setLogged } from '../utils/helpers';
 import { buildLongTermSummary } from '../utils/aiContext';
 import { logEvent } from '../db/db';
@@ -34,11 +34,19 @@ Option 2: 3 rounds — dead bugs x10/side, bird dog x10/side, plank 45s, side pl
 `;
 
 // ── Coaching system prompt ───────────────────────────────────────
-const COACH_RULES = `You are this person's long-term strength coach. Profile: IT desk job, long sitting periods. Goals: fat loss, muscle preservation/building, fitness, posture, avoid lower back pain, sustainable habits. Trains Push/Pull/Legs (flexible). Walks 12 min each way to the gym — count it in total time, treat as light warm-up/cool-down. Trains after 4PM day job, before a 1-2h evening job, so sessions must be efficient. Prefers 4-5 sessions/week Mon-Fri. Sessions 45-75 min.
-Lower back: occasionally tight from sitting. Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt if sore today.
+// The personal profile is user-editable in Settings (kept out of the
+// public repo); this neutral default applies until one is saved.
+const DEFAULT_PROFILE =
+  'Recreational lifter, trains Push/Pull/Legs at a commercial gym. Goals: strength, muscle, sustainable habits. Sessions 45-75 min, 4-5 per week.';
+
+function coachRules() {
+  const profile = (getAISettings().profile || '').trim() || DEFAULT_PROFILE;
+  return `You are this person's long-term strength coach. PROFILE: ${profile}
+Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt to today's check-in (soreness, tightness, energy).
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
 Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
+}
 
 // ── JSON schema spec sent to the model ──────────────────────────
 const JSON_SPEC = `Respond with ONLY minified valid JSON — no markdown fences, no preamble, no trailing text. BE EXTREMELY CONCISE in every string; total response must stay under 900 tokens. Schema:
@@ -74,7 +82,7 @@ function buildUserMessage(checkin, history) {
               })
               .join('; ') +
             (h.finished
-              ? ` | session RPE ${h.fin?.rpe ?? '?'}${h.fin?.pain ? ' | pain: ' + h.fin.pain : ''}${h.fin?.feedback ? ' | notes: ' + h.fin.feedback : ''}`
+              ? ` | session RPE ${h.fin?.rpe ?? '?'}${h.durationMin ? ` | took ${h.durationMin}min` : ''}${h.fin?.pain ? ' | pain: ' + h.fin.pain : ''}${h.fin?.feedback ? ' | notes: ' + h.fin.feedback : ''}`
               : ' | NOT COMPLETED')
         )
         .join('\n')
@@ -110,7 +118,7 @@ ${daysSince !== null ? `Days since last logged session: ${daysSince}${daysSince 
 ${recent.length && recent[recent.length - 1].debrief ? `\nYOUR OWN COACHING NOTE AFTER THE LAST SESSION (follow through on it): ${recent[recent.length - 1].debrief}` : ''}
 
 BASE WORKOUT DATABASE:
-${WORKOUT_DB}
+${(getAISettings().routine || '').trim() || WORKOUT_DB}
 
 Decide the right session for today and build it. ${JSON_SPEC}`;
 }
@@ -156,7 +164,7 @@ async function callGemini(checkin, history, model = MODELS[0]) {
         },
         body: JSON.stringify({
           system_instruction: {
-            parts: [{ text: COACH_RULES }],
+            parts: [{ text: coachRules() }],
           },
           contents: [
             {
@@ -306,7 +314,7 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
             'X-goog-api-key': apiKey,
           },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: COACH_RULES }] },
+            system_instruction: { parts: [{ text: coachRules() }] },
             contents: [{ role: 'user', parts: [{ text: userMsg }] }],
             generationConfig: {
               maxOutputTokens: maxTokens + 1000, // headroom for thinking models

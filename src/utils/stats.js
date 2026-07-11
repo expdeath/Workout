@@ -122,6 +122,40 @@ export function weekStats(history, target = 3) {
   return { thisWeek, streak };
 }
 
+/**
+ * Most recent performance of an exercise (by name, case-insensitive).
+ * Returns { date, sets: [{weight, reps}] } or null.
+ */
+export function lastPerformance(history, exerciseName) {
+  const key = (exerciseName || '').trim().toLowerCase();
+  if (!key) return null;
+  for (let i = history.length - 1; i >= 0; i--) {
+    const s = history[i];
+    const exI = (s.plan?.exercises || []).findIndex(
+      (ex) => ex?.name?.trim().toLowerCase() === key
+    );
+    if (exI === -1) continue;
+    const sets = (s.log?.[exI] || []).filter(setLogged);
+    if (sets.length) return { date: s.date, sets };
+  }
+  return null;
+}
+
+/**
+ * Simple progression hint: if every set last time hit the top of the
+ * prescribed rep range, suggest +2.5kg on the heaviest set.
+ */
+export function suggestNextWeight(lastPerf, repsRange) {
+  if (!lastPerf?.sets?.length) return null;
+  const top = parseInt(String(repsRange || '').split(/[-–]/).pop(), 10);
+  if (!top) return null;
+  const weights = lastPerf.sets.map((s) => parseFloat(s.weight)).filter((n) => !Number.isNaN(n));
+  if (!weights.length) return null;
+  const allTopped = lastPerf.sets.every((s) => parseInt(s.reps, 10) >= top);
+  if (!allTopped) return null;
+  return Math.min(Math.max(...weights) + 2.5, 200);
+}
+
 /** Compact text summary of the last 7 days, for the AI weekly review. */
 export function lastWeekSummary(history) {
   const cutoff = Date.now() - 7 * DAY;

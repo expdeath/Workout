@@ -92,6 +92,7 @@ export default function History({ history, onBack, onDelete, onUpdate }) {
                     style={{ fontSize: 13, color: 'var(--amber)', marginTop: 8 }}
                   >
                     RPE {view.fin.rpe}/10
+                    {view.durationMin ? ` · ${view.durationMin}min` : ''}
                     {view.fin.pain ? ` · ${view.fin.pain}` : ''}
                     {view.fin.feedback ? ` · ${view.fin.feedback}` : ''}
                   </div>

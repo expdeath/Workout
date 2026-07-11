@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
 import { fmtDate } from '../utils/helpers';
+import { lastPerformance, suggestNextWeight } from '../utils/stats';
 
 /** "90s" → 90 · "2min" → 120 · "1-2min" → 120 · fallback 90 */
 function parseRestSeconds(rest) {
@@ -12,7 +13,7 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, onBack, onFinish }) {
   const p = t.plan;
   const totalSets = t.log.reduce((a, ex) => a + ex.length, 0);
   const doneSets = t.log.reduce(
@@ -117,7 +118,10 @@ export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }
         </div>
       )}
 
-      {(p.exercises || []).map((ex, exI) => (
+      {(p.exercises || []).map((ex, exI) => {
+        const lastPerf = lastPerformance(history, ex.name);
+        const suggest = suggestNextWeight(lastPerf, ex.reps);
+        return (
         <div key={exI} className="ex-card card--animate">
           <div className="row-between">
             <div className="ex-name">{ex.name}</div>
@@ -127,8 +131,19 @@ export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }
           </div>
           <div className="mono ex-prescription">
             {ex.sets} × {ex.reps}
-            {ex.suggestedWeight ? ` · try ${ex.suggestedWeight}` : ''}
+            {suggest
+              ? ` · try ${suggest}kg`
+              : ex.suggestedWeight
+              ? ` · try ${ex.suggestedWeight}`
+              : ''}
           </div>
+          {lastPerf && (
+            <div className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
+              last time ({fmtDate(lastPerf.date)}):{' '}
+              {lastPerf.sets.map((s) => `${s.weight || '?'}×${s.reps || '?'}`).join(' · ')}
+              {suggest ? ' — all reps hit, go up' : ''}
+            </div>
+          )}
           {ex.notes && <p className="body ex-notes">{ex.notes}</p>}
           <div className="sets-list">
             {t.log[exI].map((set, setI) => (
@@ -142,7 +157,11 @@ export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }
                 <input
                   className="set-input"
                   inputMode="decimal"
-                  placeholder="kg"
+                  placeholder={
+                    suggest
+                      ? String(suggest)
+                      : lastPerf?.sets?.[setI]?.weight || 'kg'
+                  }
                   value={set.weight}
                   onChange={(e) =>
                     updateSet(exI, setI, 'weight', e.target.value)
@@ -152,7 +171,7 @@ export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }
                 <input
                   className="set-input"
                   inputMode="numeric"
-                  placeholder="reps"
+                  placeholder={lastPerf?.sets?.[setI]?.reps || 'reps'}
                   value={set.reps}
                   onChange={(e) =>
                     updateSet(exI, setI, 'reps', e.target.value)
@@ -167,7 +186,8 @@ export default function Workout({ t, updateSet, swapExercise, onBack, onFinish }
             </button>
           )}
         </div>
-      ))}
+        );
+      })}
 
       {p.cardio && (
         <div className="card card--animate">

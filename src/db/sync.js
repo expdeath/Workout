@@ -219,10 +219,16 @@ export function mergeBackups(local, remote) {
     seen.add(eventKey(e));
     events.push(e);
   }
+  // AI settings (profile/routine): newest edit wins
+  const lc = local.aiSettings || {};
+  const rc = remote.aiSettings || {};
+  const aiSettings = (rc.updatedAt || 0) > (lc.updatedAt || 0) ? rc : lc;
+
   return normalizeBackup({
     ...local,
     sessions: [...byId.values()],
     events,
+    aiSettings,
   });
 }
 
@@ -231,6 +237,7 @@ export function normalizeBackup(b) {
   return {
     app: 'coach',
     version: b.version || 1,
+    aiSettings: b.aiSettings || {},
     sessions: (b.sessions || [])
       .map((s) => ({ ...s, id: sessionId(s) }))
       .sort((a, x) => (a.date + a.id).localeCompare(x.date + x.id)),

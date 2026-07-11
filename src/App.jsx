@@ -183,6 +183,31 @@ export default function App() {
     };
   }, []);
 
+  // Default "normal day" check-in; grabs Watch data (stored or via the
+  // clipboard — the button tap that got us here is the user gesture)
+  async function buildDefaultCheckin() {
+    let health = todaysHealth();
+    if (!health && navigator.clipboard?.readText) {
+      try {
+        const clip = await navigator.clipboard.readText();
+        if (looksLikeHealthData(clip)) {
+          health = storeTodaysHealth(clip);
+          logEvent('health_pasted_auto', { chars: health.length });
+        }
+      } catch { /* paste declined — fine */ }
+    }
+    return {
+      energy: 7,
+      sleep: 'OK',
+      soreness: 'None',
+      soreAreas: '',
+      backTight: false,
+      timeAvail: '60',
+      health,
+      notes: '',
+    };
+  }
+
   // ── AI call ──
   async function generateWorkout(checkin) {
     setScreen('generating');
@@ -210,6 +235,7 @@ export default function App() {
       const t = {
         id: `${todayStr()}#${Date.now()}`,
         date: todayStr(),
+        startedAt: Date.now(),
         checkin,
         plan,
         log,
@@ -281,11 +307,16 @@ export default function App() {
 
   // ── Finish session ──
   async function finishSession() {
+    // real session length, capped at 4h in case the tab sat open
+    const durationMin = todayPlan.startedAt
+      ? Math.min(Math.round((Date.now() - todayPlan.startedAt) / 60000), 240)
+      : undefined;
     // typed-but-unticked sets clearly happened — complete them on save
     const t = {
       ...todayPlan,
       finished: true,
       fin,
+      ...(durationMin && durationMin >= 10 ? { durationMin } : {}),
       log: (todayPlan.log || []).map((ex) =>
         ex.map((s) => (s.weight || s.reps ? { ...s, done: true } : s))
       ),
@@ -375,30 +406,15 @@ export default function App() {
             weeklyReview={weeklyReview}
             onProgress={() => setScreen('progress')}
             onStart={async () => {
-              // The tap is a user gesture — if the Shortcut only managed to
-              // copy the data (clipboard route), grab it right now
-              let health = todaysHealth();
-              if (!health && navigator.clipboard?.readText) {
-                try {
-                  const clip = await navigator.clipboard.readText();
-                  if (looksLikeHealthData(clip)) {
-                    health = storeTodaysHealth(clip);
-                    logEvent('health_pasted_auto', { chars: health.length });
-                  }
-                } catch { /* paste declined — fine */ }
-              }
-              setCi({
-                energy: 7,
-                sleep: 'OK',
-                soreness: 'None',
-                soreAreas: '',
-                backTight: false,
-                timeAvail: '60',
-                health,
-                notes: '',
-              });
+              setCi(await buildDefaultCheckin());
               setError('');
               setScreen('checkin');
+            }}
+            onQuickStart={async () => {
+              const checkin = await buildDefaultCheckin();
+              setCi(checkin);
+              logEvent('quick_start');
+              generateWorkout({ ...checkin, notes: 'Quick start — assumed a normal day.' });
             }}
             onResume={() => setScreen('workout')}
             onHistory={() => setScreen('history')}
@@ -427,6 +443,7 @@ export default function App() {
         {screen === 'workout' && todayPlan && (
           <Workout
             t={todayPlan}
+            history={history}
             updateSet={updateSet}
             swapExercise={swapExercise}
             onBack={() => setScreen('home')}

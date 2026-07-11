@@ -118,6 +118,8 @@ async function getAllEvents() {
 
 // ── Backup: export / import ──────────────────────────────────────
 
+import { getAISettings, restoreAISettings } from '../utils/storage.js';
+
 export async function exportAll() {
   const [sessions, events] = await Promise.all([
     getAllSessions(),
@@ -129,6 +131,7 @@ export async function exportAll() {
     exportedAt: new Date().toISOString(),
     sessions,
     events,
+    aiSettings: getAISettings(),
   };
 }
 
@@ -144,6 +147,9 @@ export async function replaceAll(backup) {
     s.clear();
     (backup.events || []).forEach(({ id, ...row }) => row && row.type && s.add(row));
   });
+  if (backup.aiSettings && (backup.aiSettings.updatedAt || 0) > (getAISettings().updatedAt || 0)) {
+    restoreAISettings(backup.aiSettings);
+  }
 }
 
 /** Restore a backup, replacing current data. Throws on invalid shape. */
