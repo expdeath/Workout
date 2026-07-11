@@ -2,6 +2,8 @@
 import { parsePlan } from '../utils/parser';
 import { getApiKey } from '../utils/storage';
 import { todayStr } from '../utils/helpers';
+import { buildLongTermSummary } from '../utils/aiContext';
+import { logEvent } from '../db/db';
 
 // ── Workout database ─────────────────────────────────────────────
 const WORKOUT_DB = `
@@ -35,7 +37,7 @@ Option 2: 3 rounds — dead bugs x10/side, bird dog x10/side, plank 45s, side pl
 const COACH_RULES = `You are this person's long-term strength coach. Profile: IT desk job, long sitting periods. Goals: fat loss, muscle preservation/building, fitness, posture, avoid lower back pain, sustainable habits. Trains Push/Pull/Legs (flexible). Walks 12 min each way to the gym — count it in total time, treat as light warm-up/cool-down. Trains after 4PM day job, before a 1-2h evening job, so sessions must be efficient. Prefers 4-5 sessions/week Mon-Fri. Sessions 45-75 min.
 Lower back: occasionally tight from sitting. Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt if sore today.
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
-Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log.
+Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 
 // ── JSON schema spec sent to the model ──────────────────────────
@@ -99,7 +101,10 @@ ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 APPLE HEALTH DATA (pasted by user, may be empty):
 ${checkin.health || 'None provided today — rely on check-in + history.'}
 
-TRAINING LOG (most recent last):
+LONG-TERM TRAINING SUMMARY (compressed from full history):
+${buildLongTermSummary(history) || 'Not enough history yet — rely on the recent log below.'}
+
+TRAINING LOG (last sessions in detail, most recent last):
 ${histText}
 ${daysSince !== null ? `Days since last logged session: ${daysSince}${daysSince >= 7 ? ' — RETURNING FROM BREAK, apply reduced-volume rules.' : ''}` : ''}
 
@@ -130,6 +135,9 @@ async function callGemini(checkin, history, model = MODELS[0]) {
   // 60-second timeout for the API call
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60000);
+
+  const startedAt = Date.now();
+  logEvent('ai_request', { model });
 
   let response;
   try {
@@ -163,12 +171,17 @@ async function callGemini(checkin, history, model = MODELS[0]) {
     console.log('[COACH] Got response:', response.status);
   } catch (fetchErr) {
     clearTimeout(timeout);
+    logEvent('ai_error', { model, kind: fetchErr.name, message: fetchErr.message });
     if (fetchErr.name === 'AbortError') {
       throw new Error('Request timed out after 60 seconds. The AI might be overloaded — try again.');
     }
     throw new Error(`Network error: ${fetchErr.message}`);
   }
   clearTimeout(timeout);
+
+  if (!response.ok) {
+    logEvent('ai_error', { model, status: response.status, latencyMs: Date.now() - startedAt });
+  }
 
   // Handle rate limiting
   if (response.status === 429) {
@@ -242,6 +255,14 @@ async function callGemini(checkin, history, model = MODELS[0]) {
   if (!text) {
     throw new Error(`Empty response from Gemini. Finish reason: ${candidate.finishReason || 'unknown'}`);
   }
+
+  logEvent('ai_response', {
+    model,
+    status: response.status,
+    latencyMs: Date.now() - startedAt,
+    chars: text.length,
+    raw: text,
+  });
 
   return parsePlan(text);
 }

@@ -1,16 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getApiKey, setApiKey } from '../utils/storage';
+import { exportAll, importAll, countEvents, logEvent } from '../db/db';
+import { todayStr } from '../utils/helpers';
 
-export default function Settings({ onBack, onClearHistory }) {
+export default function Settings({ onBack, onClearHistory, onDataImported, sessionCount }) {
   const [key, setKey] = useState(getApiKey());
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [eventCount, setEventCount] = useState(null);
+  const [dataMsg, setDataMsg] = useState('');
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    countEvents().then(setEventCount);
+  }, [dataMsg]);
 
   const handleSave = () => {
     setApiKey(key.trim());
     setSaved(true);
+    logEvent('api_key_saved');
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const handleExport = async () => {
+    const backup = await exportAll();
+    const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `coach-backup-${todayStr()}.json`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    logEvent('data_exported', { sessions: backup.sessions.length });
+    setDataMsg(`Exported ${backup.sessions.length} sessions.`);
+  };
+
+  const handleImportFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const backup = JSON.parse(await file.text());
+      await importAll(backup);
+      await onDataImported?.();
+      setDataMsg(`Restored ${backup.sessions.length} sessions from backup.`);
+    } catch (err) {
+      setDataMsg(`Import failed: ${err.message}`);
+    }
   };
 
   const handleClear = () => {
@@ -84,11 +120,42 @@ export default function Settings({ onBack, onClearHistory }) {
       <div className="card">
         <div className="card__label">Data</div>
         <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          All data is stored in your browser's localStorage. Clear it to start
-          fresh.
+          Your full training history and an activity log of every interaction
+          are stored in this browser's database and feed the AI coach.
+          {sessionCount != null && (
+            <>
+              <br />
+              <span className="mono" style={{ fontSize: 13 }}>
+                {sessionCount} sessions · {eventCount ?? '…'} events logged
+              </span>
+            </>
+          )}
         </p>
+        <button className="big-btn" onClick={handleExport}>
+          Export backup
+        </button>
+        <button
+          className="big-btn"
+          style={{ marginTop: 8 }}
+          onClick={() => fileRef.current?.click()}
+        >
+          Import backup
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
+        {dataMsg && (
+          <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
+            {dataMsg}
+          </p>
+        )}
         <button
           className="big-btn big-btn--danger"
+          style={{ marginTop: 8 }}
           onClick={handleClear}
         >
           {confirmClear ? 'Tap again to confirm' : 'Clear all history'}

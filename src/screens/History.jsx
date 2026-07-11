@@ -2,7 +2,8 @@ import React from 'react';
 import { fmtDate } from '../utils/helpers';
 
 export default function History({ history, onBack }) {
-  const rev = [...history].reverse();
+  // Full history lives in the DB; render only the latest 100 for speed.
+  const rev = history.slice(-100).reverse();
 
   return (
     <div className="screen screen--slide-in">

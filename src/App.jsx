@@ -3,6 +3,13 @@ import { loadKey, saveKey } from './utils/storage';
 import { todayStr, quickReadiness } from './utils/helpers';
 import { generateWorkoutPlan } from './api/gemini';
 import { getApiKey } from './utils/storage';
+import {
+  getAllSessions,
+  putSession,
+  clearSessions,
+  logEvent,
+  migrateFromLocalStorage,
+} from './db/db';
 
 import Home from './screens/Home';
 import CheckIn from './screens/CheckIn';
@@ -43,10 +50,12 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
-      const h = await loadKey('history', []);
+      await migrateFromLocalStorage();
+      const h = await getAllSessions();
       const t = await loadKey('today', null);
       setHistory(h);
       if (t && t.date === todayStr()) setTodayPlan(t);
+      logEvent('app_open', { sessions: h.length });
 
       // If no API key, go to settings first
       if (!getApiKey()) {
@@ -68,8 +77,16 @@ export default function App() {
     setError('');
     setStatusMsg('');
 
+    logEvent('checkin_submitted', { checkin });
+
     try {
       const plan = await generateWorkoutPlan(checkin, history, setStatusMsg);
+      logEvent('plan_generated', {
+        sessionType: plan.sessionType,
+        title: plan.title,
+        recoveryScore: plan.recoveryScore,
+        estTimeMin: plan.estTimeMin,
+      });
       const log = (plan.exercises || []).map((ex) =>
         Array.from({ length: Number(ex.sets) || 3 }, () => ({
           weight: '',
@@ -82,6 +99,7 @@ export default function App() {
       setScreen('workout');
     } catch (e) {
       console.error(e);
+      logEvent('generation_failed', { message: e.message });
       setError(e.message || "Couldn't build today's session. Check Settings for your API key, then try again.");
       setScreen('checkin');
     }
@@ -100,10 +118,18 @@ export default function App() {
   // ── Finish session ──
   async function finishSession() {
     const t = { ...todayPlan, finished: true, fin };
-    const newHist = [...history.filter((h) => h.date !== t.date), t].slice(-30);
+    const newHist = [...history.filter((h) => h.date !== t.date), t];
     setHistory(newHist);
-    await saveKey('history', newHist);
+    await putSession(t);
     await persistToday(t);
+    logEvent('session_finished', {
+      date: t.date,
+      sessionType: t.plan?.sessionType,
+      rpe: fin.rpe,
+      pain: fin.pain,
+      feedback: fin.feedback,
+      setsDone: (t.log || []).flat().filter((s) => s.done).length,
+    });
     setScreen('home');
   }
 
@@ -111,8 +137,15 @@ export default function App() {
   async function clearHistory() {
     setHistory([]);
     setTodayPlan(null);
-    await saveKey('history', []);
+    await clearSessions();
     await saveKey('today', null);
+    logEvent('history_cleared');
+  }
+
+  // ── Reload after backup import ──
+  async function reloadFromDb() {
+    const h = await getAllSessions();
+    setHistory(h);
   }
 
   // ================= RENDER =================
@@ -196,6 +229,8 @@ export default function App() {
           <Settings
             onBack={() => setScreen('home')}
             onClearHistory={clearHistory}
+            onDataImported={reloadFromDb}
+            sessionCount={history.length}
           />
         )}
       </div>
