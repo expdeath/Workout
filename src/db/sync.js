@@ -45,6 +45,10 @@ function setLastSync(info) {
 
 function gh(cfg, path, opts = {}) {
   return fetch(`${API}${path}`, {
+    // GitHub's API sends max-age=60; a cached read here means a device
+    // can miss another device's push for a minute and then fail its own
+    // push with a version conflict. Always hit the network.
+    cache: 'no-store',
     ...opts,
     headers: {
       Authorization: `Bearer ${cfg.token}`,
@@ -180,7 +184,7 @@ export async function syncNow({ replaceRemote = false } = {}) {
   if (replaceRemote) {
     await pushRemote(cfg, local, await remoteSha(cfg));
     setLastSync({ status: 'ok', sessions: local.sessions.length });
-    return { status: 'pushed', changedLocal: false };
+    return { status: 'pushed', changedLocal: false, sessions: local.sessions.length };
   }
 
   const doPass = async () => {
@@ -202,7 +206,17 @@ export async function syncNow({ replaceRemote = false } = {}) {
       setLastSync({ status: 'error', message: e.message });
       throw e;
     }
-    result = await doPass(); // someone else pushed between fetch and put — once more
+    // Someone else pushed between our fetch and put — brief pause, once more
+    await new Promise((r) => setTimeout(r, 800));
+    try {
+      result = await doPass();
+    } catch (e2) {
+      const msg = e2.conflict
+        ? 'Sync conflict — another device is syncing right now. It will resolve on the next sync.'
+        : e2.message;
+      setLastSync({ status: 'error', message: msg });
+      throw e2.conflict ? new Error(msg) : e2;
+    }
   }
   setLastSync({ status: 'ok', sessions: result.sessions });
   return result;

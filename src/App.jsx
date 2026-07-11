@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { loadKey, saveKey } from './utils/storage';
 import { todayStr, quickReadiness } from './utils/helpers';
 import { generateWorkoutPlan } from './api/gemini';
@@ -32,6 +32,8 @@ export default function App() {
   const [todayPlan, setTodayPlan] = useState(null);
   const [error, setError] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
+  const [syncInfo, setSyncInfo] = useState(null);
+  const lastSyncAt = useRef(0);
 
   // Check-in state — pre-filled with a "normal day"
   const [ci, setCi] = useState({
@@ -75,14 +77,40 @@ export default function App() {
 
   // ── Cloud sync (no-op until configured in Settings) ──
   async function runSync(opts) {
+    lastSyncAt.current = Date.now();
+    setSyncInfo((s) => ({ ...(s || {}), state: 'syncing' }));
     try {
       const r = await syncNow(opts);
+      if (r.status === 'unconfigured') {
+        setSyncInfo(null);
+        return;
+      }
       if (r.changedLocal) setHistory(await getAllSessions());
+      setSyncInfo({ state: 'ok', at: Date.now(), sessions: r.sessions });
     } catch (e) {
       console.warn('[COACH] sync failed', e);
       logEvent('sync_failed', { message: e.message });
+      setSyncInfo({ state: 'error', message: e.message });
     }
   }
+
+  // Re-sync when the app regains focus (phones rarely reload the tab),
+  // and every 5 minutes while it stays open. Throttled to 20s.
+  useEffect(() => {
+    const maybeSync = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (Date.now() - lastSyncAt.current < 20000) return;
+      runSync();
+    };
+    document.addEventListener('visibilitychange', maybeSync);
+    window.addEventListener('focus', maybeSync);
+    const interval = setInterval(maybeSync, 5 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', maybeSync);
+      window.removeEventListener('focus', maybeSync);
+      clearInterval(interval);
+    };
+  }, []);
 
   // ── AI call ──
   async function generateWorkout(checkin) {
@@ -182,6 +210,7 @@ export default function App() {
           <Home
             todayPlan={todayPlan}
             history={history}
+            syncInfo={syncInfo}
             onStart={() => {
               setCi({
                 energy: 7,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { fmtDate } from '../utils/helpers';
 
-export default function Home({ todayPlan, history, onStart, onResume, onHistory, onSettings }) {
+export default function Home({ todayPlan, history, syncInfo, onStart, onResume, onHistory, onSettings }) {
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
@@ -77,6 +77,16 @@ export default function Home({ todayPlan, history, onStart, onResume, onHistory,
         Tip: paste today's Apple Health numbers during check-in (sleep, HRV,
         resting HR, steps) — the coach reads them.
       </div>
+
+      {syncInfo && (
+        <div className="foot-note mono" style={{ marginTop: 4 }}>
+          {syncInfo.state === 'syncing'
+            ? '☁ syncing…'
+            : syncInfo.state === 'ok'
+            ? `☁ synced ${new Date(syncInfo.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${syncInfo.sessions} sessions in cloud`
+            : `☁ sync error — ${syncInfo.message}`}
+        </div>
+      )}
     </div>
   );
 }
