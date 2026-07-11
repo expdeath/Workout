@@ -7,8 +7,10 @@
 
 const MAX_CHARS = 1800;
 
+import { setLogged } from './helpers.js';
+
 function bestWeight(session, exIndex) {
-  const sets = (session.log?.[exIndex] || []).filter((s) => s.done);
+  const sets = (session.log?.[exIndex] || []).filter(setLogged);
   let best = null;
   for (const s of sets) {
     const w = parseFloat(s.weight);

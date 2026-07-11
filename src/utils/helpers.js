@@ -1,5 +1,9 @@
 // ── Date formatters & readiness calculation ─────────────────────
 
+// A set counts if it was ticked done OR has data typed into it —
+// entering weight/reps clearly means the set happened
+export const setLogged = (s) => !!(s && (s.done || s.weight || s.reps));
+
 export const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export const fmtDate = (iso) =>

@@ -274,7 +274,15 @@ export default function App() {
 
   // ── Finish session ──
   async function finishSession() {
-    const t = { ...todayPlan, finished: true, fin };
+    // typed-but-unticked sets clearly happened — complete them on save
+    const t = {
+      ...todayPlan,
+      finished: true,
+      fin,
+      log: (todayPlan.log || []).map((ex) =>
+        ex.map((s) => (s.weight || s.reps ? { ...s, done: true } : s))
+      ),
+    };
     const newHist = [...history.filter((h) => sid(h) !== sid(t)), t];
     setHistory(newHist);
     await putSession(t);
@@ -285,7 +293,7 @@ export default function App() {
       rpe: fin.rpe,
       pain: fin.pain,
       feedback: fin.feedback,
-      setsDone: (t.log || []).flat().filter((s) => s.done).length,
+      setsDone: (t.log || []).flat().filter((s) => s.done).length, // post auto-complete
     });
     setScreen('home');
     runSync(); // background — push today's session to the cloud

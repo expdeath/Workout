@@ -1,7 +1,7 @@
 // ── Gemini API integration ───────────────────────────────────────
 import { parsePlan } from '../utils/parser';
 import { getApiKey } from '../utils/storage';
-import { todayStr } from '../utils/helpers';
+import { todayStr, setLogged } from '../utils/helpers';
 import { buildLongTermSummary } from '../utils/aiContext';
 import { logEvent } from '../db/db';
 
@@ -67,7 +67,7 @@ function buildUserMessage(checkin, history) {
             (h.plan.exercises || [])
               .map((ex, i) => {
                 const sets = (h.log?.[i] || [])
-                  .filter((s) => s.done)
+                  .filter(setLogged)
                   .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
                   .join(', ');
                 return `${ex.name} [${sets || 'no sets logged'}]`;
@@ -343,7 +343,7 @@ export function generateDebrief(session, history) {
   const sets = (session.plan?.exercises || [])
     .map((ex, i) => {
       const done = (session.log?.[i] || [])
-        .filter((s) => s.done)
+        .filter(setLogged)
         .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
         .join(', ');
       return `${ex.name} [${done || 'skipped'}]`;

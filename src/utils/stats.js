@@ -6,6 +6,8 @@ const DAY = 86400000;
 
 const dateMs = (iso) => new Date(iso + 'T12:00:00').getTime();
 
+import { setLogged } from './helpers.js';
+
 /** Monday (ISO date string) of the week containing the given date. */
 export function mondayOf(iso) {
   const d = new Date(iso + 'T12:00:00');
@@ -16,7 +18,7 @@ export function mondayOf(iso) {
 function bestSetWeight(session, exIndex) {
   let best = null;
   for (const s of session.log?.[exIndex] || []) {
-    if (!s.done) continue;
+    if (!setLogged(s)) continue;
     const w = parseFloat(s.weight);
     if (!Number.isNaN(w) && (best === null || w > best)) best = w;
   }
@@ -28,7 +30,7 @@ export function sessionVolume(session) {
   let vol = 0;
   for (const ex of session.log || []) {
     for (const s of ex) {
-      if (!s.done) continue;
+      if (!setLogged(s)) continue;
       const w = parseFloat(s.weight);
       const r = parseFloat(s.reps);
       if (!Number.isNaN(w) && !Number.isNaN(r)) vol += w * r;

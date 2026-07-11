@@ -1,5 +1,5 @@
 import React from 'react';
-import { fmtDate } from '../utils/helpers';
+import { fmtDate, setLogged } from '../utils/helpers';
 
 export default function History({ history, onBack }) {
   // Full history lives in the DB; render only the latest 100 for speed.
@@ -35,7 +35,7 @@ export default function History({ history, onBack }) {
             </span>
           </div>
           {(h.plan.exercises || []).map((ex, exI) => {
-            const sets = (h.log?.[exI] || []).filter((s) => s.done);
+            const sets = (h.log?.[exI] || []).filter(setLogged);
             return (
               <div
                 key={exI}
