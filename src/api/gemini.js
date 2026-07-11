@@ -164,8 +164,14 @@ async function callGemini(checkin, history, model = MODELS[0]) {
             },
           ],
           generationConfig: {
-            maxOutputTokens: 1000,
+            maxOutputTokens: 4000,
             temperature: 0.7,
+            // 3.5 Flash thinks at "medium" by default and can spend the
+            // whole budget reasoning before emitting the JSON — we want
+            // fast structured output, not deliberation
+            ...(model.startsWith('gemini-3.5')
+              ? { thinkingConfig: { thinkingLevel: 'minimal' } }
+              : {}),
           },
         }),
       }
@@ -301,7 +307,13 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
           body: JSON.stringify({
             system_instruction: { parts: [{ text: COACH_RULES }] },
             contents: [{ role: 'user', parts: [{ text: userMsg }] }],
-            generationConfig: { maxOutputTokens: maxTokens, temperature: 0.6 },
+            generationConfig: {
+              maxOutputTokens: maxTokens + 1000, // headroom for thinking models
+              temperature: 0.6,
+              ...(model.startsWith('gemini-3.5')
+                ? { thinkingConfig: { thinkingLevel: 'minimal' } }
+                : {}),
+            },
           }),
         }
       );

@@ -45,6 +45,12 @@ export function parsePlan(raw) {
 export function validatePlan(p) {
   if (!p || !p.sessionType) throw new Error('plan missing sessionType');
   p.exercises = Array.isArray(p.exercises) ? p.exercises : [];
+  // A training day with no exercises means the response was truncated —
+  // throw so the caller falls back to the next model instead of showing
+  // an empty workout
+  if (!/rest/i.test(p.sessionType) && p.exercises.length === 0) {
+    throw new Error('plan has no exercises (truncated response)');
+  }
   p.warmup = Array.isArray(p.warmup) ? p.warmup : [];
   p.cooldown = Array.isArray(p.cooldown) ? p.cooldown : [];
   p.recoveryScore = Math.max(0, Math.min(100, Number(p.recoveryScore) || 50));
