@@ -212,6 +212,14 @@ export function mergeBackups(local, remote) {
   for (const s of local.sessions || []) {
     if (s?.date) byId.set(sessionId(s), pickSession(s, byId.get(sessionId(s))));
   }
+
+  // deletion log: union, newest timestamp per id (deletion always wins
+  // over a live copy still sitting on another device)
+  const delById = new Map();
+  for (const d of [...(local.deletedIds || []), ...(remote.deletedIds || [])]) {
+    if (d?.id && (d.at || 0) > (delById.get(d.id) || 0)) delById.set(d.id, d.at || 0);
+  }
+  const deletedIds = [...delById].map(([id, at]) => ({ id, at }));
   const seen = new Set();
   const events = [];
   for (const e of [...(local.events || []), ...(remote.events || [])]) {
@@ -239,19 +247,36 @@ export function mergeBackups(local, remote) {
     events,
     health: [...byDate.values()],
     aiSettings,
+    deletedIds,
   });
 }
 
 /** Deterministic shape so backups can be compared as JSON strings. */
 export function normalizeBackup(b) {
+  const DELETION_TTL = 30 * 86400000;
+  // deletion log: legacy in-place tombstones (deleted:true rows) fold
+  // into it, sessions carry only real workouts
+  const dels = new Map((b.deletedIds || []).map((d) => [d.id, d.at || 0]));
+  const sessions = [];
+  for (const s of b.sessions || []) {
+    if (!s?.date) continue;
+    const id = sessionId(s);
+    if (s.deleted) {
+      if (!dels.has(id)) dels.set(id, s.updatedAt || Date.now());
+      continue;
+    }
+    if (!dels.has(id)) sessions.push({ ...s, id });
+  }
   return {
     app: 'coach',
     version: b.version || 1,
     aiSettings: b.aiSettings || {},
+    deletedIds: [...dels]
+      .filter(([, at]) => Date.now() - at < DELETION_TTL)
+      .map(([id, at]) => ({ id, at }))
+      .sort((a, x) => a.id.localeCompare(x.id)),
     health: [...(b.health || [])].sort((a, x) => (a.date < x.date ? -1 : 1)),
-    sessions: (b.sessions || [])
-      .map((s) => ({ ...s, id: sessionId(s) }))
-      .sort((a, x) => (a.date + a.id).localeCompare(x.date + x.id)),
+    sessions: sessions.sort((a, x) => (a.date + a.id).localeCompare(x.date + x.id)),
     events: (b.events || [])
       .map(({ id, ...e }) => e)
       .sort((a, x) => (eventKey(a) < eventKey(x) ? -1 : 1)),

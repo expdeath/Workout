@@ -93,6 +93,36 @@ export function clearSessions() {
   return withStore('sessions', 'readwrite', (s) => s.clear());
 }
 
+// ── Deletion log ─────────────────────────────────────────────────
+// Deleted sessions are REMOVED from the store; only their id+time go
+// on this list so the deletion propagates to other devices through
+// sync instead of the session resurrecting. Entries self-purge after
+// 30 days (every device will long since have synced).
+
+const DELETED_KEY = 'coach:deleted-ids';
+
+export function getDeletedIds() {
+  try {
+    return JSON.parse(localStorage.getItem(DELETED_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+export function setDeletedIds(list) {
+  try {
+    localStorage.setItem(DELETED_KEY, JSON.stringify(list || []));
+  } catch { /* non-critical */ }
+}
+
+/** Remove the session row for real and record the deletion. */
+export async function hardDeleteSession(id) {
+  await withStore('sessions', 'readwrite', (s) => s.delete(id));
+  const list = getDeletedIds().filter((d) => d.id !== id);
+  list.push({ id, at: Date.now() });
+  setDeletedIds(list);
+}
+
 // ── Health log (daily Watch data) ────────────────────────────────
 
 export function putHealth(entry) {
@@ -150,17 +180,22 @@ export async function exportAll() {
     events,
     health,
     aiSettings: getAISettings(),
+    deletedIds: getDeletedIds(),
   };
 }
 
 /** Overwrite both stores with backup contents. No validation, no logging. */
 export async function replaceAll(backup) {
+  const dels = new Set((backup.deletedIds || []).map((d) => d.id));
   await withStore('sessions', 'readwrite', (s) => {
     s.clear();
     (backup.sessions || []).forEach(
-      (row) => row && row.date && s.put({ ...row, id: sessionId(row) })
+      (row) =>
+        row && row.date && !row.deleted && !dels.has(sessionId(row)) &&
+        s.put({ ...row, id: sessionId(row) })
     );
   });
+  if (backup.deletedIds) setDeletedIds(backup.deletedIds);
   await withStore('events', 'readwrite', (s) => {
     s.clear();
     (backup.events || []).forEach(({ id, ...row }) => row && row.type && s.add(row));

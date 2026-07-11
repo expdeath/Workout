@@ -15,6 +15,7 @@ import {
   getAllSessions,
   putSession,
   clearSessions,
+  hardDeleteSession,
   logEvent,
   migrateFromLocalStorage,
 } from './db/db';
@@ -367,7 +368,7 @@ export default function App() {
 
   // ── Delete / edit a logged session ──
   async function deleteSession(s) {
-    await putSession({ ...s, deleted: true });
+    await hardDeleteSession(sid(s));
     setHistory((h) => h.filter((x) => sid(x) !== sid(s)));
     if (todayPlan && sid(todayPlan) === sid(s)) {
       setTodayPlan(null);

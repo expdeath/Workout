@@ -4,8 +4,8 @@ import { fmtDate, setLogged, cleanWeight, cleanReps } from '../utils/helpers';
 const sid = (s) => s.id || s.date;
 
 export default function History({ history, onBack, onDelete, onUpdate }) {
-  // Full history lives in the DB; render only the latest 100 for speed.
-  const rev = history.slice(-100).reverse();
+  // every session in the DB, newest first
+  const rev = [...history].reverse();
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [editing, setEditing] = useState(null); // session id
   const [draft, setDraft] = useState(null);
