@@ -3,6 +3,7 @@ import { loadKey, saveKey } from './utils/storage';
 import { todayStr, quickReadiness } from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
 import { lastWeekSummary, mondayOf } from './utils/stats';
+import { ingestHealthFromUrl, todaysHealth, pruneOldHealth } from './utils/healthIngest';
 import { getApiKey } from './utils/storage';
 import {
   getAllSessions,
@@ -62,6 +63,18 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
+      // Watch data arriving via the Shortcut deep link (#health=…)
+      try {
+        const ingested = ingestHealthFromUrl();
+        if (ingested) {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+          logEvent('health_autoreceived', { chars: ingested.length });
+        }
+        pruneOldHealth();
+      } catch (e) {
+        console.warn('[COACH] health ingest failed', e);
+      }
+
       await migrateFromLocalStorage();
       const h = await getAllSessions();
       const t = await loadKey('today', null);
@@ -282,7 +295,7 @@ export default function App() {
                 soreAreas: '',
                 backTight: false,
                 timeAvail: '60',
-                health: '',
+                health: todaysHealth(), // pre-filled if the Shortcut ran today
                 notes: '',
               });
               setError('');

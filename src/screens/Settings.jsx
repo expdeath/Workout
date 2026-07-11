@@ -256,10 +256,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
       </div>
 
       <div className="card">
-        <div className="card__label">Apple Health in one tap</div>
+        <div className="card__label">⌚ Apple Watch — automatic</div>
         <p className="body" style={{ color: 'var(--muted)' }}>
-          Build this iOS Shortcut once, then run it before check-in — it copies
-          your health numbers so you can hit "Paste from clipboard" in the app:
+          Apple only lets native apps talk to the Watch, but this one-time
+          Shortcut gets you the same result: it reads your Watch's numbers
+          from Health and hands them to the app automatically — your next
+          check-in arrives pre-filled.
           <br /><br />
           1. Shortcuts app → + → name it "Gym check-in"
           <br />
@@ -267,14 +269,21 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           <br />
           3. Repeat for Heart Rate Variability, Resting Heart Rate, Steps
           <br />
-          4. Add <b>Text</b> — combine the results, e.g. "Sleep [Sleep] · HRV
-          [HRV] · RHR [RHR] · Steps [Steps]"
+          4. Add <b>Text</b>: "Sleep [Sleep] · HRV [HRV] · RHR [RHR] · Steps
+          [Steps]" (insert each result as a variable)
           <br />
-          5. Add <b>Copy to Clipboard</b>, then <b>Open URL</b> →
-          this app's address
+          5. Add <b>URL Encode</b> on that text
+          <br />
+          6. Add <b>Open URLs</b>:
+          <br />
+          <span className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>
+            https://expdeath.github.io/Workout/#health=[URL&#8203;Encoded&#8203;Text]
+          </span>
           <br /><br />
-          Tip: add the shortcut to your home screen or an automation at your
-          usual gym time.
+          Make it automatic: Shortcuts → Automation → + → Time of Day (your
+          usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
+          pick "Gym check-in". The app opens with your Watch data already
+          loaded; you'll see "⌚ Received" on the check-in.
         </p>
       </div>
 

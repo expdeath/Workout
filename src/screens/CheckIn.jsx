@@ -5,7 +5,9 @@ import ReadinessBar from '../components/ReadinessBar';
 import { quickReadiness } from '../utils/helpers';
 
 export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
-  const [showHealth, setShowHealth] = useState(false);
+  // Auto-open the health section when the Watch Shortcut pre-filled it
+  const [autoFilled] = useState(!!ci.health);
+  const [showHealth, setShowHealth] = useState(!!ci.health);
   const set = (patch) => setCi({ ...ci, ...patch });
 
   return (
@@ -96,6 +98,11 @@ export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
       </button>
       {showHealth && (
         <>
+          {autoFilled && (
+            <p className="mono" style={{ fontSize: 12, color: 'var(--teal)', margin: '6px 0 0' }}>
+              ⌚ Received from your Apple Watch shortcut today
+            </p>
+          )}
           <button
             className="ghost-btn"
             style={{ display: 'block', padding: '4px 0', color: 'var(--teal)' }}
