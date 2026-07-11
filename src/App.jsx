@@ -75,7 +75,7 @@ export default function App() {
       } catch { /* non-critical */ }
 
       await migrateFromLocalStorage();
-      const h = await getAllSessions();
+      const h = await loadActive();
       const t = await loadKey('today', null);
       setHistory(h);
       if (t && t.date === todayStr()) setTodayPlan(t);
@@ -97,6 +97,11 @@ export default function App() {
     await saveKey('today', t);
   };
 
+  // deleted sessions stay in the DB as tombstones (so the deletion
+  // syncs to other devices instead of being merged back) but never
+  // reach the UI, stats, or the AI
+  const loadActive = async () => (await getAllSessions()).filter((s) => !s.deleted);
+
   // ── Cloud sync (no-op until configured in Settings) ──
   const syncRetry = useRef(null);
   async function runSync(opts) {
@@ -109,7 +114,7 @@ export default function App() {
         setSyncInfo(null);
         return;
       }
-      if (r.changedLocal) setHistory(await getAllSessions());
+      if (r.changedLocal) setHistory(await loadActive());
       setSyncInfo({ state: 'ok', at: Date.now(), sessions: r.sessions });
     } catch (e) {
       console.warn('[COACH] sync failed', e);
@@ -323,8 +328,27 @@ export default function App() {
 
   // ── Reload after backup import or manual sync ──
   async function reloadFromDb() {
-    const h = await getAllSessions();
-    setHistory(h);
+    setHistory(await loadActive());
+  }
+
+  // ── Delete / edit a logged session ──
+  async function deleteSession(s) {
+    await putSession({ ...s, deleted: true });
+    setHistory((h) => h.filter((x) => sid(x) !== sid(s)));
+    if (todayPlan && sid(todayPlan) === sid(s)) {
+      setTodayPlan(null);
+      await saveKey('today', null);
+    }
+    logEvent('session_deleted', { id: sid(s), date: s.date, sessionType: s.plan?.sessionType });
+    runSync();
+  }
+
+  async function updateSession(s) {
+    await putSession(s);
+    setHistory((h) => h.map((x) => (sid(x) === sid(s) ? s : x)));
+    if (todayPlan && sid(todayPlan) === sid(s)) await persistToday(s);
+    logEvent('session_edited', { id: sid(s), date: s.date });
+    runSync();
   }
 
   // ================= RENDER =================
@@ -421,7 +445,12 @@ export default function App() {
         )}
 
         {screen === 'history' && (
-          <History history={history} onBack={() => setScreen('home')} />
+          <History
+            history={history}
+            onBack={() => setScreen('home')}
+            onDelete={deleteSession}
+            onUpdate={updateSession}
+          />
         )}
 
         {screen === 'settings' && (
