@@ -65,7 +65,12 @@ export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
   const max = Math.max(...points.map((p) => p.value));
   const min = Math.min(...points.map((p) => p.value));
   const lo = Math.max(0, min - (max - min || max * 0.2) * 0.25);
-  const ticks = niceTicks(max);
+  // ticks span the visible (zoomed) range, not zero-up
+  const span = max - lo || max || 1;
+  const pow = 10 ** Math.floor(Math.log10(span / 2));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((s) => s >= span / 3) || pow;
+  const ticks = [];
+  for (let v = Math.ceil(lo / step) * step; v <= max + step; v += step) ticks.push(v);
   const top = ticks[ticks.length - 1];
   const yOf = (v) => PAD.t + plotH - ((v - lo) / (top - lo || 1)) * plotH;
   const dx = points.length > 1 ? plotW / (points.length - 1) : 0;
