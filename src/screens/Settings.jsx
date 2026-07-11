@@ -260,30 +260,23 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         <p className="body" style={{ color: 'var(--muted)' }}>
           Apple only lets native apps talk to the Watch, but this one-time
           Shortcut gets you the same result: it reads your Watch's numbers
-          from Health and hands them to the app automatically — your next
-          check-in arrives pre-filled.
+          (HRV, resting heart rate, steps) from Health and hands them to the
+          app automatically — your next check-in arrives pre-filled.
           <br /><br />
-          1. Shortcuts app → + → name it "Gym check-in"
+          1. On your iPhone, tap:{' '}
+          <a className="link" href="gym-checkin.shortcut" download>
+            Install the Gym Check-in shortcut
+          </a>
           <br />
-          2. Add <b>Find Health Samples</b> — Sleep, last 1 day
+          2. Open the downloaded file → <b>Add Shortcut</b>
           <br />
-          3. Repeat for Heart Rate Variability, Resting Heart Rate, Steps
-          <br />
-          4. Add <b>Text</b>: "Sleep [Sleep] · HRV [HRV] · RHR [RHR] · Steps
-          [Steps]" (insert each result as a variable)
-          <br />
-          5. Add <b>URL Encode</b> on that text
-          <br />
-          6. Add <b>Open URLs</b>:
-          <br />
-          <span className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>
-            https://expdeath.github.io/Workout/#health=[URL&#8203;Encoded&#8203;Text]
-          </span>
+          3. Run it once from the Shortcuts app and allow the Health access
+          prompts (first run only)
           <br /><br />
           Make it automatic: Shortcuts → Automation → + → Time of Day (your
           usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
-          pick "Gym check-in". The app opens with your Watch data already
-          loaded; you'll see "⌚ Received" on the check-in.
+          pick "Gym Check-in". The app then opens with your Watch data
+          already loaded — you'll see "⌚ Received" on the check-in.
         </p>
       </div>
 
