@@ -20,6 +20,8 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
 
   // index of the exercise with the "remove?" confirm open, or null
   const [confirmRemove, setConfirmRemove] = useState(null);
+  // index of the exercise with the ⋯ menu open, or null
+  const [menuOpen, setMenuOpen] = useState(null);
   // "discard the whole session?" confirm — 'top' (header ✕) or
   // 'bottom' (link under Finish), so it opens next to where you tapped
   const [confirmCancel, setConfirmCancel] = useState(null);
@@ -237,6 +239,9 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
       {(p.exercises || []).map((ex, exI) => {
         const lastPerf = lastPerformance(history, ex.name);
         const suggest = suggestNextWeight(lastPerf, ex.reps);
+        const lastRow = t.log[exI][t.log[exI].length - 1];
+        const canDrop =
+          t.log[exI].length > 1 && !(lastRow?.done || lastRow?.weight || lastRow?.reps);
         return (
         <div key={exI} className="ex-card card--animate">
           <div className="row-between">
@@ -244,14 +249,60 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
             <div className="mono ex-meta">
               RPE {ex.rpe} · rest {ex.rest}
               <button
-                className="ex-remove"
-                aria-label={`Remove ${ex.name}`}
-                onClick={() => setConfirmRemove(confirmRemove === exI ? null : exI)}
+                className="menu-btn"
+                aria-label={`Options for ${ex.name}`}
+                onClick={() => {
+                  setMenuOpen(menuOpen === exI ? null : exI);
+                  setConfirmRemove(null);
+                }}
               >
-                ✕
+                ⋯
               </button>
             </div>
           </div>
+          {menuOpen === exI && (
+            <div className="pop-menu">
+              {ex.alt && (
+                <button
+                  className="pop-menu__item pop-menu__item--teal"
+                  onClick={() => {
+                    setMenuOpen(null);
+                    swapExercise(exI);
+                  }}
+                >
+                  ⇄ Swap to {ex.alt}
+                </button>
+              )}
+              <button
+                className="pop-menu__item"
+                onClick={() => {
+                  setMenuOpen(null);
+                  adjustSets?.(exI, +1);
+                }}
+              >
+                + Add set
+              </button>
+              <button
+                className="pop-menu__item"
+                disabled={!canDrop}
+                onClick={() => {
+                  setMenuOpen(null);
+                  adjustSets?.(exI, -1);
+                }}
+              >
+                − Remove set
+              </button>
+              <button
+                className="pop-menu__item pop-menu__item--danger"
+                onClick={() => {
+                  setMenuOpen(null);
+                  setConfirmRemove(exI);
+                }}
+              >
+                ✕ Remove exercise
+              </button>
+            </div>
+          )}
           {confirmRemove === exI && (
             <div className="remove-confirm">
               <span>
@@ -328,33 +379,6 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
               </div>
             ))}
           </div>
-          {(() => {
-            const last = t.log[exI][t.log[exI].length - 1];
-            const canDrop =
-              t.log[exI].length > 1 && !(last?.done || last?.weight || last?.reps);
-            return (
-              <div className="set-adjust">
-                <button
-                  className="set-adjust__btn"
-                  disabled={!canDrop}
-                  onClick={() => adjustSets?.(exI, -1)}
-                >
-                  − set
-                </button>
-                <button
-                  className="set-adjust__btn"
-                  onClick={() => adjustSets?.(exI, +1)}
-                >
-                  + set
-                </button>
-              </div>
-            );
-          })()}
-          {ex.alt && (
-            <button className="swap-btn" onClick={() => swapExercise(exI)}>
-              ⇄ Machine busy? Swap to {ex.alt}
-            </button>
-          )}
         </div>
         );
       })}

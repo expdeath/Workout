@@ -470,11 +470,32 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
   throw lastErr;
 }
 
+// One logged session flattened for the chat context — exercises with
+// their logged sets, plus how the athlete rated and debriefed it.
+function sessionDetail(s) {
+  const lines = (s.plan?.exercises || []).map((ex, i) => {
+    const sets = (s.log?.[i] || [])
+      .filter((x) => x.done || x.weight || x.reps)
+      .map((x) => `${x.weight || '?'}×${x.reps || '?'}`)
+      .join(' ');
+    return `${ex.name}: ${sets || '—'}`;
+  });
+  return [
+    `${s.date} ${s.plan?.sessionType || ''}${s.durationMin ? ` · ${s.durationMin}min` : ''}`,
+    ...lines,
+    s.fin
+      ? `RPE ${s.fin.rpe}/10${s.fin.pain ? ` · pain: ${s.fin.pain}` : ''}${s.fin.feedback ? ` · feedback: ${s.fin.feedback}` : ''}`
+      : '',
+    s.debrief ? `Debrief already given: ${s.debrief}` : '',
+  ].filter(Boolean).join('\n');
+}
+
 /**
  * Multi-turn "ask the coach" chat. messages: [{ role: 'user'|'coach', text }].
+ * Pass focusSession to scope the chat to one logged session (History detail).
  * Returns the coach's reply as plain text.
  */
-export async function askCoach(messages, { history = [], todayPlan = null, healthLog = [] } = {}) {
+export async function askCoach(messages, { history = [], todayPlan = null, healthLog = [], focusSession = null } = {}) {
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
 
@@ -489,7 +510,7 @@ export async function askCoach(messages, { history = [], todayPlan = null, healt
 
   const system = `${coachRules()}
 You are now CHATTING with the athlete (often mid-workout, phone in hand). Answer in 2-5 short sentences, plain text, no markdown, immediately practical. If they mention pain, be conservative and suggest the safe variation.
-CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.${trend ? `\nWatch data:\n${trend}` : ''}`;
+CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.${trend ? `\nWatch data:\n${trend}` : ''}${focusSession ? `\nFOCUS — the athlete is viewing this logged session and asking about it:\n${sessionDetail(focusSession)}` : ''}`;
 
   const contents = messages.slice(-12).map((m) => ({
     role: m.role === 'user' ? 'user' : 'model',

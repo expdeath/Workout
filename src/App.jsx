@@ -29,6 +29,7 @@ import Generating from './screens/Generating';
 import Workout from './screens/Workout';
 import Finish from './screens/Finish';
 import History from './screens/History';
+import HistoryDetail from './screens/HistoryDetail';
 import Settings from './screens/Settings';
 
 // ------------------------------------------------------------------
@@ -41,6 +42,10 @@ export default function App() {
   const [screen, setScreen] = useState('loading');
   const [history, setHistory] = useState([]);
   const [todayPlan, setTodayPlan] = useState(null);
+  // Coach chat is a bottom sheet reachable from any screen
+  const [chatOpen, setChatOpen] = useState(false);
+  // History → tapped session shown full-screen
+  const [detailId, setDetailId] = useState(null);
   const [error, setError] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [syncInfo, setSyncInfo] = useState(null);
@@ -524,7 +529,7 @@ export default function App() {
             onResume={() => setScreen('workout')}
             onHistory={() => setScreen('history')}
             onSettings={() => setScreen('settings')}
-            onCoach={() => setScreen('coach')}
+            onCoach={() => setChatOpen(true)}
           />
         )}
 
@@ -546,14 +551,6 @@ export default function App() {
           <Progress history={history} onBack={() => setScreen('home')} />
         )}
 
-        {screen === 'coach' && (
-          <Coach
-            history={history}
-            todayPlan={todayPlan}
-            onBack={() => setScreen(todayPlan && !todayPlan.finished ? 'workout' : 'home')}
-          />
-        )}
-
         {screen === 'workout' && todayPlan && (
           <Workout
             t={todayPlan}
@@ -564,7 +561,7 @@ export default function App() {
             removeExercise={removeExercise}
             adjustSets={adjustSets}
             onCancelSession={cancelSession}
-            onCoach={() => setScreen('coach')}
+            onCoach={() => setChatOpen(true)}
             onBack={() => setScreen('home')}
             onFinish={() => {
               setFin({ rpe: 7, pain: '', feedback: '' });
@@ -588,8 +585,27 @@ export default function App() {
             onBack={() => setScreen('home')}
             onDelete={deleteSession}
             onUpdate={updateSession}
+            onOpen={(s) => {
+              setDetailId(sid(s));
+              setScreen('historyDetail');
+            }}
           />
         )}
+
+        {screen === 'historyDetail' && (() => {
+          const s = history.find((h) => sid(h) === detailId);
+          if (!s) {
+            setScreen('history');
+            return null;
+          }
+          return (
+            <HistoryDetail
+              session={s}
+              history={history}
+              onBack={() => setScreen('history')}
+            />
+          );
+        })()}
 
         {screen === 'settings' && (
           <Settings
@@ -604,6 +620,28 @@ export default function App() {
           />
         )}
       </div>
+
+      {/* Coach is one tap away from anywhere. Hidden on the workout
+          screen (header button + rest bar live there), while generating,
+          and on history detail (it has its own scoped chat). */}
+      {!chatOpen &&
+        ['home', 'checkin', 'finish', 'progress', 'history', 'settings'].includes(screen) && (
+          <button
+            className="chat-fab"
+            aria-label="Ask the coach"
+            onClick={() => setChatOpen(true)}
+          >
+            🗨
+          </button>
+        )}
+
+      {chatOpen && (
+        <Coach
+          history={history}
+          todayPlan={todayPlan}
+          onClose={() => setChatOpen(false)}
+        />
+      )}
     </div>
   );
 }

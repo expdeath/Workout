@@ -73,18 +73,23 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, onSta
           Resume {todayPlan.plan.sessionType}
         </button>
       ) : (
-        <>
-          <button className="big-btn" onClick={onStart}>
-            {doneToday ? 'Plan another session' : 'Start check-in'}
-          </button>
-          <button className="quick-btn" onClick={onQuickStart}>
-            ⚡ Quick start — normal day, skip the questions
-          </button>
-        </>
+        <button className="big-btn" onClick={onStart}>
+          {doneToday ? 'Plan another session' : 'Start check-in'}
+        </button>
       )}
-      <button className="quick-btn" onClick={onCoach}>
-        🗨 Ask the coach anything
-      </button>
+      <div className="links-row">
+        {!inProgress && (
+          <>
+            <button className="link-btn" onClick={onQuickStart}>
+              ⚡ Quick start
+            </button>
+            <span className="links-row__dot">·</span>
+          </>
+        )}
+        <button className="link-btn" onClick={onCoach}>
+          🗨 Ask coach
+        </button>
+      </div>
 
       {last && (
         <div className="card card--animate">
@@ -122,13 +127,8 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, onSta
         </div>
       )}
 
-      <div className="foot-note">
-        Tip: paste today's Apple Health numbers during check-in (sleep, HRV,
-        resting HR, steps) — the coach reads them.
-      </div>
-
       {syncInfo && (
-        <div className="foot-note mono" style={{ marginTop: 4 }}>
+        <div className="foot-note mono">
           {syncInfo.state === 'syncing'
             ? '☁ syncing…'
             : syncInfo.state === 'ok'

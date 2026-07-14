@@ -9,18 +9,19 @@ export default function Finish({ fin, setFin, onSave, onBack }) {
       </header>
       <h2 className="h2">Log it. 20 seconds.</h2>
 
-      <div className="card__label">Overall session RPE</div>
-      <div className="energy-row">
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-          <button
-            key={n}
-            className={'num-btn' + (fin.rpe === n ? ' num-on' : '')}
-            onClick={() => setFin({ ...fin, rpe: n })}
-          >
-            {n}
-          </button>
-        ))}
+      <div className="q-label q-label--row" style={{ marginTop: 0 }}>
+        <span>Overall session RPE</span>
+        <span className="q-label__value">{fin.rpe}/10</span>
       </div>
+      <input
+        type="range"
+        className="slider"
+        min="1"
+        max="10"
+        step="1"
+        value={fin.rpe}
+        onChange={(e) => setFin({ ...fin, rpe: Number(e.target.value) })}
+      />
 
       <div className="card__label" style={{ marginTop: 20 }}>
         Any pain or discomfort?

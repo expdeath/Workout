@@ -5,6 +5,25 @@ import { getSyncConfig, setSyncConfig, syncNow, getLastSync } from '../db/sync';
 import { todaysHealth } from '../utils/healthIngest';
 import { todayStr } from '../utils/helpers';
 
+function Section({ title, status, statusColor, open, onToggle, children }) {
+  return (
+    <div className="section">
+      <button className="section__head" onClick={onToggle}>
+        <div>
+          <div className="section__title">{title}</div>
+          {status && (
+            <div className="section__status" style={statusColor ? { color: statusColor } : undefined}>
+              {status}
+            </div>
+          )}
+        </div>
+        <span className={'chevron' + (open ? ' chevron--open' : '')}>⌄</span>
+      </button>
+      {open && <div className="section__body">{children}</div>}
+    </div>
+  );
+}
+
 export default function Settings({ onBack, onClearHistory, onDataImported, onSynced, sessionCount }) {
   const [key, setKey] = useState(getApiKey());
   const [showKey, setShowKey] = useState(false);
@@ -14,27 +33,32 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
   const [dataMsg, setDataMsg] = useState('');
   const fileRef = useRef(null);
 
+  // first run (no key yet) lands here — open the coach section for them
+  const [open, setOpen] = useState(() => ({
+    coach: !getApiKey(),
+    sync: false,
+    watch: false,
+    about: false,
+  }));
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
+
   const [ai, setAi] = useState(() => {
     const s = getAISettings();
     return { profile: s.profile || '', routine: s.routine || '' };
   });
-  const [aiSaved, setAiSaved] = useState(false);
-  const handleAiSave = () => {
+  const handleCoachSave = () => {
+    setApiKey(key.trim());
     setAISettings({ profile: ai.profile.trim(), routine: ai.routine.trim() });
-    setAiSaved(true);
+    setSaved(true);
+    logEvent('api_key_saved');
     logEvent('ai_settings_saved');
-    setTimeout(() => setAiSaved(false), 2000);
+    setTimeout(() => setSaved(false), 2000);
   };
 
   const [sync, setSync] = useState(getSyncConfig());
   const [showToken, setShowToken] = useState(false);
   const [syncSaved, setSyncSaved] = useState(false);
-  const [syncMsg, setSyncMsg] = useState(() => {
-    const last = getLastSync();
-    return last?.status === 'ok'
-      ? `Last synced ${new Date(last.at).toLocaleString()} (${last.sessions} sessions)`
-      : '';
-  });
+  const [syncMsg, setSyncMsg] = useState('');
   const [syncing, setSyncing] = useState(false);
 
   const handleSyncSave = () => {
@@ -65,13 +89,6 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
   useEffect(() => {
     countEvents().then(setEventCount);
   }, [dataMsg]);
-
-  const handleSave = () => {
-    setApiKey(key.trim());
-    setSaved(true);
-    logEvent('api_key_saved');
-    setTimeout(() => setSaved(false), 2000);
-  };
 
   const handleExport = async () => {
     const backup = await exportAll();
@@ -108,6 +125,19 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
     setConfirmClear(false);
   };
 
+  // ── Collapsed status lines ──
+  const coachStatus = getApiKey()
+    ? `API key saved${getAISettings().profile ? ' · custom profile set' : ''}`
+    : 'No API key yet — add one to start';
+  const lastSync = getLastSync();
+  const syncStatus =
+    lastSync?.status === 'ok'
+      ? `☁ synced ${new Date(lastSync.at).toLocaleString()} · ${lastSync.sessions} sessions in cloud`
+      : sync.repo
+      ? '☁ configured — not synced yet'
+      : 'Back up your log to a private GitHub repo';
+  const watchReceived = todaysHealth();
+
   return (
     <div className="screen screen--slide-in">
       <header className="header">
@@ -116,12 +146,13 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         <div />
       </header>
 
-      <div className="card">
-        <div className="card__label">Gemini API Key</div>
-        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          Your key is stored locally in your browser. It's only sent to Google's
-          Gemini API — never to any other server.
-        </p>
+      <Section
+        title="AI Coach"
+        status={coachStatus}
+        open={open.coach}
+        onToggle={() => toggle('coach')}
+      >
+        <div className="q-label" style={{ marginTop: 0 }}>Gemini API key</div>
         <div className="settings-key-row">
           <input
             className="input"
@@ -139,19 +170,8 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             {showKey ? 'Hide' : 'Show'}
           </button>
         </div>
-        <button
-          className="big-btn"
-          onClick={handleSave}
-          style={{ marginTop: 12 }}
-        >
-          {saved ? '✓ Saved' : 'Save API Key'}
-        </button>
-      </div>
-
-      <div className="card">
-        <div className="card__label">Get a Gemini API Key</div>
-        <p className="body" style={{ color: 'var(--muted)' }}>
-          1. Go to{' '}
+        <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
+          Get a free key →{' '}
           <a
             href="https://aistudio.google.com/apikey"
             target="_blank"
@@ -159,22 +179,11 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             className="link"
           >
             aistudio.google.com/apikey
-          </a>
-          <br />
-          2. Click "Create API key"
-          <br />
-          3. Copy the key and paste it above
+          </a>{' '}
+          → "Create API key". Stored locally, only sent to Google's Gemini API.
         </p>
-      </div>
 
-      <div className="card">
-        <div className="card__label">Your Coach Setup</div>
-        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          Tell the coach about yourself and your base routine. This stays
-          private (synced through your own data repo, never in the app's
-          public code) and shapes every plan.
-        </p>
-        <div className="q-label" style={{ marginTop: 0 }}>About you</div>
+        <div className="q-label">About you</div>
         <textarea
           className="input textarea"
           style={{ marginTop: 6, minHeight: 80 }}
@@ -190,13 +199,17 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           value={ai.routine}
           onChange={(e) => setAi({ ...ai, routine: e.target.value.slice(0, 4000) })}
         />
-        <button className="big-btn" onClick={handleAiSave} style={{ marginTop: 12 }}>
-          {aiSaved ? '✓ Saved' : 'Save coach setup'}
+        <button className="big-btn" onClick={handleCoachSave} style={{ marginTop: 14, padding: 14, fontSize: 15 }}>
+          {saved ? '✓ Saved' : 'Save coach setup'}
         </button>
-      </div>
+      </Section>
 
-      <div className="card">
-        <div className="card__label">Cloud Sync</div>
+      <Section
+        title="Sync & Backup"
+        status={syncStatus}
+        open={open.sync}
+        onToggle={() => toggle('sync')}
+      >
         <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
           Syncs your full training log to a private GitHub repo you own, so
           it survives this browser and follows you across devices. The app
@@ -227,17 +240,19 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             {showToken ? 'Hide' : 'Show'}
           </button>
         </div>
-        <button className="big-btn" onClick={handleSyncSave} style={{ marginTop: 12 }}>
-          {syncSaved ? '✓ Saved' : 'Save sync settings'}
-        </button>
-        <button
-          className="big-btn"
-          onClick={handleSyncNow}
-          disabled={syncing}
-          style={{ marginTop: 8 }}
-        >
-          {syncing ? 'Syncing…' : 'Sync now'}
-        </button>
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <button className="big-btn" onClick={handleSyncSave} style={{ marginTop: 0, padding: 12, fontSize: 14 }}>
+            {syncSaved ? '✓ Saved' : 'Save settings'}
+          </button>
+          <button
+            className="big-btn"
+            onClick={handleSyncNow}
+            disabled={syncing}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            {syncing ? 'Syncing…' : 'Sync now'}
+          </button>
+        </div>
         {syncMsg && (
           <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
             {syncMsg}
@@ -249,32 +264,29 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           repo. Permissions: Contents → Read and write. Paste the token here —
           it stays in this browser and is only sent to api.github.com.
         </p>
-      </div>
 
-      <div className="card">
-        <div className="card__label">Data</div>
-        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          Your full training history and an activity log of every interaction
-          are stored in this browser's database and feed the AI coach.
-          {sessionCount != null && (
-            <>
-              <br />
-              <span className="mono" style={{ fontSize: 13 }}>
-                {sessionCount} sessions · {eventCount ?? '…'} events logged
-              </span>
-            </>
-          )}
-        </p>
-        <button className="big-btn" onClick={handleExport}>
-          Export backup
-        </button>
-        <button
-          className="big-btn"
-          style={{ marginTop: 8 }}
-          onClick={() => fileRef.current?.click()}
-        >
-          Import backup
-        </button>
+        <div className="q-label">Local data</div>
+        {sessionCount != null && (
+          <p className="mono" style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
+            {sessionCount} sessions · {eventCount ?? '…'} events logged
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button
+            className="big-btn"
+            onClick={handleExport}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            Export backup
+          </button>
+          <button
+            className="big-btn"
+            onClick={() => fileRef.current?.click()}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            Import backup
+          </button>
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -289,15 +301,20 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         )}
         <button
           className="big-btn big-btn--danger"
-          style={{ marginTop: 8 }}
+          style={{ marginTop: 10, padding: 12, fontSize: 14 }}
           onClick={handleClear}
         >
           {confirmClear ? 'Tap again to confirm' : 'Clear all history'}
         </button>
-      </div>
+      </Section>
 
-      <div className="card">
-        <div className="card__label">⌚ Apple Watch — automatic</div>
+      <Section
+        title="⌚ Apple Watch"
+        status={watchReceived ? 'Received today' : 'Nothing received today yet'}
+        statusColor={watchReceived ? 'var(--teal)' : undefined}
+        open={open.watch}
+        onToggle={() => toggle('watch')}
+      >
         <p className="body" style={{ color: 'var(--muted)' }}>
           Apple only lets native apps talk to the Watch, but this one-time
           Shortcut gets you the same result: it reads your Watch's numbers
@@ -321,9 +338,9 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           re-point the automation at the new copy — automations keep running
           the exact copy they were created with.
         </p>
-        <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: todaysHealth() ? 'var(--teal)' : 'var(--dim)' }}>
-          {todaysHealth()
-            ? `⌚ Received today: ${todaysHealth()}`
+        <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: watchReceived ? 'var(--teal)' : 'var(--dim)' }}>
+          {watchReceived
+            ? `⌚ Received today: ${watchReceived}`
             : '⌚ Nothing received today yet — run the shortcut to test.'}
         </p>
         {(() => {
@@ -340,16 +357,15 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             return null;
           }
         })()}
-      </div>
+      </Section>
 
-      <div className="card">
-        <div className="card__label">About</div>
+      <Section title="About" open={open.about} onToggle={() => toggle('about')}>
         <p className="body" style={{ color: 'var(--muted)' }}>
           COACH is a personal workout planner powered by Google Gemini AI. It
           builds daily sessions from your check-in, training history, and
           recovery data. Everything runs in your browser — no server, no account.
         </p>
-      </div>
+      </Section>
 
       <div style={{ height: 24 }} />
     </div>

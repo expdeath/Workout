@@ -235,6 +235,12 @@ a:hover {
   padding: 16px;
   margin-top: 14px;
   border-left: 3px solid var(--amber);
+  position: relative;
+}
+
+.card--tappable {
+  position: relative;
+  cursor: pointer;
 }
 
 .ex-name {
@@ -308,21 +314,32 @@ a:hover {
   box-shadow: 0 4px 20px rgba(242, 109, 91, 0.25);
 }
 
-.quick-btn {
-  width: 100%;
-  margin-top: 10px;
-  padding: 13px;
-  border-radius: var(--radius);
-  background: none;
-  border: 1px dashed var(--border-dim);
-  color: var(--muted);
-  font-family: var(--font-body);
-  font-size: 14.5px;
-  transition: border-color 0.15s, color 0.15s;
+/* ── Compact secondary actions (Home, under the primary button) ── */
+.links-row {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
 }
 
-.quick-btn:hover {
-  border-color: var(--amber);
+.links-row__dot {
+  color: var(--border-dim);
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px;
+  transition: color 0.15s;
+}
+
+.link-btn:hover {
   color: var(--amber);
 }
 
@@ -370,30 +387,26 @@ a:hover {
   color: var(--red);
 }
 
-/* ── Number buttons (energy, RPE) ───────────────────────────────── */
-.energy-row {
-  display: flex;
-  gap: 6px;
+/* ── Slider (energy, RPE) ───────────────────────────────────────── */
+.slider {
+  width: 100%;
+  height: 32px;
+  accent-color: var(--amber);
+  margin: 0;
 }
 
-.num-btn {
-  flex: 1;
-  aspect-ratio: 1;
-  min-width: 0;
-  border-radius: var(--radius-sm);
-  background: var(--bg-pill);
-  border: 1px solid var(--border-dim);
-  color: var(--muted);
+.q-label--row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.q-label__value {
   font-family: var(--font-mono);
   font-size: 15px;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.num-on {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--bg);
-  font-weight: 600;
+  color: var(--amber);
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 /* ── Segmented control ──────────────────────────────────────────── */
@@ -697,25 +710,67 @@ a:hover {
   text-overflow: ellipsis;
 }
 
-/* ── Exercise swap ──────────────────────────────────────────────── */
-.swap-btn {
+/* ── Per-card ⋯ menu (Workout exercises, History sessions) ──────── */
+.menu-btn {
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 20px;
+  padding: 2px 6px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.menu-btn:hover {
+  color: var(--text);
+}
+
+.pop-menu {
+  position: absolute;
+  top: 46px;
+  right: 14px;
+  z-index: 5;
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  min-width: 175px;
+}
+
+.pop-menu__item {
   display: block;
   width: 100%;
   text-align: left;
-  margin-top: 10px;
-  padding: 9px 12px;
-  border-radius: var(--radius-sm);
-  background: var(--bg-pill);
-  border: 1px solid var(--border-dim);
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--border);
   color: var(--text-body);
   font-family: var(--font-mono);
   font-size: 12.5px;
-  transition: border-color 0.15s, color 0.15s;
+  transition: background 0.15s;
 }
 
-.swap-btn:hover {
-  border-color: var(--teal);
+.pop-menu__item:last-child {
+  border-bottom: none;
+}
+
+.pop-menu__item:hover:not(:disabled) {
+  background: var(--border);
+}
+
+.pop-menu__item--teal {
   color: var(--teal);
+}
+
+.pop-menu__item--danger {
+  color: var(--red);
+}
+
+.pop-menu__item:disabled {
+  color: var(--dim);
+  cursor: default;
 }
 
 /* ── Cancel session ─────────────────────────────────────────────── */
@@ -743,50 +798,6 @@ a:hover {
 }
 
 .cancel-session-btn:hover {
-  color: var(--red);
-}
-
-/* ── Set stepper (+/− a set row) ───────────────────────────────── */
-.set-adjust {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.set-adjust__btn {
-  padding: 5px 14px;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  border: 1px solid var(--border-dim);
-  color: var(--muted);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.set-adjust__btn:hover:not(:disabled) {
-  border-color: var(--teal);
-  color: var(--teal);
-}
-
-.set-adjust__btn:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-/* ── Remove exercise ────────────────────────────────────────────── */
-.ex-remove {
-  margin-left: 10px;
-  padding: 2px 6px;
-  background: none;
-  border: none;
-  color: var(--dim);
-  font-size: 13px;
-  line-height: 1;
-  transition: color 0.15s;
-}
-
-.ex-remove:hover {
   color: var(--red);
 }
 
@@ -895,13 +906,152 @@ a:hover {
   cursor: default;
 }
 
-/* ── Coach chat ─────────────────────────────────────────────────── */
-.chat-screen {
+/* ── "More details" fold (Check-in) ─────────────────────────────── */
+.more-toggle {
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  min-height: calc(100dvh - 120px);
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 22px;
+  padding: 13px 2px;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  font-family: var(--font-head);
+  font-size: 15px;
+  letter-spacing: 0.05em;
+  transition: color 0.15s;
 }
 
+.more-toggle:hover {
+  color: var(--text);
+}
+
+.chevron {
+  display: inline-block;
+  color: var(--muted);
+  transition: transform 0.2s;
+}
+
+.chevron--open {
+  transform: rotate(180deg);
+}
+
+/* ── Collapsible sections (Settings) ────────────────────────────── */
+.section {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  margin-top: 12px;
+  overflow: hidden;
+}
+
+.section__head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: none;
+  border: none;
+  text-align: left;
+}
+
+.section__title {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--text);
+}
+
+.section__status {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.section__body {
+  padding: 0 16px 16px;
+}
+
+/* ── Floating coach bubble + bottom sheet ───────────────────────── */
+.chat-fab {
+  position: fixed;
+  bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  right: max(18px, calc((100vw - 520px) / 2 + 18px));
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  z-index: 40;
+  background: var(--amber);
+  color: var(--bg);
+  border: none;
+  font-size: 22px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.1s;
+}
+
+.chat-fab:active {
+  transform: scale(0.94);
+}
+
+.chat-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.chat-sheet {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 520px;
+  height: min(66dvh, 560px);
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.5);
+  z-index: 55;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  animation: sheetUp 0.25s ease-out;
+}
+
+@keyframes sheetUp {
+  from { transform: translate(-50%, 24px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+.chat-sheet__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+}
+
+.chat-sheet .chat-bubble {
+  background: var(--bg-pill);
+}
+
+.chat-sheet .chat-bubble--user {
+  background: var(--amber-bg);
+}
+
+.chat-sheet .chat-input-row {
+  position: static;
+  background: none;
+  flex-shrink: 0;
+}
+
+/* ── Coach chat ─────────────────────────────────────────────────── */
 .chat-scroll {
   flex: 1;
   overflow-y: auto;

@@ -15,6 +15,8 @@ export default function Progress({ history, onBack }) {
   const weeks = useMemo(() => weeklyBuckets(history, 8), [history]);
   const { thisWeek, streak } = useMemo(() => weekStats(history), [history]);
   const [exIdx, setExIdx] = useState(0);
+  const [weekMode, setWeekMode] = useState('volume'); // volume | sessions
+  const [recMode, setRecMode] = useState('hrv'); // hrv | rhr
   const [healthLog, setHealthLog] = useState([]);
 
   useEffect(() => {
@@ -34,6 +36,15 @@ export default function Progress({ history, onBack }) {
     .filter((h) => h.rhr)
     .map((h) => ({ label: shortDay(h.date), value: h.rhr }));
 
+  // only offer recovery modes that have enough data to chart
+  const recModes = [
+    hrvPoints.length >= 2 && ['hrv', 'HRV'],
+    rhrPoints.length >= 2 && ['rhr', 'Resting HR'],
+  ].filter(Boolean);
+  const activeRec = recModes.some(([v]) => v === recMode)
+    ? recMode
+    : recModes[0]?.[0];
+
   return (
     <div className="screen screen--slide-in">
       <header className="header">
@@ -42,7 +53,7 @@ export default function Progress({ history, onBack }) {
         <div />
       </header>
 
-      {history.length < 2 && hrvPoints.length < 2 && rhrPoints.length < 2 ? (
+      {history.length < 2 && recModes.length === 0 ? (
         <div className="center-fill">
           <p className="body" style={{ color: 'var(--muted)', textAlign: 'center' }}>
             Charts unlock after a couple of logged sessions.
@@ -95,45 +106,73 @@ export default function Progress({ history, onBack }) {
           )}
 
           <div className="card">
-            <div className="card__label">Weekly volume — kg lifted, last 8 weeks</div>
-            <BarChart
-              bars={weeks.map((w) => ({ label: shortDate(w.start), value: w.volume }))}
-              unit="kg"
-            />
-          </div>
-
-          <div className="card">
-            <div className="card__label">Sessions per week</div>
-            <BarChart
-              bars={weeks.map((w) => ({ label: shortDate(w.start), value: w.count }))}
-              color="var(--chart-amber)"
-            />
+            <div className="row-between" style={{ alignItems: 'center', marginBottom: 10 }}>
+              <div className="card__label" style={{ marginBottom: 0 }}>Weekly training</div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                {[
+                  ['volume', 'Volume'],
+                  ['sessions', 'Sessions'],
+                ].map(([v, l]) => (
+                  <button
+                    key={v}
+                    className={'chip' + (weekMode === v ? ' chip-on' : '')}
+                    onClick={() => setWeekMode(v)}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {weekMode === 'volume' ? (
+              <BarChart
+                bars={weeks.map((w) => ({ label: shortDate(w.start), value: w.volume }))}
+                unit="kg"
+              />
+            ) : (
+              <BarChart
+                bars={weeks.map((w) => ({ label: shortDate(w.start), value: w.count }))}
+                color="var(--chart-amber)"
+              />
+            )}
+            <p className="mono chart-table" style={{ display: 'block' }}>
+              {weekMode === 'volume'
+                ? 'Total kg lifted per week, last 8 weeks.'
+                : 'Sessions logged per week, last 8 weeks.'}
+            </p>
           </div>
           </>
           )}
 
-          {hrvPoints.length >= 2 && (
+          {recModes.length > 0 && (
             <div className="card">
-              <div className="card__label">Recovery — HRV (ms), daily from Watch</div>
-              <LineChart points={hrvPoints} unit="ms" color="var(--chart-teal)" />
+              <div className="row-between" style={{ alignItems: 'center', marginBottom: 10 }}>
+                <div className="card__label" style={{ marginBottom: 0 }}>Recovery</div>
+                <div style={{ display: 'flex', gap: 6 }}>
+                  {recModes.map(([v, l]) => (
+                    <button
+                      key={v}
+                      className={'chip' + (activeRec === v ? ' chip-on' : '')}
+                      onClick={() => setRecMode(v)}
+                    >
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {activeRec === 'hrv' ? (
+                <LineChart points={hrvPoints} unit="ms" color="var(--chart-teal)" />
+              ) : (
+                <LineChart points={rhrPoints} color="var(--chart-amber)" />
+              )}
               <p className="mono chart-table" style={{ display: 'block' }}>
-                Higher and stable is good — dips flag poor recovery. The coach
-                reads this same trend before planning.
+                {activeRec === 'hrv'
+                  ? 'HRV (ms), daily from Watch. Higher and stable is good — dips flag poor recovery.'
+                  : 'Resting heart rate (bpm). Lower and stable is good — a climb suggests fatigue or illness.'}
               </p>
             </div>
           )}
 
-          {rhrPoints.length >= 2 && (
-            <div className="card">
-              <div className="card__label">Recovery — resting heart rate (bpm)</div>
-              <LineChart points={rhrPoints} color="var(--chart-amber)" />
-              <p className="mono chart-table" style={{ display: 'block' }}>
-                Lower and stable is good — a climb suggests fatigue or illness.
-              </p>
-            </div>
-          )}
-
-          {hrvPoints.length < 2 && rhrPoints.length < 2 && (
+          {recModes.length === 0 && (
             <div className="foot-note">
               Recovery charts (HRV, resting HR) appear after two days of Watch
               data — run the Gym Check-in shortcut daily.

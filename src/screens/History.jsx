@@ -3,15 +3,17 @@ import { fmtDate, setLogged, cleanWeight, cleanReps } from '../utils/helpers';
 
 const sid = (s) => s.id || s.date;
 
-export default function History({ history, onBack, onDelete, onUpdate }) {
+export default function History({ history, onBack, onDelete, onUpdate, onOpen }) {
   // every session in the DB, newest first
   const rev = [...history].reverse();
+  const [menuOpen, setMenuOpen] = useState(null); // session id
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [editing, setEditing] = useState(null); // session id
   const [draft, setDraft] = useState(null);
 
   const startEdit = (h) => {
     setEditing(sid(h));
+    setMenuOpen(null);
     setConfirmDelete(null);
     setDraft(JSON.parse(JSON.stringify(h)));
   };
@@ -57,15 +59,72 @@ export default function History({ history, onBack, onDelete, onUpdate }) {
         const isEditing = editing === sid(h);
         const view = isEditing ? draft : h;
         return (
-          <div key={sid(h)} className="card card--animate">
+          <div
+            key={sid(h)}
+            className={'card card--animate' + (isEditing ? '' : ' card--tappable')}
+            onClick={isEditing ? undefined : () => onOpen?.(h)}
+          >
             <div className="row-between">
               <span className="ex-name" style={{ fontSize: 18 }}>
                 {view.plan.sessionType}
+                {!isEditing && (
+                  <span style={{ color: 'var(--dim)', fontSize: 14 }}> ›</span>
+                )}
               </span>
-              <span className="mono" style={{ fontSize: 13, color: 'var(--muted)' }}>
-                {fmtDate(view.date)}
+              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="mono" style={{ fontSize: 13, color: 'var(--muted)' }}>
+                  {fmtDate(view.date)}
+                </span>
+                {!isEditing && (
+                  <button
+                    className="menu-btn"
+                    aria-label="Session options"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(menuOpen === sid(h) ? null : sid(h));
+                      setConfirmDelete(null);
+                    }}
+                  >
+                    ⋯
+                  </button>
+                )}
               </span>
             </div>
+
+            {menuOpen === sid(h) && (
+              <div className="pop-menu" style={{ minWidth: 120 }} onClick={(e) => e.stopPropagation()}>
+                <button className="pop-menu__item" onClick={() => startEdit(h)}>
+                  Edit
+                </button>
+                <button
+                  className="pop-menu__item pop-menu__item--danger"
+                  onClick={() => {
+                    setMenuOpen(null);
+                    setConfirmDelete(sid(h));
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
+            )}
+
+            {confirmDelete === sid(h) && (
+              <div className="remove-confirm" onClick={(e) => e.stopPropagation()}>
+                <span>Delete this session for good?</span>
+                <button
+                  className="remove-confirm__yes"
+                  onClick={() => {
+                    setConfirmDelete(null);
+                    onDelete(h);
+                  }}
+                >
+                  Delete
+                </button>
+                <button className="remove-confirm__no" onClick={() => setConfirmDelete(null)}>
+                  Keep
+                </button>
+              </div>
+            )}
 
             {!isEditing && (
               <>
@@ -93,34 +152,8 @@ export default function History({ history, onBack, onDelete, onUpdate }) {
                   >
                     RPE {view.fin.rpe}/10
                     {view.durationMin ? ` · ${view.durationMin}min` : ''}
-                    {view.fin.pain ? ` · ${view.fin.pain}` : ''}
-                    {view.fin.feedback ? ` · ${view.fin.feedback}` : ''}
                   </div>
                 )}
-                {view.debrief && (
-                  <p className="body" style={{ fontSize: 13, marginTop: 6, color: 'var(--muted)' }}>
-                    🗨 {view.debrief}
-                  </p>
-                )}
-                <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-                  <button className="ghost-btn" style={{ fontSize: 14 }} onClick={() => startEdit(h)}>
-                    Edit
-                  </button>
-                  <button
-                    className="ghost-btn"
-                    style={{ fontSize: 14, color: confirmDelete === sid(h) ? 'var(--red)' : undefined }}
-                    onClick={() => {
-                      if (confirmDelete === sid(h)) {
-                        setConfirmDelete(null);
-                        onDelete(h);
-                      } else {
-                        setConfirmDelete(sid(h));
-                      }
-                    }}
-                  >
-                    {confirmDelete === sid(h) ? 'Tap again to delete' : 'Delete'}
-                  </button>
-                </div>
               </>
             )}
 
