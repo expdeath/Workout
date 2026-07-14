@@ -337,6 +337,23 @@ export default function App() {
     return true;
   }
 
+  // ── Remove an exercise from today's plan (skip it entirely) ──
+  function removeExercise(exI) {
+    const ex = todayPlan?.plan?.exercises?.[exI];
+    if (!ex) return;
+    const t = {
+      ...todayPlan,
+      plan: {
+        ...todayPlan.plan,
+        exercises: todayPlan.plan.exercises.filter((_, i) => i !== exI),
+        estTimeMin: Math.max((Number(todayPlan.plan.estTimeMin) || 0) - 6, 15),
+      },
+      log: todayPlan.log.filter((_, i) => i !== exI),
+    };
+    logEvent('exercise_removed', { name: ex.name });
+    persistToday(t);
+  }
+
   // ── Set logging ──
   const updateSet = (exI, setI, field, val) => {
     if (field === 'weight') val = cleanWeight(val);
@@ -502,6 +519,7 @@ export default function App() {
             updateSet={updateSet}
             swapExercise={swapExercise}
             applyHarder={applyHarder}
+            removeExercise={removeExercise}
             onCoach={() => setScreen('coach')}
             onBack={() => setScreen('home')}
             onFinish={() => {

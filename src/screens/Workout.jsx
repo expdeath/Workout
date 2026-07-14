@@ -15,8 +15,11 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, onCoach, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, removeExercise, onCoach, onBack, onFinish }) {
   const p = t.plan;
+
+  // index of the exercise with the "remove?" confirm open, or null
+  const [confirmRemove, setConfirmRemove] = useState(null);
 
   // ── "Make it harder" panel ──
   // null = closed · {loading, caution} = fetching · {caution, options, applied, error}
@@ -211,8 +214,40 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
             <div className="ex-name">{ex.name}</div>
             <div className="mono ex-meta">
               RPE {ex.rpe} · rest {ex.rest}
+              <button
+                className="ex-remove"
+                aria-label={`Remove ${ex.name}`}
+                onClick={() => setConfirmRemove(confirmRemove === exI ? null : exI)}
+              >
+                ✕
+              </button>
             </div>
           </div>
+          {confirmRemove === exI && (
+            <div className="remove-confirm">
+              <span>
+                Skip {ex.name} today?
+                {t.log[exI].some((s) => s.done || s.weight || s.reps)
+                  ? ' Logged sets will be lost.'
+                  : ''}
+              </span>
+              <button
+                className="remove-confirm__yes"
+                onClick={() => {
+                  setConfirmRemove(null);
+                  removeExercise?.(exI);
+                }}
+              >
+                Remove
+              </button>
+              <button
+                className="remove-confirm__no"
+                onClick={() => setConfirmRemove(null)}
+              >
+                Keep
+              </button>
+            </div>
+          )}
           <div className="mono ex-prescription">
             {ex.sets} × {ex.reps}
             {suggest

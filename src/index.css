@@ -707,6 +707,61 @@ a:hover {
   color: var(--teal);
 }
 
+/* ── Remove exercise ────────────────────────────────────────────── */
+.ex-remove {
+  margin-left: 10px;
+  padding: 2px 6px;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-size: 13px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.ex-remove:hover {
+  color: var(--red);
+}
+
+.remove-confirm {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-pill);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.remove-confirm span {
+  flex: 1;
+}
+
+.remove-confirm__yes,
+.remove-confirm__no {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-dim);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.remove-confirm__yes {
+  color: var(--red);
+}
+
+.remove-confirm__yes:hover {
+  border-color: var(--red);
+}
+
+.remove-confirm__no {
+  color: var(--text-body);
+}
+
 /* ── "Make it harder" ───────────────────────────────────────────── */
 .harder-btn {
   display: block;
