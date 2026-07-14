@@ -20,8 +20,26 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
 
   // index of the exercise with the "remove?" confirm open, or null
   const [confirmRemove, setConfirmRemove] = useState(null);
-  // "discard the whole session?" confirm
-  const [confirmCancel, setConfirmCancel] = useState(false);
+  // "discard the whole session?" confirm — 'top' (header ✕) or
+  // 'bottom' (link under Finish), so it opens next to where you tapped
+  const [confirmCancel, setConfirmCancel] = useState(null);
+
+  const cancelConfirm = (
+    <div className="remove-confirm" style={{ marginTop: 10 }}>
+      <span>
+        Discard this session entirely?
+        {t.log.some((ex) => ex.some((s) => s.done || s.weight || s.reps))
+          ? ' Your logged sets will be lost.'
+          : ''}
+      </span>
+      <button className="remove-confirm__yes" onClick={onCancelSession}>
+        Discard
+      </button>
+      <button className="remove-confirm__no" onClick={() => setConfirmCancel(null)}>
+        Keep
+      </button>
+    </div>
+  );
 
   // ── "Make it harder" panel ──
   // null = closed · {loading, caution} = fetching · {caution, options, applied, error}
@@ -173,8 +191,17 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
           <span className="mono sets-counter">
             {doneSets}/{totalSets} sets
           </span>
+          <button
+            className="ghost-btn ghost-btn--danger"
+            aria-label="Cancel this session"
+            onClick={() => setConfirmCancel(confirmCancel === 'top' ? null : 'top')}
+          >
+            ✕
+          </button>
         </div>
       </header>
+
+      {confirmCancel === 'top' && cancelConfirm}
 
       <div className="hero">
         <div className="eyebrow">
@@ -416,25 +443,12 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
         Finish session
       </button>
 
-      {!confirmCancel ? (
-        <button className="cancel-session-btn" onClick={() => setConfirmCancel(true)}>
+      {confirmCancel === 'bottom' ? (
+        cancelConfirm
+      ) : (
+        <button className="cancel-session-btn" onClick={() => setConfirmCancel('bottom')}>
           Cancel this session
         </button>
-      ) : (
-        <div className="remove-confirm" style={{ marginTop: 10 }}>
-          <span>
-            Discard this session entirely?
-            {doneSets > 0 || t.log.some((ex) => ex.some((s) => s.weight || s.reps))
-              ? ' Your logged sets will be lost.'
-              : ''}
-          </span>
-          <button className="remove-confirm__yes" onClick={onCancelSession}>
-            Discard
-          </button>
-          <button className="remove-confirm__no" onClick={() => setConfirmCancel(false)}>
-            Keep
-          </button>
-        </div>
       )}
       <div style={{ height: timer ? 84 : 24 }} />
 

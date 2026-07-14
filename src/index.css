@@ -719,6 +719,16 @@ a:hover {
 }
 
 /* ── Cancel session ─────────────────────────────────────────────── */
+.ghost-btn--danger {
+  color: var(--dim);
+  padding-left: 6px;
+  padding-right: 0;
+}
+
+.ghost-btn--danger:hover {
+  color: var(--red);
+}
+
 .cancel-session-btn {
   display: block;
   width: 100%;
