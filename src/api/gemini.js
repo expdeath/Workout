@@ -112,6 +112,20 @@ const PLAN_SCHEMA = {
  * Deterministic guardrails on the model's plan: suggested weights stay
  * within a plausible jump from logged history, session fits the time.
  */
+function capSuggestedWeight(ex, history) {
+  const m = /([\d.]+)/.exec(String(ex.suggestedWeight || ''));
+  if (!m) return false;
+  const w = parseFloat(m[1]);
+  const lp = lastPerformance(history, ex.name);
+  const lastW = lp
+    ? Math.max(...lp.sets.map((s) => parseFloat(s.weight)).filter((n) => !Number.isNaN(n)), 0)
+    : 0;
+  const cap = lastW ? Math.min(Math.max(lastW * 1.15, lastW + 2.5), 200) : 200;
+  if (w <= cap) return false;
+  ex.suggestedWeight = `${Math.round((cap / 2.5)) * 2.5}kg`;
+  return true;
+}
+
 export function sanitizePlan(plan, history, checkin) {
   let changed = false;
   if ((plan.exercises || []).length > 6) {
@@ -119,18 +133,7 @@ export function sanitizePlan(plan, history, checkin) {
     changed = true;
   }
   for (const ex of plan.exercises || []) {
-    const m = /([\d.]+)/.exec(String(ex.suggestedWeight || ''));
-    if (!m) continue;
-    const w = parseFloat(m[1]);
-    const lp = lastPerformance(history, ex.name);
-    const lastW = lp
-      ? Math.max(...lp.sets.map((s) => parseFloat(s.weight)).filter((n) => !Number.isNaN(n)), 0)
-      : 0;
-    const cap = lastW ? Math.min(Math.max(lastW * 1.15, lastW + 2.5), 200) : 200;
-    if (w > cap) {
-      ex.suggestedWeight = `${Math.round((cap / 2.5)) * 2.5}kg`;
-      changed = true;
-    }
+    if (capSuggestedWeight(ex, history)) changed = true;
   }
   const avail = parseInt(checkin?.timeAvail, 10) || 60;
   if (plan.estTimeMin > avail + 24 + 10) {
@@ -509,6 +512,178 @@ CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.
       if (!text) throw new Error('empty response');
       logEvent('coach_chat', { model, chars: text.length });
       return text;
+    } catch (e) {
+      clearTimeout(timeout);
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
+// ── "Make it harder" — mid-session intensity upgrades ────────────
+
+const INTENSIFY_EXERCISE = {
+  type: 'OBJECT',
+  nullable: true,
+  properties: {
+    name: { type: 'STRING' },
+    sets: { type: 'INTEGER' },
+    reps: { type: 'STRING' },
+    rpe: { type: 'STRING' },
+    rest: { type: 'STRING' },
+    notes: { type: 'STRING' },
+    alt: { type: 'STRING' },
+    suggestedWeight: { type: 'STRING' },
+  },
+  required: ['name', 'sets', 'reps'],
+};
+
+const INTENSIFY_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    note: { type: 'STRING' },
+    options: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          kind: { type: 'STRING', enum: ['add', 'extraSet', 'replace'] },
+          target: { type: 'STRING' },
+          why: { type: 'STRING' },
+          exercise: INTENSIFY_EXERCISE,
+        },
+        required: ['kind', 'why'],
+      },
+    },
+  },
+  required: ['options'],
+};
+
+/**
+ * The athlete feels strong mid-session and wants more. Returns
+ * { note, options: [{ kind: 'add'|'extraSet'|'replace', target, why, exercise }] }.
+ * The note is a gentle recovery reminder (empty when recovery looks fine),
+ * grounded in the same history + sleep/HRV data the plan was built from.
+ */
+export async function intensifyWorkout(today, history, healthLog = []) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
+
+  const p = today.plan || {};
+  const checkin = today.checkin || {};
+  const progress = (p.exercises || [])
+    .map((ex, i) => {
+      const done = (today.log?.[i] || [])
+        .filter(setLogged)
+        .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
+        .join(', ');
+      return `${i + 1}. ${ex.name} ${ex.sets}×${ex.reps}${ex.suggestedWeight ? ` @${ex.suggestedWeight}` : ''} — sets logged: ${done || 'none yet'}`;
+    })
+    .join('\n');
+
+  const recovery = [];
+  const t = healthTrend(healthLog, 5);
+  if (t) recovery.push(`Watch data trend:\n${t}`);
+  const todayNums = parseHealthNumbers(checkin.health);
+  const base = healthBaseline(history, healthLog);
+  if (todayNums.hrv && base.hrv) {
+    const d = Math.round(((todayNums.hrv - base.hrv) / base.hrv) * 100);
+    recovery.push(`HRV today ${todayNums.hrv} vs 30-day avg ${base.hrv} (${d >= 0 ? '+' : ''}${d}%)`);
+  }
+  if (todayNums.rhr && base.rhr) {
+    const d = Math.round(((todayNums.rhr - base.rhr) / base.rhr) * 100);
+    recovery.push(`RHR today ${todayNums.rhr} vs 30-day avg ${base.rhr} (${d >= 0 ? '+' : ''}${d}%)`);
+  }
+  const fatigue = fatigueSignal(history);
+  if (fatigue) recovery.push(fatigue);
+
+  const recent = history
+    .slice(-3)
+    .map((h) => `${h.date} ${h.plan?.sessionType} RPE ${h.fin?.rpe ?? '?'}`)
+    .join('; ');
+
+  const userMsg = `The athlete is mid-session TODAY and feels strong — they tapped "make it harder" and want to extend this workout.
+
+TODAY (${today.date}) — ${p.sessionType}, plan with live progress:
+${progress}
+Time budget: ${checkin.timeAvail || '60'} min gym time. Check-in this morning: energy ${checkin.energy}/10, sleep ${checkin.sleep}, soreness ${checkin.soreness}${checkin.soreAreas ? ' (' + checkin.soreAreas + ')' : ''}.
+
+RECOVERY DATA (today vs their own history):
+${recovery.join('\n') || 'No watch data available — rely on check-in and training log.'}
+
+PROGRESSION TARGETS (from logged history):
+${progressionTargets(history) || 'No logged sets yet.'}
+RECENT SESSIONS: ${recent || 'none logged'}
+
+Offer 2-3 concrete ways to make today harder — AT MOST ONE of each kind:
+- "add": ONE new exercise that fits the ${p.sessionType || 'current'} split and the remaining time ("exercise" required, sets 2-3).
+- "extraSet": one extra set on the existing exercise that would benefit most ("target" = its exact name from the plan).
+- "replace": swap an exercise with NO sets logged yet for a harder variation ("target" = exact name of the exercise being replaced, "exercise" = the harder one). Skip this kind if everything is already started.
+Keep "why" under 10 words. Anchor any suggestedWeight on the logged history — no big jumps.
+"note": ONLY IF the recovery data above (sleep, HRV vs baseline, RHR, fatigue trend) suggests today isn't ideal for extra load, write ONE gentle supportive sentence reminding them of that specific data point — a soft nudge, never a prohibition, no scolding. If recovery looks fine, use an empty string.`;
+
+  let lastErr;
+  for (const model of MODELS.slice(0, 2)) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          signal: controller.signal,
+          headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+          body: JSON.stringify({
+            system_instruction: { parts: [{ text: coachRules() }] },
+            contents: [{ role: 'user', parts: [{ text: userMsg }] }],
+            generationConfig: {
+              maxOutputTokens: 2000,
+              temperature: 0.5,
+              responseMimeType: 'application/json',
+              responseSchema: INTENSIFY_SCHEMA,
+              ...(model.startsWith('gemini-3.5')
+                ? { thinkingConfig: { thinkingLevel: 'low' } }
+                : {}),
+            },
+          }),
+        }
+      );
+      clearTimeout(timeout);
+      if (!response.ok) throw new Error(`status ${response.status}`);
+      const data = await response.json();
+      const text = data.candidates?.[0]?.content?.parts
+        ?.filter((pt) => pt.text)
+        .map((pt) => pt.text)
+        .join('')
+        .trim();
+      if (!text) throw new Error('empty response');
+      const parsed = JSON.parse(text);
+      const names = new Set(
+        (p.exercises || []).map((e) => e?.name?.trim().toLowerCase())
+      );
+      parsed.options = (parsed.options || [])
+        .filter((o) =>
+          o.kind === 'add'
+            ? o.exercise?.name
+            : o.kind === 'replace'
+            ? o.exercise?.name && names.has(o.target?.trim().toLowerCase())
+            : o.kind === 'extraSet' && names.has(o.target?.trim().toLowerCase())
+        )
+        .slice(0, 3);
+      for (const o of parsed.options) {
+        if (!o.exercise) continue;
+        o.exercise.rpe ||= '7-8';
+        o.exercise.rest ||= '90s';
+        capSuggestedWeight(o.exercise, history);
+      }
+      logEvent('ai_intensify', {
+        model,
+        latencyMs: Date.now() - startedAt,
+        options: parsed.options.map((o) => o.kind),
+        hasNote: !!parsed.note,
+      });
+      return parsed;
     } catch (e) {
       clearTimeout(timeout);
       lastErr = e;

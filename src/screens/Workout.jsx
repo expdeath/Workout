@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
 import { fmtDate } from '../utils/helpers';
-import { lastPerformance, suggestNextWeight } from '../utils/stats';
+import { lastPerformance, suggestNextWeight, recoveryCaution } from '../utils/stats';
+import { intensifyWorkout } from '../api/gemini';
+import { getAllHealth } from '../db/db';
 
 /** "90s" → 90 · "2min" → 120 · "1-2min" → 120 · fallback 90 */
 function parseRestSeconds(rest) {
@@ -13,8 +15,42 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, history = [], updateSet, swapExercise, onCoach, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, onCoach, onBack, onFinish }) {
   const p = t.plan;
+
+  // ── "Make it harder" panel ──
+  // null = closed · {loading, caution} = fetching · {caution, options, applied, error}
+  const [harder, setHarder] = useState(null);
+
+  async function openHarder() {
+    const healthLog = await getAllHealth().catch(() => []);
+    // gentle data-driven reminder, shown instantly while the AI thinks
+    const caution = recoveryCaution(t.checkin, history, healthLog);
+    setHarder({ loading: true, caution });
+    try {
+      const res = await intensifyWorkout(t, history, healthLog);
+      setHarder({
+        caution: caution || res.note || null,
+        options: res.options || [],
+        applied: [],
+      });
+    } catch (e) {
+      console.warn('[COACH] intensify failed', e);
+      setHarder({
+        caution,
+        options: [],
+        applied: [],
+        error: 'Couldn’t reach the coach — try again in a moment.',
+      });
+    }
+  }
+
+  const harderLabel = (o) => {
+    const ex = o.exercise;
+    if (o.kind === 'add') return `Add ${ex.name} — ${ex.sets}×${ex.reps}${ex.suggestedWeight ? ` @ ${ex.suggestedWeight}` : ''}`;
+    if (o.kind === 'extraSet') return `One more set of ${o.target}`;
+    return `Swap ${o.target} → ${ex.name} — ${ex.sets}×${ex.reps}${ex.suggestedWeight ? ` @ ${ex.suggestedWeight}` : ''}`;
+  };
   const totalSets = t.log.reduce((a, ex) => a + ex.length, 0);
   const doneSets = t.log.reduce(
     (a, ex) => a + ex.filter((s) => s.done).length,
@@ -254,6 +290,66 @@ export default function Workout({ t, history = [], updateSet, swapExercise, onCo
               · {c}
             </p>
           ))}
+        </div>
+      )}
+
+      {!harder && (
+        <button className="harder-btn" onClick={openHarder}>
+          ⚡ Feeling strong? Make it harder
+        </button>
+      )}
+
+      {harder && (
+        <div className="card card--animate">
+          <div className="row-between">
+            <div className="card__label">Push harder</div>
+            <button
+              className="ghost-btn"
+              style={{ padding: 0 }}
+              onClick={() => setHarder(null)}
+            >
+              close
+            </button>
+          </div>
+
+          {harder.caution && <p className="harder-note">{harder.caution}</p>}
+
+          {harder.loading && (
+            <p className="body" style={{ color: 'var(--muted)' }}>
+              Coach is picking your upgrades…
+            </p>
+          )}
+
+          {harder.error && <p className="body body--warn">{harder.error}</p>}
+
+          {(harder.options || []).map((o, i) => {
+            const done = harder.applied?.includes(i);
+            return (
+              <div key={i} className="harder-opt">
+                <div>
+                  <div className="body">{harderLabel(o)}</div>
+                  {o.why && <div className="harder-why">{o.why}</div>}
+                </div>
+                <button
+                  className={'harder-apply' + (done ? ' harder-apply--done' : '')}
+                  disabled={done}
+                  onClick={() => {
+                    if (applyHarder?.(o)) {
+                      setHarder((h) => ({ ...h, applied: [...(h.applied || []), i] }));
+                    }
+                  }}
+                >
+                  {done ? '✓ In' : 'Apply'}
+                </button>
+              </div>
+            );
+          })}
+
+          {!harder.loading && !harder.error && !(harder.options || []).length && (
+            <p className="body" style={{ color: 'var(--muted)' }}>
+              No sensible upgrades today — finish strong instead.
+            </p>
+          )}
         </div>
       )}
 

@@ -293,6 +293,50 @@ export default function App() {
     persistToday(t);
   }
 
+  // ── "Make it harder": apply one AI upgrade to today's plan ──
+  // add = new exercise · extraSet = +1 set · replace = harder variation
+  function applyHarder(opt) {
+    if (!todayPlan?.plan) return false;
+    const plan = { ...todayPlan.plan, exercises: [...(todayPlan.plan.exercises || [])] };
+    const log = todayPlan.log.map((a) => a.map((s) => ({ ...s })));
+    const emptySet = () => ({ weight: '', reps: '', done: false });
+    const findI = (name) =>
+      plan.exercises.findIndex(
+        (e) => e?.name?.trim().toLowerCase() === String(name || '').trim().toLowerCase()
+      );
+
+    if (opt.kind === 'add' && opt.exercise?.name) {
+      plan.exercises.push(opt.exercise);
+      log.push(Array.from({ length: Number(opt.exercise.sets) || 3 }, emptySet));
+    } else if (opt.kind === 'extraSet') {
+      const i = findI(opt.target);
+      if (i === -1) return false;
+      plan.exercises[i] = {
+        ...plan.exercises[i],
+        sets: (Number(plan.exercises[i].sets) || log[i].length) + 1,
+      };
+      log[i] = [...log[i], emptySet()];
+    } else if (opt.kind === 'replace' && opt.exercise?.name) {
+      const i = findI(opt.target);
+      if (i === -1) return false;
+      plan.exercises[i] = opt.exercise;
+      // keep any sets already typed/ticked, pad up to the new count
+      const kept = log[i].filter((s) => s.done || s.weight || s.reps);
+      const n = Math.max(Number(opt.exercise.sets) || 3, kept.length);
+      log[i] = [...kept, ...Array.from({ length: n - kept.length }, emptySet)];
+    } else {
+      return false;
+    }
+    plan.estTimeMin = (Number(plan.estTimeMin) || 0) + (opt.kind === 'extraSet' ? 3 : 6);
+    logEvent('plan_intensified', {
+      kind: opt.kind,
+      target: opt.target || '',
+      exercise: opt.exercise?.name || '',
+    });
+    persistToday({ ...todayPlan, plan, log });
+    return true;
+  }
+
   // ── Set logging ──
   const updateSet = (exI, setI, field, val) => {
     if (field === 'weight') val = cleanWeight(val);
@@ -457,6 +501,7 @@ export default function App() {
             history={history}
             updateSet={updateSet}
             swapExercise={swapExercise}
+            applyHarder={applyHarder}
             onCoach={() => setScreen('coach')}
             onBack={() => setScreen('home')}
             onFinish={() => {

@@ -258,6 +258,35 @@ export function fatigueSignal(history) {
   return null;
 }
 
+/**
+ * Gentle nudge for the "make it harder" flow: compares today's
+ * check-in (sleep, soreness) and Watch data (HRV/RHR vs 30-day
+ * baseline) plus the fatigue trend. Returns one soft sentence, or
+ * null when recovery looks fine — it never blocks, only reminds.
+ */
+export function recoveryCaution(checkin, history, healthLog = []) {
+  const bits = [];
+  if (/poor/i.test(checkin?.sleep || '')) bits.push('sleep was poor last night');
+  const today = parseHealthNumbers(checkin?.health);
+  const base = healthBaseline(history, healthLog);
+  if (today.hrv && base.hrv) {
+    const d = Math.round(((today.hrv - base.hrv) / base.hrv) * 100);
+    if (d <= -10) bits.push(`HRV is ${Math.abs(d)}% below your 30-day normal`);
+  }
+  if (today.rhr && base.rhr) {
+    const d = Math.round(((today.rhr - base.rhr) / base.rhr) * 100);
+    if (d >= 7) bits.push('resting heart rate is running a bit high');
+  }
+  if (/very sore/i.test(checkin?.soreness || '')) bits.push("you're still quite sore");
+  if (fatigueSignal(history)) bits.push('volume and effort have been climbing for a few weeks');
+  if (!bits.length) return null;
+  const list =
+    bits.length > 1
+      ? bits.slice(0, -1).join(', ') + ' and ' + bits[bits.length - 1]
+      : bits[0];
+  return `Heads-up: ${list}. Extra work is your call — maybe keep a rep or two in the tank.`;
+}
+
 /** Compact text summary of the last 7 days, for the AI weekly review. */
 export function lastWeekSummary(history) {
   const cutoff = Date.now() - 7 * DAY;
