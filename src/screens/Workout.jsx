@@ -15,7 +15,7 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, removeExercise, onCoach, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, removeExercise, adjustSets, onCoach, onBack, onFinish }) {
   const p = t.plan;
 
   // index of the exercise with the "remove?" confirm open, or null
@@ -299,6 +299,28 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
               </div>
             ))}
           </div>
+          {(() => {
+            const last = t.log[exI][t.log[exI].length - 1];
+            const canDrop =
+              t.log[exI].length > 1 && !(last?.done || last?.weight || last?.reps);
+            return (
+              <div className="set-adjust">
+                <button
+                  className="set-adjust__btn"
+                  disabled={!canDrop}
+                  onClick={() => adjustSets?.(exI, -1)}
+                >
+                  − set
+                </button>
+                <button
+                  className="set-adjust__btn"
+                  onClick={() => adjustSets?.(exI, +1)}
+                >
+                  + set
+                </button>
+              </div>
+            );
+          })()}
           {ex.alt && (
             <button className="swap-btn" onClick={() => swapExercise(exI)}>
               ⇄ Machine busy? Swap to {ex.alt}

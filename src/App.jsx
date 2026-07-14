@@ -354,6 +354,31 @@ export default function App() {
     persistToday(t);
   }
 
+  // ── Manually add/remove a set row on one exercise ──
+  // Removing only pops the last row while it's still empty — logged
+  // work can't be deleted this way (that's what remove-exercise is for).
+  function adjustSets(exI, delta) {
+    const rows = todayPlan?.log?.[exI];
+    if (!rows) return;
+    const last = rows[rows.length - 1];
+    if (delta < 0 && (rows.length <= 1 || last.done || last.weight || last.reps)) return;
+    const log = todayPlan.log.map((a) => a.map((s) => ({ ...s })));
+    if (delta > 0) log[exI].push({ weight: '', reps: '', done: false });
+    else log[exI].pop();
+    const plan = {
+      ...todayPlan.plan,
+      exercises: todayPlan.plan.exercises.map((e, i) =>
+        i === exI ? { ...e, sets: log[exI].length } : e
+      ),
+    };
+    logEvent('sets_adjusted', {
+      name: todayPlan.plan.exercises[exI]?.name,
+      delta,
+      sets: log[exI].length,
+    });
+    persistToday({ ...todayPlan, plan, log });
+  }
+
   // ── Set logging ──
   const updateSet = (exI, setI, field, val) => {
     if (field === 'weight') val = cleanWeight(val);
@@ -520,6 +545,7 @@ export default function App() {
             swapExercise={swapExercise}
             applyHarder={applyHarder}
             removeExercise={removeExercise}
+            adjustSets={adjustSets}
             onCoach={() => setScreen('coach')}
             onBack={() => setScreen('home')}
             onFinish={() => {

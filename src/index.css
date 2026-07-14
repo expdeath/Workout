@@ -707,6 +707,34 @@ a:hover {
   color: var(--teal);
 }
 
+/* ── Set stepper (+/− a set row) ───────────────────────────────── */
+.set-adjust {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.set-adjust__btn {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.set-adjust__btn:hover:not(:disabled) {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
+.set-adjust__btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
 /* ── Remove exercise ────────────────────────────────────────────── */
 .ex-remove {
   margin-left: 10px;
