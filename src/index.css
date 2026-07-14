@@ -414,6 +414,17 @@ a:hover {
   transition: border-color 0.15s, background 0.15s;
 }
 
+.seg-group--wrap {
+  flex-wrap: wrap;
+}
+
+.seg-group--wrap .seg-btn {
+  flex: 1 1 30%;
+  white-space: nowrap;
+  padding: 11px 6px;
+  font-size: 14px;
+}
+
 .seg-on {
   border-color: var(--amber);
   background: var(--amber-bg);

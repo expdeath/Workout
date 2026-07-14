@@ -89,6 +89,25 @@ export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
           : 'Lower back tight today?'}
       </Pill>
 
+      <div className="q-label">Today's vibe</div>
+      <div className="seg-group seg-group--wrap">
+        {[
+          ['', "Coach's call"],
+          ['lift', 'Lift'],
+          ['cardio', 'Cardio'],
+          ['stretch', 'Stretch'],
+          ['surprise', '🎲 Surprise me'],
+        ].map(([v, l]) => (
+          <button
+            key={v}
+            className={'seg-btn' + ((ci.wish || '') === v ? ' seg-on' : '')}
+            onClick={() => set({ wish: v })}
+          >
+            {l}
+          </button>
+        ))}
+      </div>
+
       <div className="q-label">Gym time (walk not included)</div>
       <Seg
         options={[

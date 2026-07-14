@@ -61,6 +61,7 @@ export default function App() {
     soreAreas: '',
     backTight: false,
     timeAvail: '60',
+    wish: '',
     health: '',
     notes: '',
   });
@@ -205,6 +206,7 @@ export default function App() {
       soreAreas: '',
       backTight: false,
       timeAvail: '60',
+      wish: '',
       health,
       notes: '',
     };

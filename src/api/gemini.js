@@ -39,6 +39,14 @@ Cooldown: quad stretch, hamstring stretch.
 
 ACTIVE RECOVERY — Option 1: 30min stationary bike zone 2.
 Option 2: 3 rounds — dead bugs x10/side, bird dog x10/side, plank 45s, side plank 30s/side, hollow hold 20-30s.
+
+CARDIO DAY — Option 1: 35-45min zone 2 — stationary bike, incline treadmill walk, or stairmaster.
+Option 2: intervals — 10min easy bike, then 8 × (1min hard / 2min easy), 5min cooldown walk.
+Finish: 5min full-body stretch.
+
+STRETCH & MOBILITY DAY — 10min easy bike, then 2 rounds: cat-cow x10, world's greatest stretch x5/side, 90/90 hip switches x10/side, couch stretch 45s/side, hamstring floss x10/side, thoracic wall opener 45s/side, doorway chest stretch 45s/side, deep squat hold 30s.
+
+FULL BODY MIX (fun day) — pick 5-6, 2 sets each, moderate load, superset pairs, 60s rests: leg press, chest press machine, chest supported row, cable lateral raise, cable curl, rope pushdown, plank 45s.
 `;
 
 // ── Coaching system prompt ───────────────────────────────────────
@@ -52,13 +60,14 @@ function coachRules() {
   return `You are this person's long-term strength coach. PROFILE: ${profile}
 Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt to today's check-in (soreness, tightness, energy).
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
-Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
+Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log.
+VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after 3+ consecutive lifting days, or when no cardio or mobility day appears in the last 7-10 days, schedule a Cardio or Stretch & Mobility day (recovery quality decides which). A Full Body mix day is a good occasional change of pace. If the check-in states a session preference, honor it — it overrides the rotation. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 }
 
 // ── JSON schema spec sent to the model ──────────────────────────
 const JSON_SPEC = `Respond with ONLY minified valid JSON — no markdown fences, no preamble, no trailing text. BE EXTREMELY CONCISE in every string; total response must stay under 900 tokens. Schema:
-{"sessionType":"Push|Pull|Legs|Active Recovery|Mobility|Rest Day|Light Cardio",
+{"sessionType":"Push|Pull|Legs|Full Body|Cardio|Stretch & Mobility|Active Recovery|Rest Day",
 "title":"max 6 words",
 "recoveryScore":0-100,
 "reasoning":"max 2 short sentences",
@@ -68,7 +77,7 @@ const JSON_SPEC = `Respond with ONLY minified valid JSON — no markdown fences,
 "cooldown":["max 3 items, max 6 words each"],
 "estTimeMin":number including 24min walking,
 "concerns":"max 12 words or empty"}
-Max 6 exercises. If Rest Day, exercises=[]. For Active Recovery put the circuit in exercises.`;
+Max 6 exercises. If Rest Day, exercises=[]. For Cardio, Stretch & Mobility, or Active Recovery put the circuit/intervals/stretches in exercises (sets=rounds, reps=duration or count, weight empty).`;
 
 // Enforced at the API level — malformed/truncated JSON can't happen
 const PLAN_SCHEMA = {
@@ -147,6 +156,14 @@ export function sanitizePlan(plan, history, checkin) {
 /**
  * Build the user message from check-in data and history.
  */
+// Check-in "today's vibe" → an instruction the model must honor
+const WISH = {
+  lift: 'The athlete wants to LIFT today — pick the right strength session for the split balance.',
+  cardio: 'The athlete asked for a CARDIO day — build it around conditioning (bike/stairs/incline walk/intervals), no lifting session.',
+  stretch: 'The athlete asked for a STRETCH & MOBILITY day — a full mobility/flexibility session, no heavy lifting.',
+  surprise: 'The athlete asked you to SURPRISE them — build something genuinely different from the recent sessions (mixed circuit, superset full-body, conditioning + core, new variations). Keep it safe and equipment-realistic, but make it fun.',
+};
+
 function buildUserMessage(checkin, history, healthLog = []) {
   const recent = history.slice(-6);
   const histText = recent.length
@@ -186,6 +203,7 @@ CHECK-IN:
 - Soreness: ${checkin.soreness}${checkin.soreAreas ? ' (' + checkin.soreAreas + ')' : ''}
 - Lower back tight today: ${checkin.backTight ? 'YES — adapt exercise selection' : 'no'}
 - Time available today (gym time, walking excluded): ${checkin.timeAvail} min
+${WISH[checkin.wish] ? '- SESSION PREFERENCE (honor this): ' + WISH[checkin.wish] : ''}
 ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 
 APPLE HEALTH DATA (pasted by user, may be empty):
@@ -279,7 +297,8 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
           ],
           generationConfig: {
             maxOutputTokens: 4000,
-            temperature: 0.5, // steadier progression decisions
+            // steadier progression decisions — but let "surprise me" be creative
+            temperature: checkin.wish === 'surprise' ? 0.9 : 0.5,
             responseMimeType: 'application/json',
             responseSchema: PLAN_SCHEMA,
             // "low" buys planning quality without the medium-default
