@@ -438,6 +438,21 @@ export default function App() {
       .catch((e) => console.warn('[COACH] debrief failed', e));
   }
 
+  // ── Cancel the in-progress session entirely ──
+  // Today's plan lives only in the 'today' slot until Finish, so
+  // discarding it never touches history or the cloud.
+  async function cancelSession() {
+    logEvent('session_cancelled', {
+      sessionType: todayPlan?.plan?.sessionType,
+      setsLogged: (todayPlan?.log || [])
+        .flat()
+        .filter((s) => s.done || s.weight || s.reps).length,
+    });
+    setTodayPlan(null);
+    await saveKey('today', null);
+    setScreen('home');
+  }
+
   // ── Clear all history ──
   async function clearHistory() {
     setHistory([]);
@@ -548,6 +563,7 @@ export default function App() {
             applyHarder={applyHarder}
             removeExercise={removeExercise}
             adjustSets={adjustSets}
+            onCancelSession={cancelSession}
             onCoach={() => setScreen('coach')}
             onBack={() => setScreen('home')}
             onFinish={() => {

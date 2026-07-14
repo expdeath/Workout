@@ -718,6 +718,24 @@ a:hover {
   color: var(--teal);
 }
 
+/* ── Cancel session ─────────────────────────────────────────────── */
+.cancel-session-btn {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px;
+  background: none;
+  border: none;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  transition: color 0.15s;
+}
+
+.cancel-session-btn:hover {
+  color: var(--red);
+}
+
 /* ── Set stepper (+/− a set row) ───────────────────────────────── */
 .set-adjust {
   display: flex;

@@ -15,11 +15,13 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, removeExercise, adjustSets, onCoach, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, removeExercise, adjustSets, onCancelSession, onCoach, onBack, onFinish }) {
   const p = t.plan;
 
   // index of the exercise with the "remove?" confirm open, or null
   const [confirmRemove, setConfirmRemove] = useState(null);
+  // "discard the whole session?" confirm
+  const [confirmCancel, setConfirmCancel] = useState(false);
 
   // ── "Make it harder" panel ──
   // null = closed · {loading, caution} = fetching · {caution, options, applied, error}
@@ -413,6 +415,27 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
       <button className="big-btn" onClick={onFinish}>
         Finish session
       </button>
+
+      {!confirmCancel ? (
+        <button className="cancel-session-btn" onClick={() => setConfirmCancel(true)}>
+          Cancel this session
+        </button>
+      ) : (
+        <div className="remove-confirm" style={{ marginTop: 10 }}>
+          <span>
+            Discard this session entirely?
+            {doneSets > 0 || t.log.some((ex) => ex.some((s) => s.weight || s.reps))
+              ? ' Your logged sets will be lost.'
+              : ''}
+          </span>
+          <button className="remove-confirm__yes" onClick={onCancelSession}>
+            Discard
+          </button>
+          <button className="remove-confirm__no" onClick={() => setConfirmCancel(false)}>
+            Keep
+          </button>
+        </div>
+      )}
       <div style={{ height: timer ? 84 : 24 }} />
 
       {timer && (
