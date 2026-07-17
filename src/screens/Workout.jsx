@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
+import ActionSheet from '../components/ActionSheet';
 import { fmtDate, fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
 import { lastPerformance, suggestNextWeight, recoveryCaution, isCardio } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
@@ -22,10 +23,9 @@ function parseRestSeconds(rest) {
 export default function Workout({ t, history = [], updateSet, swapExercise, renameExercise, applyHarder, removeExercise, adjustSets, onCancelSession, onCoach, onBack, onFinish }) {
   const p = t.plan;
 
-  // index of the exercise with the "remove?" confirm open, or null
-  const [confirmRemove, setConfirmRemove] = useState(null);
-  // index of the exercise with the ⋯ menu open, or null
-  const [menuOpen, setMenuOpen] = useState(null);
+  // per-exercise ⋯ menu, shown as a bottom action sheet:
+  // null | { exI, mode: 'menu' | 'swap' | 'remove' }
+  const [sheet, setSheet] = useState(null);
   // "discard the whole session?" confirm — 'top' (header ✕) or
   // 'bottom' (link under Finish), so it opens next to where you tapped
   const [confirmCancel, setConfirmCancel] = useState(null);
@@ -71,12 +71,11 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
   };
 
   // ── Custom swap: type what you actually did instead ──
-  const [swapping, setSwapping] = useState(null); // exercise index or null
   const [swapDraft, setSwapDraft] = useState('');
   const saveSwap = (exI) => {
     const name = swapDraft.trim();
     if (name) renameExercise?.(exI, name);
-    setSwapping(null);
+    setSheet(null);
   };
 
   // ── "Make it harder" panel ──
@@ -278,8 +277,6 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
         const cardio = isCardio(ex.name);
         const lastPerf = lastPerformance(history, ex.name);
         const suggest = cardio ? null : suggestNextWeight(lastPerf, ex.reps);
-        const lastRow = t.log[exI][t.log[exI].length - 1];
-        const canDrop = t.log[exI].length > 1 && !setLogged(lastRow);
         // plate math targets the weight you're actually lifting: the
         // latest typed set, else the computed/AI suggestion
         const typed = [...t.log[exI]].reverse().find((s) => parseFloat(s.weight) > 0);
@@ -296,128 +293,12 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
               <button
                 className="menu-btn"
                 aria-label={`Options for ${ex.name}`}
-                onClick={() => {
-                  setMenuOpen(menuOpen === exI ? null : exI);
-                  setConfirmRemove(null);
-                }}
+                onClick={() => setSheet({ exI, mode: 'menu' })}
               >
                 ⋯
               </button>
             </div>
           </div>
-          {menuOpen === exI && (
-            <div className="pop-menu">
-              {ex.alt && (
-                <button
-                  className="pop-menu__item pop-menu__item--teal"
-                  onClick={() => {
-                    setMenuOpen(null);
-                    swapExercise(exI);
-                  }}
-                >
-                  ⇄ Swap to {ex.alt}
-                </button>
-              )}
-              <button
-                className="pop-menu__item pop-menu__item--teal"
-                onClick={() => {
-                  setMenuOpen(null);
-                  setSwapDraft('');
-                  setSwapping(exI);
-                }}
-              >
-                ⇄ Did something else…
-              </button>
-              <button
-                className="pop-menu__item"
-                onClick={() => {
-                  setMenuOpen(null);
-                  adjustSets?.(exI, +1);
-                }}
-              >
-                + Add set
-              </button>
-              <button
-                className="pop-menu__item"
-                disabled={!canDrop}
-                onClick={() => {
-                  setMenuOpen(null);
-                  adjustSets?.(exI, -1);
-                }}
-              >
-                − Remove set
-              </button>
-              <button
-                className="pop-menu__item"
-                onClick={() => {
-                  setMenuOpen(null);
-                  setCueDraft(cues[cueKey(ex.name)] || '');
-                  setEditingCue(exI);
-                }}
-              >
-                ✎ {cues[cueKey(ex.name)] ? 'Edit note to self' : 'Note to self'}
-              </button>
-              <button
-                className="pop-menu__item pop-menu__item--danger"
-                onClick={() => {
-                  setMenuOpen(null);
-                  setConfirmRemove(exI);
-                }}
-              >
-                ✕ Remove exercise
-              </button>
-            </div>
-          )}
-          {swapping === exI && (
-            <div>
-              <input
-                className="input"
-                style={{ marginTop: 8 }}
-                placeholder="What did you actually do? e.g. Running"
-                value={swapDraft}
-                autoFocus
-                onChange={(e) => setSwapDraft(e.target.value.slice(0, 60))}
-                onKeyDown={(e) => e.key === 'Enter' && saveSwap(exI)}
-              />
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button
-                  className="chip chip-on"
-                  disabled={!swapDraft.trim()}
-                  onClick={() => saveSwap(exI)}
-                >
-                  ⇄ Swap it in
-                </button>
-                <button className="chip" onClick={() => setSwapping(null)}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-          {confirmRemove === exI && (
-            <div className="remove-confirm">
-              <span>
-                Skip {ex.name} today?
-                {t.log[exI].some(setLogged)
-                  ? ' Logged sets will be lost.'
-                  : ''}
-              </span>
-              <button
-                className="remove-confirm__yes"
-                onClick={() => {
-                  setConfirmRemove(null);
-                  removeExercise?.(exI);
-                }}
-              >
-                Remove
-              </button>
-              <button
-                className="remove-confirm__no"
-                onClick={() => setConfirmRemove(null)}
-              >
-                Keep
-              </button>
-            </div>
-          )}
           <div className="mono ex-prescription">
             {ex.sets} × {ex.reps}
             {suggest
@@ -667,6 +548,118 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
         </button>
       )}
       <div style={{ height: timer ? 84 : 24 }} />
+
+      {sheet && (() => {
+        const ex = p.exercises[sheet.exI];
+        if (!ex) return null;
+        const rows = t.log[sheet.exI] || [];
+        const canDrop = rows.length > 1 && !setLogged(rows[rows.length - 1]);
+        return (
+          <ActionSheet title={ex.name} onClose={() => setSheet(null)}>
+            {sheet.mode === 'menu' && (
+              <>
+                {ex.alt && (
+                  <button
+                    className="action-sheet__item action-sheet__item--teal"
+                    onClick={() => {
+                      setSheet(null);
+                      swapExercise(sheet.exI);
+                    }}
+                  >
+                    ⇄ Swap to {ex.alt}
+                  </button>
+                )}
+                <button
+                  className="action-sheet__item action-sheet__item--teal"
+                  onClick={() => {
+                    setSwapDraft('');
+                    setSheet({ ...sheet, mode: 'swap' });
+                  }}
+                >
+                  ⇄ Did something else…
+                </button>
+                <button
+                  className="action-sheet__item"
+                  onClick={() => {
+                    setSheet(null);
+                    adjustSets?.(sheet.exI, +1);
+                  }}
+                >
+                  ＋ Add set
+                </button>
+                <button
+                  className="action-sheet__item"
+                  disabled={!canDrop}
+                  onClick={() => {
+                    setSheet(null);
+                    adjustSets?.(sheet.exI, -1);
+                  }}
+                >
+                  − Remove set
+                </button>
+                <button
+                  className="action-sheet__item"
+                  onClick={() => {
+                    setCueDraft(cues[cueKey(ex.name)] || '');
+                    setEditingCue(sheet.exI);
+                    setSheet(null);
+                  }}
+                >
+                  ✎ {cues[cueKey(ex.name)] ? 'Edit note to self' : 'Note to self'}
+                </button>
+                <button
+                  className="action-sheet__item action-sheet__item--danger"
+                  onClick={() => setSheet({ ...sheet, mode: 'remove' })}
+                >
+                  ✕ Remove exercise
+                </button>
+              </>
+            )}
+
+            {sheet.mode === 'swap' && (
+              <>
+                <p className="action-sheet__note">
+                  Log what you actually did instead — it replaces {ex.name} for
+                  today, and one tap swaps it back.
+                </p>
+                <input
+                  className="input"
+                  placeholder="e.g. Running"
+                  value={swapDraft}
+                  autoFocus
+                  onChange={(e) => setSwapDraft(e.target.value.slice(0, 60))}
+                  onKeyDown={(e) => e.key === 'Enter' && saveSwap(sheet.exI)}
+                />
+                <button
+                  className="action-sheet__go"
+                  disabled={!swapDraft.trim()}
+                  onClick={() => saveSwap(sheet.exI)}
+                >
+                  ⇄ Swap it in
+                </button>
+              </>
+            )}
+
+            {sheet.mode === 'remove' && (
+              <>
+                <p className="action-sheet__note">
+                  Skip {ex.name} today?
+                  {rows.some(setLogged) ? ' Logged sets will be lost.' : ''}
+                </p>
+                <button
+                  className="action-sheet__go action-sheet__go--danger"
+                  onClick={() => {
+                    setSheet(null);
+                    removeExercise?.(sheet.exI);
+                  }}
+                >
+                  ✕ Remove exercise
+                </button>
+              </>
+            )}
+          </ActionSheet>
+        );
+      })()}
 
       {timer && (
         <div className={'rest-bar' + (remaining <= 0 ? ' rest-bar--go' : '')}>

@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import ActionSheet from '../components/ActionSheet';
 import { fmtDate, fmtSet, setLogged, cleanWeight, cleanReps, cleanTime, cleanDist } from '../utils/helpers';
 import { isCardio } from '../utils/stats';
 
@@ -7,15 +8,14 @@ const sid = (s) => s.id || s.date;
 export default function History({ history, onBack, onDelete, onUpdate, onOpen }) {
   // every session in the DB, newest first
   const rev = [...history].reverse();
-  const [menuOpen, setMenuOpen] = useState(null); // session id
-  const [confirmDelete, setConfirmDelete] = useState(null);
+  // per-session ⋯ menu as a bottom sheet: null | { id, mode: 'menu' | 'delete' }
+  const [sheet, setSheet] = useState(null);
   const [editing, setEditing] = useState(null); // session id
   const [draft, setDraft] = useState(null);
 
   const startEdit = (h) => {
     setEditing(sid(h));
-    setMenuOpen(null);
-    setConfirmDelete(null);
+    setSheet(null);
     setDraft(JSON.parse(JSON.stringify(h)));
   };
 
@@ -84,8 +84,7 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
                     aria-label="Session options"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setMenuOpen(menuOpen === sid(h) ? null : sid(h));
-                      setConfirmDelete(null);
+                      setSheet({ id: sid(h), mode: 'menu' });
                     }}
                   >
                     ⋯
@@ -93,41 +92,6 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
                 )}
               </span>
             </div>
-
-            {menuOpen === sid(h) && (
-              <div className="pop-menu" style={{ minWidth: 120 }} onClick={(e) => e.stopPropagation()}>
-                <button className="pop-menu__item" onClick={() => startEdit(h)}>
-                  Edit
-                </button>
-                <button
-                  className="pop-menu__item pop-menu__item--danger"
-                  onClick={() => {
-                    setMenuOpen(null);
-                    setConfirmDelete(sid(h));
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            )}
-
-            {confirmDelete === sid(h) && (
-              <div className="remove-confirm" onClick={(e) => e.stopPropagation()}>
-                <span>Delete this session for good?</span>
-                <button
-                  className="remove-confirm__yes"
-                  onClick={() => {
-                    setConfirmDelete(null);
-                    onDelete(h);
-                  }}
-                >
-                  Delete
-                </button>
-                <button className="remove-confirm__no" onClick={() => setConfirmDelete(null)}>
-                  Keep
-                </button>
-              </div>
-            )}
 
             {!isEditing && (
               <>
@@ -247,6 +211,48 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
           </div>
         );
       })}
+
+      {sheet && (() => {
+        const s = rev.find((h) => sid(h) === sheet.id);
+        if (!s) return null;
+        return (
+          <ActionSheet
+            title={`${s.plan?.sessionType || 'Session'} · ${fmtDate(s.date)}`}
+            onClose={() => setSheet(null)}
+          >
+            {sheet.mode === 'menu' && (
+              <>
+                <button className="action-sheet__item" onClick={() => startEdit(s)}>
+                  ✎ Edit sets &amp; notes
+                </button>
+                <button
+                  className="action-sheet__item action-sheet__item--danger"
+                  onClick={() => setSheet({ ...sheet, mode: 'delete' })}
+                >
+                  ✕ Delete session
+                </button>
+              </>
+            )}
+            {sheet.mode === 'delete' && (
+              <>
+                <p className="action-sheet__note">
+                  Delete this session for good? It disappears from your log,
+                  stats, and the coach's memory.
+                </p>
+                <button
+                  className="action-sheet__go action-sheet__go--danger"
+                  onClick={() => {
+                    setSheet(null);
+                    onDelete(s);
+                  }}
+                >
+                  ✕ Delete it
+                </button>
+              </>
+            )}
+          </ActionSheet>
+        );
+      })()}
       <div style={{ height: 24 }} />
     </div>
   );

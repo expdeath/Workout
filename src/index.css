@@ -885,61 +885,16 @@ a:hover {
   border: none;
   color: var(--dim);
   font-size: 20px;
-  padding: 2px 6px;
+  /* generous padding + negative margin: a ~44px thumb target without
+     inflating the row it sits in */
+  padding: 12px 10px;
+  margin: -12px -10px -12px 0;
   line-height: 1;
   transition: color 0.15s;
 }
 
 .menu-btn:hover {
   color: var(--text);
-}
-
-.pop-menu {
-  position: absolute;
-  top: 46px;
-  right: 14px;
-  z-index: 5;
-  background: var(--bg-pill);
-  border: 1px solid var(--border-dim);
-  border-radius: var(--radius);
-  overflow: hidden;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  min-width: 175px;
-}
-
-.pop-menu__item {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 10px 14px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-body);
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  transition: background 0.15s;
-}
-
-.pop-menu__item:last-child {
-  border-bottom: none;
-}
-
-.pop-menu__item:hover:not(:disabled) {
-  background: var(--border);
-}
-
-.pop-menu__item--teal {
-  color: var(--teal);
-}
-
-.pop-menu__item--danger {
-  color: var(--red);
-}
-
-.pop-menu__item:disabled {
-  color: var(--dim);
-  cursor: default;
 }
 
 /* ── Cancel session ─────────────────────────────────────────────── */
@@ -1218,6 +1173,120 @@ a:hover {
   position: static;
   background: none;
   flex-shrink: 0;
+}
+
+/* ── Action sheet: thumb-sized menu rows on a bottom sheet ──────── */
+.action-sheet {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 0;
+  width: 100%;
+  max-width: 520px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-dim);
+  border-bottom: none;
+  border-radius: 20px 20px 0 0;
+  box-shadow: 0 -14px 40px rgba(0, 0, 0, 0.5);
+  z-index: 55;
+  padding: 10px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  animation: sheetUp 0.22s ease-out;
+}
+
+.action-sheet__handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 0 auto 12px;
+}
+
+.action-sheet__title {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  text-align: center;
+  margin-bottom: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.action-sheet__item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 15px 14px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 16px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.action-sheet__item:active {
+  background: var(--border-dim);
+}
+
+.action-sheet__item--teal {
+  color: var(--teal);
+}
+
+.action-sheet__item--danger {
+  color: var(--red);
+}
+
+.action-sheet__item:disabled {
+  opacity: 0.4;
+}
+
+.action-sheet__cancel {
+  display: block;
+  width: 100%;
+  padding: 14px;
+  margin-top: 14px;
+  border-radius: var(--radius-sm);
+  background: none;
+  border: 1px solid var(--border-dim);
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+/* full-width action button inside a sheet (swap confirm, delete) */
+.action-sheet__go {
+  display: block;
+  width: 100%;
+  padding: 15px 14px;
+  margin-top: 12px;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: var(--teal);
+  color: var(--bg);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.action-sheet__go:disabled {
+  opacity: 0.4;
+}
+
+.action-sheet__go--danger {
+  background: var(--red);
+}
+
+.action-sheet__note {
+  font-size: 13.5px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 4px 2px 0;
 }
 
 /* ── Coach chat ─────────────────────────────────────────────────── */
