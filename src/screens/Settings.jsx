@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
-import { getSyncConfig, setSyncConfig, syncNow, getLastSync } from '../db/sync';
+import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox } from '../db/sync';
 import { todaysHealth } from '../utils/healthIngest';
 import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
 
@@ -438,11 +438,83 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         onToggle={() => toggle('watch')}
       >
         <p className="body" style={{ color: 'var(--muted)' }}>
-          Apple only lets native apps talk to the Watch, but this one-time
-          Shortcut gets you the same result: it reads your Watch's numbers
-          (three-day HRV and resting-HR averages, today's steps) from Health and hands them to the
-          app automatically — your next check-in arrives pre-filled.
-          <br /><br />
+          Apple only lets native apps talk to the Watch, so a Shortcut reads
+          your numbers (HRV, resting HR, steps, sleep) from Health and
+          delivers them here — your next check-in arrives pre-filled.
+        </p>
+
+        <div className="q-label">Recommended: background delivery</div>
+        {sync.repo && sync.token ? (
+          <>
+            <p className="body" style={{ color: 'var(--muted)' }}>
+              The v9 shortcut uploads its numbers straight to your data
+              repo — one silent web request, no browser, works with the
+              phone locked. The app collects them on its next sync (every
+              app open, and every 5 minutes while open).
+              <br /><br />
+              1. Delete older "gym-checkin" copies from the Shortcuts app
+              <br />
+              2. On your iPhone, tap:{' '}
+              <a className="link" href="gym-checkin-v9.shortcut" download>
+                Install the Gym Check-in v9 shortcut
+              </a>{' '}
+              → <b>Add Shortcut</b>. It asks for two values on import —
+              copy them from here:
+            </p>
+            <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+              <button
+                className="ghost-btn"
+                onClick={() => navigator.clipboard?.writeText(sync.repo)}
+              >
+                Copy repo ({sync.repo})
+              </button>
+              <button
+                className="ghost-btn"
+                onClick={() => navigator.clipboard?.writeText(sync.token)}
+              >
+                Copy token
+              </button>
+            </div>
+            <p className="body" style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
+              (If iOS skips the questions, open the shortcut and paste the
+              two values into the first two Text boxes after the "Copy to
+              clipboard" step.)
+              <br /><br />
+              3. Run it once — allow the Health prompts, and a{' '}
+              <span className="mono">health-inbox/</span> file appears in
+              your repo, vanishing after the app's next sync.
+              <br />
+              4. Automate it: Shortcuts → Automation → + → Time of Day
+              (your usual pre-gym time) → Run Immediately → pick{' '}
+              <b>"Gym Check-in v9"</b>.
+            </p>
+            {(() => {
+              const inbox = getLastInbox();
+              return inbox ? (
+                <p className="mono" style={{ fontSize: 12.5, color: 'var(--teal)' }}>
+                  📥 Last delivery collected: {inbox.files} file{inbox.files > 1 ? 's' : ''},{' '}
+                  {new Date(inbox.at).toLocaleString()}
+                </p>
+              ) : (
+                <p className="mono" style={{ fontSize: 12.5, color: 'var(--dim)' }}>
+                  📥 Nothing collected from the inbox yet.
+                </p>
+              );
+            })()}
+          </>
+        ) : (
+          <p className="body" style={{ color: 'var(--muted)' }}>
+            Set up <b>Sync & Backup</b> above first — background delivery
+            drops the data into that same private repo, using the same token.
+          </p>
+        )}
+
+        <div className="q-label">Fallback: URL handoff (v8 shortcut)</div>
+        <p className="body" style={{ color: 'var(--muted)' }}>
+          The older method — the shortcut opens the app with the data in the
+          URL. Simpler to install, but iOS drops the handoff if the phone is
+          locked or the app is already open.
+          <br />
           1. Delete any older "gym-checkin" copies from the Shortcuts app
           <br />
           2. On your iPhone, tap:{' '}
@@ -451,14 +523,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           </a>{' '}
           → <b>Add Shortcut</b>
           <br />
-          3. Run it once from the Shortcuts app and allow the Health access
-          prompts (first run only)
-          <br /><br />
-          Make it automatic: Shortcuts → Automation → + → Time of Day (your
-          usual pre-gym time, e.g. 3:45 PM, weekdays) → Run Immediately →
-          pick <b>"Gym Check-in v8"</b>. If you reinstall the shortcut later,
-          re-point the automation at the new copy — automations keep running
-          the exact copy they were created with.
+          3. Run it once and allow the Health access prompts (first run only)
         </p>
         <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: watchReceived ? 'var(--teal)' : 'var(--dim)' }}>
           {watchReceived

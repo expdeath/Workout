@@ -6,14 +6,16 @@
 // localStorage like the Gemini key. Only ever sent to api.github.com
 // (enforced by the CSP).
 
-import { exportAll, replaceAll, sessionId } from './db.js';
-import { sessionVolume, weekStats } from '../utils/stats.js';
-import { setLogged, fmtDate } from '../utils/helpers.js';
+import { exportAll, replaceAll, sessionId, mergeHealth } from './db.js';
+import { sessionVolume, weekStats, parseHealthNumbers } from '../utils/stats.js';
+import { setLogged, fmtDate, todayStr } from '../utils/helpers.js';
+import { storeTodaysHealth } from '../utils/healthIngest.js';
 
 const API = 'https://api.github.com';
 const FILE = 'coach-backup.json';
 const README = 'README.md';
 const BRANCH = 'main';
+const INBOX = 'health-inbox';
 
 // ── Config ───────────────────────────────────────────────────────
 
@@ -189,6 +191,114 @@ async function pushReadme(cfg, sessions, sha) {
   }
 }
 
+// ── Health inbox ─────────────────────────────────────────────────
+// The Watch shortcut PUTs one small file per run into health-inbox/
+// (background HTTP — no browser hop, works with the phone locked).
+// Every sync drains the inbox: parse → merge into the health store →
+// delete the file. Filenames carry the date; always-unique names mean
+// the shortcut never needs a sha and can never conflict.
+
+/** File body → { text } or { text, nums }. Accepts plain text,
+ *  {"health":"…"}, or {"hrv":48,"rhr":57,"sleepH":7.5,…}. */
+function parseInboxFile(body) {
+  const t = String(body || '').trim();
+  if (t.startsWith('{')) {
+    try {
+      const o = JSON.parse(t);
+      if (typeof o.health === 'string') return { text: o.health };
+      const nums = {};
+      for (const k of ['hrv', 'rhr', 'steps', 'sleepH', 'weightKg']) {
+        if (typeof o[k] === 'number' && o[k] > 0) nums[k] = o[k];
+      }
+      if (Object.keys(nums).length) return { text: t, nums };
+    } catch { /* not JSON — treat as plain text */ }
+  }
+  return { text: t };
+}
+
+export function getLastInbox() {
+  try {
+    return JSON.parse(localStorage.getItem('coach:last-inbox')) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Drain health-inbox/: merge every file into the local health store,
+ * pre-fill today's check-in when a file is from today, then delete the
+ * file from the repo. Per-file failures are skipped (retried next
+ * sync). Returns the number of files ingested.
+ */
+export async function consumeHealthInbox(cfg = getSyncConfig()) {
+  if (!cfg.token || !cfg.repo) return 0;
+  const res = await gh(cfg, `/repos/${cfg.repo}/contents/${INBOX}?ref=${BRANCH}`);
+  if (res.status === 404) return 0; // no inbox folder yet — nothing delivered
+  if (!res.ok) throw new Error(`GitHub error ${res.status} listing health inbox`);
+  const files = await res.json();
+  if (!Array.isArray(files)) return 0;
+  let ingested = 0;
+  for (const f of files.filter((x) => x?.type === 'file').slice(0, 30)) {
+    try {
+      const raw = await gh(
+        cfg,
+        `/repos/${cfg.repo}/contents/${INBOX}/${encodeURIComponent(f.name)}?ref=${BRANCH}`,
+        { headers: { Accept: 'application/vnd.github.raw+json' } }
+      );
+      if (!raw.ok) continue;
+      const { text, nums } = parseInboxFile(await raw.text());
+      const date = /(\d{4}-\d{2}-\d{2})/.exec(f.name)?.[1] || todayStr();
+      // readable form pre-fills the check-in and is what the AI reads
+      const asText = nums
+        ? [
+            nums.hrv && `HRV ${nums.hrv} ms`,
+            nums.rhr && `RHR ${nums.rhr}`,
+            nums.sleepH && `Sleep ${nums.sleepH}h`,
+            nums.weightKg && `Weight ${nums.weightKg}kg`,
+            nums.steps && `Steps ${nums.steps}`,
+          ]
+            .filter(Boolean)
+            .join(' · ')
+        : text;
+      if (!asText) continue;
+      if (date === todayStr()) {
+        storeTodaysHealth(asText); // localStorage prefill + health-store row
+      } else {
+        const n = parseHealthNumbers(asText);
+        await mergeHealth({
+          date,
+          hrv: n.hrv || null,
+          rhr: n.rhr || null,
+          steps: n.steps || null,
+          sleepH: n.sleepH || null,
+          raw: asText.slice(0, 300),
+        });
+      }
+      // structured payloads may carry fields the text parser doesn't (weightKg)
+      if (nums) await mergeHealth({ date, ...nums });
+      const del = await gh(
+        cfg,
+        `/repos/${cfg.repo}/contents/${INBOX}/${encodeURIComponent(f.name)}`,
+        {
+          method: 'DELETE',
+          body: JSON.stringify({ message: `chore: ingest ${f.name}`, sha: f.sha, branch: BRANCH }),
+        }
+      );
+      if (!del.ok) console.warn('[COACH] inbox delete failed', f.name, del.status);
+      ingested++;
+    } catch (e) {
+      console.warn('[COACH] inbox file failed', f?.name, e);
+    }
+  }
+  if (ingested) {
+    localStorage.setItem(
+      'coach:last-inbox',
+      JSON.stringify({ at: Date.now(), files: ingested })
+    );
+  }
+  return ingested;
+}
+
 // ── Merge ────────────────────────────────────────────────────────
 
 function pickSession(local, remote) {
@@ -297,6 +407,16 @@ export async function syncNow({ replaceRemote = false } = {}) {
   const cfg = getSyncConfig();
   if (!cfg.token || !cfg.repo) return { status: 'unconfigured', changedLocal: false };
 
+  // drain the Watch shortcut's drop-box first, so anything it delivered
+  // is in the local store before we snapshot and push. Never fatal —
+  // a broken inbox must not block session sync.
+  let inboxFiles = 0;
+  try {
+    inboxFiles = await consumeHealthInbox(cfg);
+  } catch (e) {
+    console.warn('[COACH] health inbox check failed', e);
+  }
+
   const local = normalizeBackup(await exportAll());
 
   if (replaceRemote) {
@@ -323,7 +443,7 @@ export async function syncNow({ replaceRemote = false } = {}) {
         await pushReadme(cfg, merged.sessions, (await remoteShas(cfg)).readme);
       }
     }
-    return { status: 'ok', changedLocal, sessions: merged.sessions.length };
+    return { status: 'ok', changedLocal: changedLocal || inboxFiles > 0, sessions: merged.sessions.length, inboxFiles };
   };
 
   let result;

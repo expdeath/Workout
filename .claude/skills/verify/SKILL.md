@@ -46,6 +46,11 @@ Health data lives in IndexedDB `coach-db` (version 3), store `health`
 then `page.evaluate` an `indexedDB.open('coach-db', 3)` and `put` rows
 like `{ date, hrv, rhr, steps, sleepH, weightKg }`, then `page.reload()`.
 
+To fake cloud sync / the health inbox, `page.route('**/api.github.com/**')`
+with `coach:gh-repo` + `coach:gh-token` seeded in localStorage. Sync runs
+at boot; note dev StrictMode double-mounts effects, so boot-time API
+calls appear twice — production runs them once.
+
 To fake the AI, `page.route('**/generativelanguage.googleapis.com/**')`
 and fulfill with `{ candidates: [{ content: { parts: [{ text:
 JSON.stringify(plan) }] }, finishReason: 'STOP' }] }` — this also lets
