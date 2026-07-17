@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
-import { fmtDate } from '../utils/helpers';
+import { fmtDate, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
 import { lastPerformance, suggestNextWeight, recoveryCaution } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
 import { getAllHealth } from '../db/db';
+import { getAISettings, setAISettings } from '../utils/storage';
+
+// per-set effort tap cycles through these; '' means not rated
+const EFFORTS = ['', 'easy', 'good', 'grind'];
 
 /** "90s" → 90 · "2min" → 120 · "1-2min" → 120 · fallback 90 */
 function parseRestSeconds(rest) {
@@ -42,6 +46,29 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
       </button>
     </div>
   );
+
+  // index of the exercise with the plate breakdown open, or null
+  const [platesFor, setPlatesFor] = useState(null);
+  const gym = getAISettings();
+  const barKg = Number(gym.barKg) || DEFAULT_BAR_KG;
+  const plates = parsePlates(gym.plates) || undefined;
+
+  // ── Cue notes: persistent per-exercise "note to self" cards ──
+  // Keyed by lowercased exercise name; saved with the AI settings so
+  // they survive re-planning, sync with backups, and reach the coach.
+  const [cues, setCues] = useState(() => getAISettings().cueNotes || {});
+  const [editingCue, setEditingCue] = useState(null); // exercise index or null
+  const [cueDraft, setCueDraft] = useState('');
+  const cueKey = (name) => String(name || '').trim().toLowerCase();
+  const saveCue = (name) => {
+    const next = { ...cues };
+    const text = cueDraft.trim().slice(0, 200);
+    if (text) next[cueKey(name)] = text;
+    else delete next[cueKey(name)];
+    setCues(next);
+    setAISettings({ cueNotes: next });
+    setEditingCue(null);
+  };
 
   // ── "Make it harder" panel ──
   // null = closed · {loading, caution} = fetching · {caution, options, applied, error}
@@ -242,6 +269,12 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
         const lastRow = t.log[exI][t.log[exI].length - 1];
         const canDrop =
           t.log[exI].length > 1 && !(lastRow?.done || lastRow?.weight || lastRow?.reps);
+        // plate math targets the weight you're actually lifting: the
+        // latest typed set, else the computed/AI suggestion
+        const typed = [...t.log[exI]].reverse().find((s) => parseFloat(s.weight) > 0);
+        const plateTarget =
+          parseFloat(typed?.weight) || suggest || parseFloat(ex.suggestedWeight) || null;
+        const plateInfo = platesFor === exI ? plateBreakdown(plateTarget, barKg, plates) : null;
         return (
         <div key={exI} className="ex-card card--animate">
           <div className="row-between">
@@ -293,6 +326,16 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
                 − Remove set
               </button>
               <button
+                className="pop-menu__item"
+                onClick={() => {
+                  setMenuOpen(null);
+                  setCueDraft(cues[cueKey(ex.name)] || '');
+                  setEditingCue(exI);
+                }}
+              >
+                ✎ {cues[cueKey(ex.name)] ? 'Edit note to self' : 'Note to self'}
+              </button>
+              <button
                 className="pop-menu__item pop-menu__item--danger"
                 onClick={() => {
                   setMenuOpen(null);
@@ -335,7 +378,28 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
               : ex.suggestedWeight
               ? ` · try ${ex.suggestedWeight}`
               : ''}
+            {plateTarget ? (
+              <button
+                className={'plate-btn' + (platesFor === exI ? ' plate-btn--on' : '')}
+                aria-label={`Plate breakdown for ${plateTarget}kg`}
+                onClick={() => setPlatesFor(platesFor === exI ? null : exI)}
+              >
+                ⚖ plates
+              </button>
+            ) : null}
           </div>
+          {plateInfo && (
+            <div className="mono plate-line">
+              {plateInfo.perSide.length
+                ? `${plateTarget}kg → ${plateInfo.bar}kg bar + ${plateInfo.perSide.join(' + ')} per side`
+                : `${plateTarget}kg → bar only (${plateInfo.bar}kg${
+                    plateTarget < plateInfo.bar ? ' — lighter than the bar' : ''
+                  })`}
+              {plateInfo.perSide.length && !plateInfo.exact
+                ? ` · closest load ${plateInfo.loaded}kg`
+                : ''}
+            </div>
+          )}
           {lastPerf && (
             <div className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
               last time ({fmtDate(lastPerf.date)}):{' '}
@@ -343,7 +407,47 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
               {suggest ? ' — all reps hit, go up' : ''}
             </div>
           )}
+          {ex.superset && (
+            <div className="mono superset-badge">
+              ⇋ superset {ex.superset}
+              {(() => {
+                const partner = p.exercises.find(
+                  (e, i2) => i2 !== exI && e.superset === ex.superset
+                );
+                return partner ? ` — alternate sets with ${partner.name}` : '';
+              })()}
+            </div>
+          )}
           {ex.notes && <p className="body ex-notes">{ex.notes}</p>}
+          {editingCue === exI ? (
+            <div>
+              <textarea
+                className="input textarea"
+                style={{ minHeight: 60, marginTop: 8 }}
+                placeholder="Note to self — sticks to this exercise forever. e.g. seat height 4 · tuck elbows, left shoulder"
+                value={cueDraft}
+                onChange={(e) => setCueDraft(e.target.value)}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button className="chip chip-on" onClick={() => saveCue(ex.name)}>
+                  Save note
+                </button>
+                <button className="chip" onClick={() => setEditingCue(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : cues[cueKey(ex.name)] ? (
+            <p
+              className="body cue-note"
+              onClick={() => {
+                setCueDraft(cues[cueKey(ex.name)]);
+                setEditingCue(exI);
+              }}
+            >
+              ✎ {cues[cueKey(ex.name)]}
+            </p>
+          ) : null}
           <div className="sets-list">
             {t.log[exI].map((set, setI) => (
               <div key={setI} className="set-row">
@@ -376,6 +480,20 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
                     updateSet(exI, setI, 'reps', e.target.value)
                   }
                 />
+                <button
+                  className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
+                  aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}
+                  onClick={() =>
+                    updateSet(
+                      exI,
+                      setI,
+                      'effort',
+                      EFFORTS[(EFFORTS.indexOf(set.effort || '') + 1) % EFFORTS.length]
+                    )
+                  }
+                >
+                  {set.effort || 'rate'}
+                </button>
               </div>
             ))}
           </div>

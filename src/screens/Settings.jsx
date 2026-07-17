@@ -3,7 +3,7 @@ import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/sto
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync } from '../db/sync';
 import { todaysHealth } from '../utils/healthIngest';
-import { todayStr } from '../utils/helpers';
+import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
 
 function Section({ title, status, statusColor, open, onToggle, children }) {
   return (
@@ -37,6 +37,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
   const [open, setOpen] = useState(() => ({
     coach: !getApiKey(),
     sync: false,
+    gym: false,
     watch: false,
     about: false,
   }));
@@ -44,15 +45,38 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
 
   const [ai, setAi] = useState(() => {
     const s = getAISettings();
-    return { profile: s.profile || '', routine: s.routine || '' };
+    return { profile: s.profile || '', routine: s.routine || '', goals: s.goals || '' };
   });
   const handleCoachSave = () => {
     setApiKey(key.trim());
-    setAISettings({ profile: ai.profile.trim(), routine: ai.routine.trim() });
+    setAISettings({
+      profile: ai.profile.trim(),
+      routine: ai.routine.trim(),
+      goals: ai.goals.trim(),
+    });
     setSaved(true);
     logEvent('api_key_saved');
     logEvent('ai_settings_saved');
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  // ── Plates & bar (used by the in-workout plate calculator) ──
+  const [gym, setGym] = useState(() => {
+    const s = getAISettings();
+    return {
+      barKg: s.barKg ?? DEFAULT_BAR_KG,
+      plates: s.plates || DEFAULT_PLATES.join(', '),
+    };
+  });
+  const [gymSaved, setGymSaved] = useState(false);
+  const handleGymSave = () => {
+    setAISettings({
+      barKg: Math.min(Math.max(parseFloat(gym.barKg) || DEFAULT_BAR_KG, 0), 40),
+      plates: gym.plates.trim(),
+    });
+    setGymSaved(true);
+    logEvent('gym_settings_saved');
+    setTimeout(() => setGymSaved(false), 2000);
   };
 
   const [sync, setSync] = useState(getSyncConfig());
@@ -100,6 +124,48 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
     URL.revokeObjectURL(a.href);
     logEvent('data_exported', { sessions: backup.sessions.length });
     setDataMsg(`Exported ${backup.sessions.length} sessions.`);
+  };
+
+  // Spreadsheet-friendly flat export: one row per logged set
+  const handleExportCsv = async () => {
+    const backup = await exportAll();
+    const sessions = (backup.sessions || []).filter((s) => !s.deleted);
+    const esc = (v) => {
+      const s = String(v ?? '');
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const rows = [
+      ['date', 'session_type', 'exercise', 'set', 'weight_kg', 'reps', 'effort', 'session_rpe', 'pain', 'duration_min'],
+    ];
+    for (const s of sessions) {
+      (s.plan?.exercises || []).forEach((ex, i) => {
+        (s.log?.[i] || []).forEach((set, si) => {
+          if (!(set.done || set.weight || set.reps)) return;
+          rows.push([
+            s.date,
+            s.plan?.sessionType || '',
+            ex?.name || '',
+            si + 1,
+            set.weight || '',
+            set.reps || '',
+            set.effort || '',
+            s.fin?.rpe ?? '',
+            s.fin?.pain || '',
+            s.durationMin ?? '',
+          ]);
+        });
+      });
+    }
+    const blob = new Blob([rows.map((r) => r.map(esc).join(',')).join('\n')], {
+      type: 'text/csv',
+    });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `coach-sessions-${todayStr()}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+    logEvent('data_exported_csv', { rows: rows.length - 1 });
+    setDataMsg(`Exported ${rows.length - 1} sets as CSV.`);
   };
 
   const handleImportFile = async (e) => {
@@ -191,6 +257,18 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           value={ai.profile}
           onChange={(e) => setAi({ ...ai, profile: e.target.value.slice(0, 1500) })}
         />
+        <div className="q-label">Goals (one per line)</div>
+        <textarea
+          className="input textarea"
+          style={{ marginTop: 6, minHeight: 60 }}
+          placeholder={'e.g.\nBench Press 80kg\n4 sessions a week\nRun a 10k in autumn'}
+          value={ai.goals}
+          onChange={(e) => setAi({ ...ai, goals: e.target.value.slice(0, 600) })}
+        />
+        <p className="body" style={{ marginTop: 6, fontSize: 12.5, color: 'var(--muted)' }}>
+          The coach plans toward these; lift and frequency goals get progress
+          bars in Stats.
+        </p>
         <div className="q-label">Your base routine</div>
         <textarea
           className="input textarea"
@@ -271,7 +349,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             {sessionCount} sessions · {eventCount ?? '…'} events logged
           </p>
         )}
-        <div style={{ display: 'flex', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           <button
             className="big-btn"
             onClick={handleExport}
@@ -285,6 +363,13 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             style={{ marginTop: 0, padding: 12, fontSize: 14 }}
           >
             Import backup
+          </button>
+          <button
+            className="big-btn"
+            onClick={handleExportCsv}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            Export CSV
           </button>
         </div>
         <input
@@ -305,6 +390,43 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           onClick={handleClear}
         >
           {confirmClear ? 'Tap again to confirm' : 'Clear all history'}
+        </button>
+      </Section>
+
+      <Section
+        title="Plates & Bar"
+        status={`${parseFloat(gym.barKg) || DEFAULT_BAR_KG}kg bar · plates ${
+          (parsePlates(gym.plates) || DEFAULT_PLATES).join('/')
+        }`}
+        open={open.gym}
+        onToggle={() => toggle('gym')}
+      >
+        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
+          Powers the ⚖ plates button during a workout — tap it on any
+          exercise to see exactly what to load per side.
+        </p>
+        <div className="q-label" style={{ marginTop: 0 }}>Bar weight (kg)</div>
+        <input
+          className="input"
+          inputMode="decimal"
+          value={gym.barKg}
+          onChange={(e) => setGym({ ...gym, barKg: e.target.value.replace(/[^\d.]/g, '') })}
+          style={{ marginTop: 6 }}
+        />
+        <div className="q-label">Available plates (kg, per pair)</div>
+        <input
+          className="input"
+          placeholder={DEFAULT_PLATES.join(', ')}
+          value={gym.plates}
+          onChange={(e) => setGym({ ...gym, plates: e.target.value })}
+          style={{ marginTop: 6 }}
+        />
+        <button
+          className="big-btn"
+          onClick={handleGymSave}
+          style={{ marginTop: 14, padding: 12, fontSize: 14 }}
+        >
+          {gymSaved ? '✓ Saved' : 'Save gym setup'}
         </button>
       </Section>
 

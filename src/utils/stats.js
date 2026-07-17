@@ -25,6 +25,16 @@ function bestSetWeight(session, exIndex) {
   return best;
 }
 
+function bestSetE1RM(session, exIndex) {
+  let best = null;
+  for (const s of session.log?.[exIndex] || []) {
+    if (!setLogged(s)) continue;
+    const e = epley1RM(s.weight, s.reps);
+    if (e && (best === null || e > best)) best = e;
+  }
+  return best;
+}
+
 /** Total volume (Σ weight×reps of done sets) for one session, in kg. */
 export function sessionVolume(session) {
   let vol = 0;
@@ -40,8 +50,9 @@ export function sessionVolume(session) {
 }
 
 /**
- * Per-exercise weight series across all history.
- * Returns [{ name, points: [{date, w}] }], most-trained first.
+ * Per-exercise series across all history: best set weight and best
+ * estimated 1RM per session.
+ * Returns [{ name, points: [{date, w, e}] }], most-trained first.
  */
 export function exerciseSeries(history) {
   const map = new Map();
@@ -52,7 +63,7 @@ export function exerciseSeries(history) {
       if (w === null) return;
       const key = ex.name.trim().toLowerCase();
       if (!map.has(key)) map.set(key, { name: ex.name.trim(), points: [] });
-      map.get(key).points.push({ date: s.date, w });
+      map.get(key).points.push({ date: s.date, w, e: bestSetE1RM(s, i) });
     });
   }
   return [...map.values()].sort((a, b) => b.points.length - a.points.length);
@@ -145,7 +156,9 @@ export function lastPerformance(history, exerciseName) {
 
 /**
  * Simple progression hint: if every set last time hit the top of the
- * prescribed rep range, suggest +2.5kg on the heaviest set.
+ * prescribed rep range, suggest +2.5kg on the heaviest set. Per-set
+ * effort taps refine it: any grind → hold the weight (reps hit, but
+ * barely); every set rated easy → jump +5kg instead.
  */
 export function suggestNextWeight(lastPerf, repsRange) {
   if (!lastPerf?.sets?.length) return null;
@@ -155,7 +168,68 @@ export function suggestNextWeight(lastPerf, repsRange) {
   if (!weights.length) return null;
   const allTopped = lastPerf.sets.every((s) => parseInt(s.reps, 10) >= top);
   if (!allTopped) return null;
-  return Math.min(Math.max(...weights) + 2.5, 200);
+  const efforts = lastPerf.sets.map((s) => s.effort).filter(Boolean);
+  if (efforts.includes('grind')) return null;
+  const jump =
+    efforts.length === lastPerf.sets.length && efforts.every((e) => e === 'easy') ? 5 : 2.5;
+  return Math.min(Math.max(...weights) + jump, 200);
+}
+
+/** Epley estimated 1RM, smoothed so 1 rep returns the weight itself. */
+export function epley1RM(weight, reps) {
+  const w = parseFloat(weight);
+  const r = parseInt(reps, 10);
+  if (Number.isNaN(w) || Number.isNaN(r) || w <= 0 || r <= 0) return null;
+  return Math.round(w * (1 + (r - 1) / 30) * 10) / 10;
+}
+
+/**
+ * All-time records per exercise: heaviest set and best estimated 1RM.
+ * Returns [{ name, count, weight: {w, reps, date}, e1rm: {v, date} }],
+ * most-trained first.
+ */
+export function prRecords(history) {
+  const map = new Map();
+  for (const s of history) {
+    (s.plan?.exercises || []).forEach((ex, i) => {
+      if (!ex?.name) return;
+      const key = ex.name.trim().toLowerCase();
+      for (const set of s.log?.[i] || []) {
+        if (!setLogged(set)) continue;
+        const w = parseFloat(set.weight);
+        if (Number.isNaN(w) || w <= 0) continue;
+        if (!map.has(key)) {
+          map.set(key, { name: ex.name.trim(), count: 0, weight: null, e1rm: null });
+        }
+        const rec = map.get(key);
+        rec.count++;
+        if (!rec.weight || w > rec.weight.w) rec.weight = { w, reps: set.reps, date: s.date };
+        const e = epley1RM(w, set.reps);
+        if (e && (!rec.e1rm || e > rec.e1rm.v)) rec.e1rm = { v: e, date: s.date };
+      }
+    });
+  }
+  return [...map.values()].sort((a, b) => b.count - a.count);
+}
+
+/**
+ * New records set by `session` vs `prior` history (which must not
+ * contain the session). First-time exercises don't count — a PR needs
+ * a previous best to beat. Heaviest-set PRs win over e1RM (rep) PRs.
+ */
+export function detectPRs(session, prior) {
+  const before = new Map(prRecords(prior).map((r) => [r.name.toLowerCase(), r]));
+  const out = [];
+  for (const rec of prRecords([session])) {
+    const old = before.get(rec.name.toLowerCase());
+    if (!old) continue;
+    if (rec.weight && old.weight && rec.weight.w > old.weight.w) {
+      out.push({ name: rec.name, kind: 'weight', from: old.weight.w, to: rec.weight.w });
+    } else if (rec.e1rm && old.e1rm && rec.e1rm.v > old.e1rm.v) {
+      out.push({ name: rec.name, kind: 'e1rm', from: old.e1rm.v, to: rec.e1rm.v });
+    }
+  }
+  return out;
 }
 
 /**
@@ -169,7 +243,9 @@ export function progressionTargets(history, max = 10) {
     if (!lp) continue;
     const repsRange = lp.repsRange;
     const target = suggestNextWeight(lp, repsRange);
-    const lastTxt = lp.sets.map((s) => `${s.weight || '?'}×${s.reps || '?'}`).join(' · ');
+    const lastTxt = lp.sets
+      .map((s) => `${s.weight || '?'}×${s.reps || '?'}${s.effort ? `(${s.effort})` : ''}`)
+      .join(' · ');
     out.push(
       `- ${ex.name}: last ${lastTxt}${target ? ` → ready for ${target}kg (all reps at top of range)` : ' → hold weight, push reps'}`
     );
@@ -177,16 +253,28 @@ export function progressionTargets(history, max = 10) {
   return out.join('\n');
 }
 
-/** Pull HRV / resting-HR / steps numbers out of a free-form health string. */
+/** Pull HRV / resting-HR / steps / sleep numbers out of a free-form health string. */
 export function parseHealthNumbers(text) {
   const t = String(text || '');
   const hrv = /hrv[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
   const rhr = /(?:rhr|resting[^\d]{0,12}(?:heart[^\d]{0,8})?(?:rate)?)[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
   const steps = /steps[^\d]{0,14}([\d,]+(?:\.\d+)?)/i.exec(t)?.[1];
+  // "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20"
+  const sl =
+    /sle(?:ep|pt)[^\d]{0,14}(\d{1,2})(?::(\d{2})|\s*h(?:ours?|rs?)?(?:\s*(\d{1,2})\s*m)?|(\.\d+))?/i.exec(t);
+  let sleepH = null;
+  if (sl) {
+    sleepH = parseInt(sl[1], 10);
+    if (sl[2]) sleepH += parseInt(sl[2], 10) / 60; // 7:20
+    else if (sl[3]) sleepH += parseInt(sl[3], 10) / 60; // 7h 20m
+    else if (sl[4]) sleepH += parseFloat(sl[4]); // 6.5
+    sleepH = sleepH > 0 && sleepH < 20 ? Math.round(sleepH * 10) / 10 : null;
+  }
   return {
     hrv: hrv ? parseFloat(hrv) : null,
     rhr: rhr ? parseFloat(rhr) : null,
     steps: steps ? Math.round(parseFloat(steps.replace(/,/g, ''))) : null,
+    sleepH,
   };
 }
 
@@ -227,6 +315,8 @@ export function healthTrend(healthLog, n = 7) {
       const bits = [];
       if (h.hrv) bits.push(`HRV ${h.hrv}ms`);
       if (h.rhr) bits.push(`RHR ${h.rhr}`);
+      if (h.sleepH) bits.push(`sleep ${h.sleepH}h`);
+      if (h.weightKg) bits.push(`bodyweight ${h.weightKg}kg`);
       if (h.steps) bits.push(`${h.steps.toLocaleString()} steps`);
       return `${h.date}: ${bits.join(' · ') || h.raw || '—'}`;
     })
@@ -259,6 +349,157 @@ export function fatigueSignal(history) {
 }
 
 /**
+ * Lifts that have stopped progressing: trained ≥3 times in the last
+ * `days`, and the best weight of the latest exposure is no better
+ * than either of the two before it. Returns [{ name, weight }].
+ */
+export function stalledProgressions(history, days = 35) {
+  const cutoff = Date.now() - days * DAY;
+  const out = [];
+  for (const ex of exerciseSeries(history)) {
+    const recent = ex.points.filter((p) => dateMs(p.date) >= cutoff);
+    if (recent.length < 3) continue;
+    const [a, b, c] = recent.slice(-3).map((p) => p.w);
+    if (c <= a && c <= b) out.push({ name: ex.name, weight: c });
+  }
+  return out;
+}
+
+/**
+ * Deload heuristic: rising fatigue (volume + RPE climbing, from
+ * fatigueSignal) OR ≥2 stalled lifts during consistent training.
+ * Returns { reason } for the Home card and the AI prompt, or null.
+ */
+export function deloadSignal(history) {
+  const fatigue = fatigueSignal(history);
+  const stalled = stalledProgressions(history);
+  const weeks = weeklyBuckets(history, 4).slice(0, 3);
+  const consistent = weeks.every((w) => w.count >= 3);
+  if (fatigue) {
+    return {
+      reason:
+        'Volume and session effort have both climbed for 3 straight weeks. A lighter week now (−30-40% volume, nothing near failure) usually buys the next PR.',
+    };
+  }
+  if (consistent && stalled.length >= 2) {
+    return {
+      reason: `${stalled
+        .slice(0, 3)
+        .map((s) => s.name)
+        .join(', ')} ${stalled.length > 1 ? 'have' : 'has'} stopped progressing despite consistent training — a classic sign accumulated fatigue is masking fitness. Consider a deload week (−30-40% volume, no failure), then rebuild.`,
+    };
+  }
+  return null;
+}
+
+// ── Muscle-group tagging ─────────────────────────────────────────
+// Keyword classifier — order matters (e.g. "leg raise" is core, and
+// "leg press" must hit Legs before the generic "press" hits Chest).
+const MUSCLE_RULES = [
+  ['Cardio', /bike|cycling|treadmill|stair|elliptical|jump rope|sprint|incline walk|\berg\b|swim/i],
+  ['Core', /plank|crunch|\babs?\b|core|russian|leg raise|knee raise|dead bug|pallof|rollout|woodchop/i],
+  ['Legs', /squat|\bleg\b|lunge|calf|hamstring|quad|glute|hip thrust|\brdl\b|romanian|adductor|abductor|step[- ]?up|nordic/i],
+  ['Back', /\brows?\b|rowing|pulldown|pull[- ]?down|pull[- ]?up|chin[- ]?up|\blats?\b|deadlift|shrug|back extension|face pull|hyperextension/i],
+  ['Shoulders', /shoulder|overhead|\bohp\b|lateral raise|side raise|rear delt|delt|arnold|military|upright/i],
+  ['Chest', /bench|chest|\bpecs?\b|\bfly\b|flye|dips?\b|push[- ]?up|crossover/i],
+  ['Arms', /curl|tricep|bicep|pushdown|push[- ]?down|extension|skull|hammer|preacher|kickback|forearm|wrist/i],
+];
+
+/** Best-effort muscle group for an exercise name. */
+export function muscleGroupOf(name) {
+  const n = String(name || '');
+  for (const [group, re] of MUSCLE_RULES) if (re.test(n)) return group;
+  return 'Other';
+}
+
+/**
+ * Training balance over the last `days`: per muscle group, sets +
+ * volume + days since last trained. Sorted by sets, busiest first.
+ * Returns [{ group, sets, volume, lastDaysAgo }].
+ */
+export function muscleBalance(history, days = 14) {
+  const cutoff = Date.now() - days * DAY;
+  const map = new Map();
+  for (const s of history) {
+    (s.plan?.exercises || []).forEach((ex, i) => {
+      const done = (s.log?.[i] || []).filter(setLogged);
+      if (!done.length) return;
+      const group = muscleGroupOf(ex?.name);
+      if (group === 'Other' || group === 'Cardio') return;
+      if (!map.has(group)) map.set(group, { group, sets: 0, volume: 0, last: null });
+      const g = map.get(group);
+      const ms = dateMs(s.date);
+      if (g.last === null || ms > g.last) g.last = ms;
+      if (ms < cutoff) return;
+      g.sets += done.length;
+      for (const set of done) {
+        const w = parseFloat(set.weight);
+        const r = parseFloat(set.reps);
+        if (!Number.isNaN(w) && !Number.isNaN(r)) g.volume += w * r;
+      }
+    });
+  }
+  return [...map.values()]
+    .map((g) => ({
+      group: g.group,
+      sets: g.sets,
+      volume: Math.round(g.volume),
+      lastDaysAgo: g.last === null ? null : Math.max(0, Math.round((Date.now() - g.last) / DAY)),
+    }))
+    .sort((a, b) => b.sets - a.sets);
+}
+
+/** One-line balance summary for the AI prompt, or ''. */
+export function muscleGapNote(history) {
+  const bal = muscleBalance(history);
+  if (!bal.length) return '';
+  const line = bal
+    .map((g) => `${g.group} ${g.sets} sets${g.lastDaysAgo >= 7 ? ` (last ${g.lastDaysAgo}d ago)` : ''}`)
+    .join(', ');
+  const gaps = bal.filter((g) => g.lastDaysAgo >= 10).map((g) => g.group);
+  return (
+    `Muscle balance last 14 days: ${line}.` +
+    (gaps.length ? ` NOT TRAINED IN 10+ DAYS: ${gaps.join(', ')} — bias today's selection toward the gap if recovery allows.` : '')
+  );
+}
+
+// ── Goals ────────────────────────────────────────────────────────
+/**
+ * Parse free-text goals (one per line) and measure progress.
+ * "Bench Press 80kg" matches an exercise's all-time best set weight;
+ * "4 sessions a week" matches weekly frequency; anything else is
+ * kept as a plain line. Returns [{ text, current, target, unit }].
+ */
+export function goalProgress(history, goalsText) {
+  const lines = String(goalsText || '')
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (!lines.length) return [];
+  const records = prRecords(history);
+  const { thisWeek } = weekStats(history);
+  return lines.map((text) => {
+    const freq = /(\d+)\s*(?:x|sessions?|days?)\s*(?:a|per|\/)\s*week/i.exec(text);
+    if (freq) {
+      return { text, current: thisWeek, target: parseInt(freq[1], 10), unit: ' this week' };
+    }
+    const kg = /^(.*?)\s+(\d+(?:\.\d+)?)\s*kg\b/i.exec(text);
+    if (kg) {
+      const namePart = kg[1].trim().toLowerCase();
+      const rec = records.find(
+        (r) =>
+          r.weight &&
+          (r.name.toLowerCase().includes(namePart) || namePart.includes(r.name.toLowerCase()))
+      );
+      if (rec) {
+        return { text, current: rec.weight.w, target: parseFloat(kg[2]), unit: 'kg' };
+      }
+    }
+    return { text, current: null, target: null, unit: '' };
+  });
+}
+
+/**
  * Gentle nudge for the "make it harder" flow: compares today's
  * check-in (sleep, soreness) and Watch data (HRV/RHR vs 30-day
  * baseline) plus the fatigue trend. Returns one soft sentence, or
@@ -268,6 +509,9 @@ export function recoveryCaution(checkin, history, healthLog = []) {
   const bits = [];
   if (/poor/i.test(checkin?.sleep || '')) bits.push('sleep was poor last night');
   const today = parseHealthNumbers(checkin?.health);
+  if (today.sleepH && today.sleepH < 6 && !bits.length) {
+    bits.push(`you only slept ${today.sleepH}h`);
+  }
   const base = healthBaseline(history, healthLog);
   if (today.hrv && base.hrv) {
     const d = Math.round(((today.hrv - base.hrv) / base.hrv) * 100);

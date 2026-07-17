@@ -7,22 +7,22 @@
 
 import { todayStr } from './helpers.js';
 import { parseHealthNumbers } from './stats.js';
-import { putHealth } from '../db/db.js';
+import { mergeHealth } from '../db/db.js';
 
 const KEY = 'coach:health-';
 
 /** Persist the day's parsed numbers into the health store (synced). */
 function recordHealth(text) {
   try {
-    const { hrv, rhr, steps } = parseHealthNumbers(text);
-    if (hrv || rhr || steps) {
-      putHealth({
+    const { hrv, rhr, steps, sleepH } = parseHealthNumbers(text);
+    if (hrv || rhr || steps || sleepH) {
+      mergeHealth({
         date: todayStr(),
         hrv: hrv || null,
         rhr: rhr || null,
         steps: steps || null,
+        sleepH: sleepH || null,
         raw: text.slice(0, 300),
-        receivedAt: Date.now(),
       }).catch(() => {});
     }
   } catch { /* parsing is best-effort */ }

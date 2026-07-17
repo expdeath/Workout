@@ -1,6 +1,6 @@
 import React from 'react';
 import { fmtDate } from '../utils/helpers';
-import { weekStats } from '../utils/stats';
+import { weekStats, deloadSignal } from '../utils/stats';
 
 const WEEK_MS = 7 * 86400000;
 
@@ -10,6 +10,7 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, onSta
   const inProgress = todayPlan && !todayPlan.finished;
   const { thisWeek, streak } = weekStats(history);
   const showReview = weeklyReview?.text && Date.now() - (weeklyReview.at || 0) < WEEK_MS;
+  const deload = deloadSignal(history);
 
   return (
     <div className="screen screen--fade-in">
@@ -90,6 +91,18 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, onSta
           🗨 Ask coach
         </button>
       </div>
+
+      {deload && (
+        <div className="card card--animate deload-card">
+          <div className="card__label" style={{ color: 'var(--amber)' }}>
+            ⚠ Deload suggested
+          </div>
+          <p className="body">{deload.reason}</p>
+          <p className="mono card__detail">
+            The coach factors this into every plan it builds this week.
+          </p>
+        </div>
+      )}
 
       {last && (
         <div className="card card--animate">

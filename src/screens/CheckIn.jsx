@@ -147,6 +147,15 @@ export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
             value={ci.health}
             onChange={(e) => set({ health: e.target.value })}
           />
+          <div className="q-label" style={{ marginTop: 18 }}>Body weight today (optional)</div>
+          <input
+            className="input"
+            inputMode="decimal"
+            placeholder="kg — one number a day, charted in Stats"
+            value={ci.bodyKg || ''}
+            onChange={(e) => set({ bodyKg: e.target.value.replace(/[^\d.]/g, '').slice(0, 6) })}
+            style={{ marginTop: 6 }}
+          />
           <input
             className="input"
             placeholder="Anything else? (injury, plans — optional)"

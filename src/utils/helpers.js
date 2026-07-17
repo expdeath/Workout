@@ -28,6 +28,41 @@ export function cleanReps(v) {
   return String(Math.min(parseInt(s, 10), MAX_REPS));
 }
 
+// ── Plate math ───────────────────────────────────────────────────
+export const DEFAULT_BAR_KG = 20;
+export const DEFAULT_PLATES = [25, 20, 15, 10, 5, 2.5, 1.25];
+
+/** "25, 20, 2.5" → [25, 20, 2.5] (deduped, largest first), or null. */
+export function parsePlates(text) {
+  const list = String(text || '')
+    .split(/[,\s]+/)
+    .map(parseFloat)
+    .filter((n) => !Number.isNaN(n) && n > 0 && n <= 50);
+  return list.length ? [...new Set(list)].sort((a, b) => b - a) : null;
+}
+
+/**
+ * Greedy per-side barbell breakdown for a target total weight.
+ * Returns { bar, perSide, loaded, exact } — `loaded` is the closest
+ * achievable total when the plates can't hit the target exactly —
+ * or null when the target isn't a positive number.
+ */
+export function plateBreakdown(target, barKg = DEFAULT_BAR_KG, plates = DEFAULT_PLATES) {
+  const t = parseFloat(target);
+  if (Number.isNaN(t) || t <= 0) return null;
+  if (t <= barKg) return { bar: barKg, perSide: [], loaded: barKg, exact: t === barKg };
+  let side = (t - barKg) / 2;
+  const perSide = [];
+  for (const p of [...plates].sort((a, b) => b - a)) {
+    while (side >= p - 1e-9) {
+      perSide.push(p);
+      side -= p;
+    }
+  }
+  const loaded = barKg + 2 * perSide.reduce((a, b) => a + b, 0);
+  return { bar: barKg, perSide, loaded, exact: Math.abs(loaded - t) < 0.05 };
+}
+
 export const todayStr = () => new Date().toISOString().slice(0, 10);
 
 export const fmtDate = (iso) =>

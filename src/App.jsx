@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { loadKey, saveKey } from './utils/storage';
 import { todayStr, quickReadiness, cleanWeight, cleanReps } from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
-import { lastWeekSummary, mondayOf } from './utils/stats';
+import { lastWeekSummary, mondayOf, detectPRs } from './utils/stats';
 import {
   ingestHealthFromUrl,
   todaysHealth,
@@ -18,6 +18,7 @@ import {
   hardDeleteSession,
   logEvent,
   migrateFromLocalStorage,
+  mergeHealth,
 } from './db/db';
 import { syncNow } from './db/sync';
 
@@ -68,6 +69,7 @@ export default function App() {
     timeAvail: '60',
     wish: '',
     health: '',
+    bodyKg: '',
     notes: '',
   });
 
@@ -213,6 +215,7 @@ export default function App() {
       timeAvail: '60',
       wish: '',
       health,
+      bodyKg: '',
       notes: '',
     };
   }
@@ -224,6 +227,12 @@ export default function App() {
     setStatusMsg('');
 
     logEvent('checkin_submitted', { checkin });
+
+    // typed body weight → today's health row (charted next to HRV/RHR)
+    const bodyKg = parseFloat(checkin.bodyKg);
+    if (bodyKg > 20 && bodyKg < 300) {
+      mergeHealth({ date: todayStr(), weightKg: bodyKg }).catch(() => {});
+    }
 
     try {
       const plan = await generateWorkoutPlan(checkin, history, setStatusMsg);
@@ -416,6 +425,9 @@ export default function App() {
         ex.map((s) => (s.weight || s.reps ? { ...s, done: true } : s))
       ),
     };
+    // all-time records beaten today, vs everything before this session
+    const prs = detectPRs(t, history.filter((h) => sid(h) !== sid(t)));
+    if (prs.length) t.prs = prs;
     const newHist = [...history.filter((h) => sid(h) !== sid(t)), t];
     setHistory(newHist);
     await putSession(t);
@@ -426,6 +438,7 @@ export default function App() {
       rpe: fin.rpe,
       pain: fin.pain,
       feedback: fin.feedback,
+      prs: prs.length,
       setsDone: (t.log || []).flat().filter((s) => s.done).length, // post auto-complete
     });
     setScreen('home');
@@ -570,10 +583,11 @@ export default function App() {
           />
         )}
 
-        {screen === 'finish' && (
+        {screen === 'finish' && todayPlan && (
           <Finish
             fin={fin}
             setFin={setFin}
+            prs={detectPRs(todayPlan, history.filter((h) => sid(h) !== sid(todayPlan)))}
             onSave={finishSession}
             onBack={() => setScreen('workout')}
           />

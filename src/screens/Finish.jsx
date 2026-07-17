@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Finish({ fin, setFin, onSave, onBack }) {
+export default function Finish({ fin, setFin, prs = [], onSave, onBack }) {
   return (
     <div className="screen screen--slide-in">
       <header className="header">
@@ -8,6 +8,20 @@ export default function Finish({ fin, setFin, onSave, onBack }) {
         <div />
       </header>
       <h2 className="h2">Log it. 20 seconds.</h2>
+
+      {prs.length > 0 && (
+        <div className="pr-banner">
+          <div className="pr-banner__title">🏆 New personal record{prs.length > 1 ? 's' : ''}</div>
+          {prs.map((p) => (
+            <div key={p.name + p.kind} className="mono pr-banner__row">
+              {p.name} —{' '}
+              {p.kind === 'weight'
+                ? `heaviest set ${p.from} → ${p.to}kg`
+                : `est. 1RM ${p.from} → ${p.to}kg`}
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="q-label q-label--row" style={{ marginTop: 0 }}>
         <span>Overall session RPE</span>

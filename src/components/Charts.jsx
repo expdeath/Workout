@@ -123,6 +123,56 @@ export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
   );
 }
 
+/**
+ * GitHub-style training heatmap: one cell per day, columns are weeks
+ * (Mon-top), teal intensity by session volume tertile.
+ * `days` is a Map of 'YYYY-MM-DD' → { volume, count }.
+ */
+export function TrainingHeatmap({ days, weeks = 16 }) {
+  const MS = 86400000;
+  const now = new Date();
+  const shift = (now.getDay() + 6) % 7; // Mon=0
+  const monday = new Date(now.getTime() - shift * MS);
+  const vols = [...days.values()].map((d) => d.volume).filter((v) => v > 0).sort((a, b) => a - b);
+  const t1 = vols[Math.floor(vols.length / 3)] ?? 1;
+  const t2 = vols[Math.floor((2 * vols.length) / 3)] ?? 1;
+  const cells = [];
+  for (let w = weeks - 1; w >= 0; w--) {
+    for (let d = 0; d < 7; d++) {
+      const dt = new Date(monday.getTime() - w * 7 * MS + d * MS);
+      const iso = new Date(dt.getTime() + 12 * 3600000).toISOString().slice(0, 10);
+      const future = dt.getTime() > now.getTime() + 12 * 3600000;
+      const day = days.get(iso);
+      const level = !day ? 0 : day.volume > t2 ? 3 : day.volume > t1 ? 2 : 1;
+      cells.push({ iso, level, future, title: day ? `${iso} — ${day.count} session${day.count > 1 ? 's' : ''}${day.volume ? `, ${day.volume.toLocaleString()}kg` : ''}` : iso });
+    }
+  }
+  const fill = ['var(--bg-pill)', 'rgba(57,208,184,0.35)', 'rgba(57,208,184,0.65)', 'var(--teal)'];
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridAutoFlow: 'column',
+        gridTemplateRows: 'repeat(7, 1fr)',
+        gridTemplateColumns: `repeat(${weeks}, 1fr)`,
+        gap: 3,
+      }}
+    >
+      {cells.map((c) => (
+        <div
+          key={c.iso}
+          title={c.title}
+          style={{
+            aspectRatio: '1',
+            borderRadius: 3,
+            background: c.future ? 'transparent' : fill[c.level],
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /** Single-series columns: bars = [{ label, value }], unit e.g. "kg". */
 export function BarChart({ bars, unit = '', color = 'var(--chart-teal)' }) {
   const plotW = W - PAD.l - PAD.r;

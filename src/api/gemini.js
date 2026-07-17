@@ -7,9 +7,11 @@ import {
   progressionTargets,
   healthBaseline,
   parseHealthNumbers,
+  deloadSignal,
   fatigueSignal,
   lastPerformance,
   healthTrend,
+  muscleGapNote,
 } from '../utils/stats.js';
 import { logEvent, getAllHealth } from '../db/db.js';
 
@@ -60,6 +62,7 @@ function coachRules() {
   return `You are this person's long-term strength coach. PROFILE: ${profile}
 Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt to today's check-in (soreness, tightness, energy).
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
+Logged sets may carry the athlete's own effort tag — (easy) = clear room to progress, (good) = about right, (grind) = near-failure. Never add load to a lift whose last sets were grinds; treat all-easy sets as a green light for a bigger jump.
 Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log.
 VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after 3+ consecutive lifting days, or when no cardio or mobility day appears in the last 7-10 days, schedule a Cardio or Stretch & Mobility day (recovery quality decides which). A Full Body mix day is a good occasional change of pace. If the check-in states a session preference, honor it — it overrides the rotation. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
@@ -72,12 +75,13 @@ const JSON_SPEC = `Respond with ONLY minified valid JSON — no markdown fences,
 "recoveryScore":0-100,
 "reasoning":"max 2 short sentences",
 "warmup":["max 3 items, max 8 words each"],
-"exercises":[{"name":"","sets":3,"reps":"10-12","rpe":"7-8","rest":"90s","notes":"max 10 words or empty","alt":"max 5 words or empty","suggestedWeight":"e.g. 24kg or empty"}],
+"exercises":[{"name":"","sets":3,"reps":"10-12","rpe":"7-8","rest":"90s","notes":"max 10 words or empty","alt":"max 5 words or empty","suggestedWeight":"e.g. 24kg or empty","superset":"A/B or empty"}],
 "cardio":{"desc":"max 8 words","duration":"e.g. 15min"} or null,
 "cooldown":["max 3 items, max 6 words each"],
 "estTimeMin":number including 24min walking,
 "concerns":"max 12 words or empty"}
-Max 6 exercises. If Rest Day, exercises=[]. For Cardio, Stretch & Mobility, or Active Recovery put the circuit/intervals/stretches in exercises (sets=rounds, reps=duration or count, weight empty).`;
+Max 6 exercises. If Rest Day, exercises=[]. For Cardio, Stretch & Mobility, or Active Recovery put the circuit/intervals/stretches in exercises (sets=rounds, reps=duration or count, weight empty).
+Supersets: when time is tight or two accessories pair well (non-competing muscles), give BOTH exercises the same "superset" letter and place them adjacently — the athlete alternates sets and shares the rest. Never superset heavy compounds.`;
 
 // Enforced at the API level — malformed/truncated JSON can't happen
 const PLAN_SCHEMA = {
@@ -101,6 +105,7 @@ const PLAN_SCHEMA = {
           notes: { type: 'STRING' },
           alt: { type: 'STRING' },
           suggestedWeight: { type: 'STRING' },
+          superset: { type: 'STRING' },
         },
         required: ['name', 'sets', 'reps'],
       },
@@ -175,7 +180,7 @@ function buildUserMessage(checkin, history, healthLog = []) {
               .map((ex, i) => {
                 const sets = (h.log?.[i] || [])
                   .filter(setLogged)
-                  .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
+                  .map((s) => `${s.weight || '?'}x${s.reps || '?'}${s.effort ? `(${s.effort})` : ''}`)
                   .join(', ');
                 return `${ex.name} [${sets || 'no sets logged'}]`;
               })
@@ -204,6 +209,7 @@ CHECK-IN:
 - Lower back tight today: ${checkin.backTight ? 'YES — adapt exercise selection' : 'no'}
 - Time available today (gym time, walking excluded): ${checkin.timeAvail} min
 ${WISH[checkin.wish] ? '- SESSION PREFERENCE (honor this): ' + WISH[checkin.wish] : ''}
+${parseFloat(checkin.bodyKg) ? `- Body weight today: ${checkin.bodyKg}kg` : ''}
 ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 
 APPLE HEALTH DATA (pasted by user, may be empty):
@@ -227,7 +233,22 @@ ${(() => {
   }
   return lines.length ? 'Baseline comparison (computed): ' + lines.join('; ') : '';
 })()}
-${(() => { const f = fatigueSignal(history); return f ? `\nFATIGUE WATCH: ${f}` : ''; })()}
+${(() => {
+  const d = deloadSignal(history);
+  return d ? `\nDELOAD WATCH (computed): ${d.reason} Honor this unless today's readiness is clearly excellent.` : '';
+})()}
+${(() => { const m = muscleGapNote(history); return m ? `\n${m}` : ''; })()}
+${(() => {
+  const g = (getAISettings().goals || '').trim();
+  return g ? `\nATHLETE'S STATED GOALS (steer selection and progression toward these):\n${g}` : '';
+})()}
+${(() => {
+  const cues = getAISettings().cueNotes || {};
+  const lines = Object.entries(cues).slice(0, 15).map(([n, t]) => `- ${n}: ${t}`);
+  return lines.length
+    ? `\nATHLETE'S OWN EXERCISE NOTES (persistent cue cards — respect them when picking/prescribing):\n${lines.join('\n')}`
+    : '';
+})()}
 
 PROGRESSION TARGETS (computed deterministically from the logs — anchor suggestedWeight on these):
 ${progressionTargets(history) || 'No logged sets yet.'}

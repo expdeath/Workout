@@ -135,6 +135,14 @@ export async function getAllHealth() {
   return (rows || []).sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
+/** Patch a day's row without clobbering fields another source wrote
+ *  (Watch data and a typed body weight share the same date row). */
+export async function mergeHealth(patch) {
+  if (!patch?.date) return;
+  const existing = await withStore('health', 'readonly', (s) => s.get(patch.date));
+  await putHealth({ ...(existing || {}), ...patch, receivedAt: Date.now() });
+}
+
 // ── Event log ────────────────────────────────────────────────────
 // Never throws — a logging failure must not break a workout.
 
