@@ -455,7 +455,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
               1. Delete older "gym-checkin" copies from the Shortcuts app
               <br />
               2. On your iPhone, tap:{' '}
-              <a className="link" href="gym-checkin-v9.shortcut" download>
+              <a
+                className="link"
+                href={`shortcuts://import-shortcut?url=${encodeURIComponent(
+                  new URL('gym-checkin-v9.shortcut', window.location.href).toString()
+                )}&name=${encodeURIComponent('Gym Check-in v9')}`}
+              >
                 Install the Gym Check-in v9 shortcut
               </a>{' '}
               → <b>Add Shortcut</b>. It asks for two values on import —
@@ -476,6 +481,13 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
               </button>
             </div>
             <p className="body" style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
+              (If tapping the link doesn't open the Shortcuts app, grab the{' '}
+              <a className="link" href="gym-checkin-v9.shortcut" download>
+                raw file
+              </a>{' '}
+              instead — when iOS shows it as a text preview, tap the Share
+              icon → <b>Shortcuts</b> to import it.)
+              <br /><br />
               (If iOS skips the questions, open the shortcut and paste the
               two values into the first two Text boxes after the "Copy to
               clipboard" step.)
