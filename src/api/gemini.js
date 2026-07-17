@@ -1,7 +1,7 @@
 // ── Gemini API integration ───────────────────────────────────────
 import { parsePlan } from '../utils/parser.js';
 import { getApiKey, getAISettings } from '../utils/storage.js';
-import { todayStr, setLogged } from '../utils/helpers.js';
+import { todayStr, setLogged, fmtSet } from '../utils/helpers.js';
 import { buildLongTermSummary } from '../utils/aiContext.js';
 import {
   progressionTargets,
@@ -180,7 +180,7 @@ function buildUserMessage(checkin, history, healthLog = []) {
               .map((ex, i) => {
                 const sets = (h.log?.[i] || [])
                   .filter(setLogged)
-                  .map((s) => `${s.weight || '?'}x${s.reps || '?'}${s.effort ? `(${s.effort})` : ''}`)
+                  .map((s) => `${fmtSet(s)}${s.effort ? `(${s.effort})` : ''}`)
                   .join(', ');
                 return `${ex.name} [${sets || 'no sets logged'}]`;
               })
@@ -496,8 +496,8 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
 function sessionDetail(s) {
   const lines = (s.plan?.exercises || []).map((ex, i) => {
     const sets = (s.log?.[i] || [])
-      .filter((x) => x.done || x.weight || x.reps)
-      .map((x) => `${x.weight || '?'}×${x.reps || '?'}`)
+      .filter(setLogged)
+      .map(fmtSet)
       .join(' ');
     return `${ex.name}: ${sets || '—'}`;
   });
@@ -636,7 +636,7 @@ export async function intensifyWorkout(today, history, healthLog = []) {
     .map((ex, i) => {
       const done = (today.log?.[i] || [])
         .filter(setLogged)
-        .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
+        .map(fmtSet)
         .join(', ');
       return `${i + 1}. ${ex.name} ${ex.sets}×${ex.reps}${ex.suggestedWeight ? ` @${ex.suggestedWeight}` : ''} — sets logged: ${done || 'none yet'}`;
     })
@@ -761,7 +761,7 @@ export function generateDebrief(session, history) {
     .map((ex, i) => {
       const done = (session.log?.[i] || [])
         .filter(setLogged)
-        .map((s) => `${s.weight || '?'}x${s.reps || '?'}`)
+        .map(fmtSet)
         .join(', ');
       return `${ex.name} [${done || 'skipped'}]`;
     })

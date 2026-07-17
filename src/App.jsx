@@ -1,6 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { loadKey, saveKey } from './utils/storage';
-import { todayStr, quickReadiness, cleanWeight, cleanReps } from './utils/helpers';
+import {
+  todayStr,
+  quickReadiness,
+  cleanWeight,
+  cleanReps,
+  cleanTime,
+  cleanDist,
+  setLogged,
+} from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
 import { lastWeekSummary, mondayOf, detectPRs } from './utils/stats';
 import {
@@ -353,6 +361,27 @@ export default function App() {
     return true;
   }
 
+  // ── Custom swap: log what you actually did instead ──
+  // (told to treadmill, went for a run). Keeps the original name as
+  // the alt so one tap flips back, and drops the now-wrong weight
+  // suggestion. Anything already logged on the exercise is kept.
+  function renameExercise(exI, name) {
+    const ex = todayPlan?.plan?.exercises?.[exI];
+    const clean = String(name || '').trim().slice(0, 60);
+    if (!ex || !clean || clean.toLowerCase() === ex.name.trim().toLowerCase()) return;
+    const t = {
+      ...todayPlan,
+      plan: {
+        ...todayPlan.plan,
+        exercises: todayPlan.plan.exercises.map((e, i) =>
+          i === exI ? { ...e, name: clean, alt: e.name, suggestedWeight: '' } : e
+        ),
+      },
+    };
+    logEvent('exercise_swapped_custom', { from: ex.name, to: clean });
+    persistToday(t);
+  }
+
   // ── Remove an exercise from today's plan (skip it entirely) ──
   function removeExercise(exI) {
     const ex = todayPlan?.plan?.exercises?.[exI];
@@ -377,7 +406,7 @@ export default function App() {
     const rows = todayPlan?.log?.[exI];
     if (!rows) return;
     const last = rows[rows.length - 1];
-    if (delta < 0 && (rows.length <= 1 || last.done || last.weight || last.reps)) return;
+    if (delta < 0 && (rows.length <= 1 || setLogged(last))) return;
     const log = todayPlan.log.map((a) => a.map((s) => ({ ...s })));
     if (delta > 0) log[exI].push({ weight: '', reps: '', done: false });
     else log[exI].pop();
@@ -399,6 +428,8 @@ export default function App() {
   const updateSet = (exI, setI, field, val) => {
     if (field === 'weight') val = cleanWeight(val);
     if (field === 'reps') val = cleanReps(val);
+    if (field === 'time') val = cleanTime(val);
+    if (field === 'dist') val = cleanDist(val);
     const t = {
       ...todayPlan,
       log: todayPlan.log.map((a) => a.map((s) => ({ ...s }))),
@@ -422,7 +453,7 @@ export default function App() {
       fin,
       ...(durationMin && durationMin >= 10 ? { durationMin } : {}),
       log: (todayPlan.log || []).map((ex) =>
-        ex.map((s) => (s.weight || s.reps ? { ...s, done: true } : s))
+        ex.map((s) => (s.weight || s.reps || s.time || s.dist ? { ...s, done: true } : s))
       ),
     };
     // all-time records beaten today, vs everything before this session
@@ -570,6 +601,7 @@ export default function App() {
             history={history}
             updateSet={updateSet}
             swapExercise={swapExercise}
+            renameExercise={renameExercise}
             applyHarder={applyHarder}
             removeExercise={removeExercise}
             adjustSets={adjustSets}

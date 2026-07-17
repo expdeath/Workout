@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
-import { fmtDate, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
-import { lastPerformance, suggestNextWeight, recoveryCaution } from '../utils/stats';
+import { fmtDate, fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
+import { lastPerformance, suggestNextWeight, recoveryCaution, isCardio } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
 import { getAllHealth } from '../db/db';
 import { getAISettings, setAISettings } from '../utils/storage';
@@ -19,7 +19,7 @@ function parseRestSeconds(rest) {
   return Math.min(Math.max(secs, 15), 600);
 }
 
-export default function Workout({ t, history = [], updateSet, swapExercise, applyHarder, removeExercise, adjustSets, onCancelSession, onCoach, onBack, onFinish }) {
+export default function Workout({ t, history = [], updateSet, swapExercise, renameExercise, applyHarder, removeExercise, adjustSets, onCancelSession, onCoach, onBack, onFinish }) {
   const p = t.plan;
 
   // index of the exercise with the "remove?" confirm open, or null
@@ -34,7 +34,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
     <div className="remove-confirm" style={{ marginTop: 10 }}>
       <span>
         Discard this session entirely?
-        {t.log.some((ex) => ex.some((s) => s.done || s.weight || s.reps))
+        {t.log.some((ex) => ex.some(setLogged))
           ? ' Your logged sets will be lost.'
           : ''}
       </span>
@@ -68,6 +68,15 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
     setCues(next);
     setAISettings({ cueNotes: next });
     setEditingCue(null);
+  };
+
+  // ── Custom swap: type what you actually did instead ──
+  const [swapping, setSwapping] = useState(null); // exercise index or null
+  const [swapDraft, setSwapDraft] = useState('');
+  const saveSwap = (exI) => {
+    const name = swapDraft.trim();
+    if (name) renameExercise?.(exI, name);
+    setSwapping(null);
   };
 
   // ── "Make it harder" panel ──
@@ -264,16 +273,19 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
       )}
 
       {(p.exercises || []).map((ex, exI) => {
+        // cardio moves through time/distance, not load — min/km inputs,
+        // no weight suggestions, no plate math
+        const cardio = isCardio(ex.name);
         const lastPerf = lastPerformance(history, ex.name);
-        const suggest = suggestNextWeight(lastPerf, ex.reps);
+        const suggest = cardio ? null : suggestNextWeight(lastPerf, ex.reps);
         const lastRow = t.log[exI][t.log[exI].length - 1];
-        const canDrop =
-          t.log[exI].length > 1 && !(lastRow?.done || lastRow?.weight || lastRow?.reps);
+        const canDrop = t.log[exI].length > 1 && !setLogged(lastRow);
         // plate math targets the weight you're actually lifting: the
         // latest typed set, else the computed/AI suggestion
         const typed = [...t.log[exI]].reverse().find((s) => parseFloat(s.weight) > 0);
-        const plateTarget =
-          parseFloat(typed?.weight) || suggest || parseFloat(ex.suggestedWeight) || null;
+        const plateTarget = cardio
+          ? null
+          : parseFloat(typed?.weight) || suggest || parseFloat(ex.suggestedWeight) || null;
         const plateInfo = platesFor === exI ? plateBreakdown(plateTarget, barKg, plates) : null;
         return (
         <div key={exI} className="ex-card card--animate">
@@ -306,6 +318,16 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
                   ⇄ Swap to {ex.alt}
                 </button>
               )}
+              <button
+                className="pop-menu__item pop-menu__item--teal"
+                onClick={() => {
+                  setMenuOpen(null);
+                  setSwapDraft('');
+                  setSwapping(exI);
+                }}
+              >
+                ⇄ Did something else…
+              </button>
               <button
                 className="pop-menu__item"
                 onClick={() => {
@@ -346,11 +368,36 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
               </button>
             </div>
           )}
+          {swapping === exI && (
+            <div>
+              <input
+                className="input"
+                style={{ marginTop: 8 }}
+                placeholder="What did you actually do? e.g. Running"
+                value={swapDraft}
+                autoFocus
+                onChange={(e) => setSwapDraft(e.target.value.slice(0, 60))}
+                onKeyDown={(e) => e.key === 'Enter' && saveSwap(exI)}
+              />
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  className="chip chip-on"
+                  disabled={!swapDraft.trim()}
+                  onClick={() => saveSwap(exI)}
+                >
+                  ⇄ Swap it in
+                </button>
+                <button className="chip" onClick={() => setSwapping(null)}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
           {confirmRemove === exI && (
             <div className="remove-confirm">
               <span>
                 Skip {ex.name} today?
-                {t.log[exI].some((s) => s.done || s.weight || s.reps)
+                {t.log[exI].some(setLogged)
                   ? ' Logged sets will be lost.'
                   : ''}
               </span>
@@ -375,7 +422,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
             {ex.sets} × {ex.reps}
             {suggest
               ? ` · try ${suggest}kg`
-              : ex.suggestedWeight
+              : !cardio && ex.suggestedWeight
               ? ` · try ${ex.suggestedWeight}`
               : ''}
             {plateTarget ? (
@@ -403,7 +450,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
           {lastPerf && (
             <div className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
               last time ({fmtDate(lastPerf.date)}):{' '}
-              {lastPerf.sets.map((s) => `${s.weight || '?'}×${s.reps || '?'}`).join(' · ')}
+              {lastPerf.sets.map(fmtSet).join(' · ')}
               {suggest ? ' — all reps hit, go up' : ''}
             </div>
           )}
@@ -457,29 +504,56 @@ export default function Workout({ t, history = [], updateSet, swapExercise, appl
                 >
                   {set.done ? '✓' : setI + 1}
                 </button>
-                <input
-                  className="set-input"
-                  inputMode="decimal"
-                  placeholder={
-                    suggest
-                      ? String(suggest)
-                      : lastPerf?.sets?.[setI]?.weight || 'kg'
-                  }
-                  value={set.weight}
-                  onChange={(e) =>
-                    updateSet(exI, setI, 'weight', e.target.value)
-                  }
-                />
-                <span className="set-x">×</span>
-                <input
-                  className="set-input"
-                  inputMode="numeric"
-                  placeholder={lastPerf?.sets?.[setI]?.reps || 'reps'}
-                  value={set.reps}
-                  onChange={(e) =>
-                    updateSet(exI, setI, 'reps', e.target.value)
-                  }
-                />
+                {cardio ? (
+                  <>
+                    <input
+                      className="set-input"
+                      inputMode="decimal"
+                      placeholder={lastPerf?.sets?.[setI]?.time || 'min'}
+                      value={set.time || ''}
+                      onChange={(e) =>
+                        updateSet(exI, setI, 'time', e.target.value)
+                      }
+                    />
+                    <span className="set-x">min</span>
+                    <input
+                      className="set-input"
+                      inputMode="decimal"
+                      placeholder={lastPerf?.sets?.[setI]?.dist || 'km'}
+                      value={set.dist || ''}
+                      onChange={(e) =>
+                        updateSet(exI, setI, 'dist', e.target.value)
+                      }
+                    />
+                    <span className="set-x">km</span>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      className="set-input"
+                      inputMode="decimal"
+                      placeholder={
+                        suggest
+                          ? String(suggest)
+                          : lastPerf?.sets?.[setI]?.weight || 'kg'
+                      }
+                      value={set.weight}
+                      onChange={(e) =>
+                        updateSet(exI, setI, 'weight', e.target.value)
+                      }
+                    />
+                    <span className="set-x">×</span>
+                    <input
+                      className="set-input"
+                      inputMode="numeric"
+                      placeholder={lastPerf?.sets?.[setI]?.reps || 'reps'}
+                      value={set.reps}
+                      onChange={(e) =>
+                        updateSet(exI, setI, 'reps', e.target.value)
+                      }
+                    />
+                  </>
+                )}
                 <button
                   className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
                   aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}

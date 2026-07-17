@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { fmtDate, setLogged, cleanWeight, cleanReps } from '../utils/helpers';
+import { fmtDate, fmtSet, setLogged, cleanWeight, cleanReps, cleanTime, cleanDist } from '../utils/helpers';
+import { isCardio } from '../utils/stats';
 
 const sid = (s) => s.id || s.date;
 
@@ -21,6 +22,8 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
   const setDraftSet = (exI, setI, field, val) => {
     if (field === 'weight') val = cleanWeight(val);
     if (field === 'reps') val = cleanReps(val);
+    if (field === 'time') val = cleanTime(val);
+    if (field === 'dist') val = cleanDist(val);
     const d = JSON.parse(JSON.stringify(draft));
     d.log[exI][setI][field] = val;
     setDraft(d);
@@ -137,11 +140,7 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
                       style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}
                     >
                       {ex.name}:{' '}
-                      {sets.length
-                        ? sets
-                            .map((s) => `${s.weight || '?'}×${s.reps || '?'}`)
-                            .join('  ')
-                        : '—'}
+                      {sets.length ? sets.map(fmtSet).join('  ') : '—'}
                     </div>
                   );
                 })}
@@ -164,26 +163,48 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
                     <div className="mono" style={{ fontSize: 13, color: 'var(--text-body)' }}>
                       {ex.name}
                     </div>
-                    {(draft.log?.[exI] || []).map((s, setI) => (
-                      <div key={setI} className="set-row">
-                        <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
-                        <input
-                          className="set-input"
-                          inputMode="decimal"
-                          placeholder="kg"
-                          value={s.weight}
-                          onChange={(e) => setDraftSet(exI, setI, 'weight', e.target.value)}
-                        />
-                        <span className="set-x">×</span>
-                        <input
-                          className="set-input"
-                          inputMode="numeric"
-                          placeholder="reps"
-                          value={s.reps}
-                          onChange={(e) => setDraftSet(exI, setI, 'reps', e.target.value)}
-                        />
-                      </div>
-                    ))}
+                    {(draft.log?.[exI] || []).map((s, setI) =>
+                      isCardio(ex.name) ? (
+                        <div key={setI} className="set-row">
+                          <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
+                          <input
+                            className="set-input"
+                            inputMode="decimal"
+                            placeholder="min"
+                            value={s.time || ''}
+                            onChange={(e) => setDraftSet(exI, setI, 'time', e.target.value)}
+                          />
+                          <span className="set-x">min</span>
+                          <input
+                            className="set-input"
+                            inputMode="decimal"
+                            placeholder="km"
+                            value={s.dist || ''}
+                            onChange={(e) => setDraftSet(exI, setI, 'dist', e.target.value)}
+                          />
+                          <span className="set-x">km</span>
+                        </div>
+                      ) : (
+                        <div key={setI} className="set-row">
+                          <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
+                          <input
+                            className="set-input"
+                            inputMode="decimal"
+                            placeholder="kg"
+                            value={s.weight}
+                            onChange={(e) => setDraftSet(exI, setI, 'weight', e.target.value)}
+                          />
+                          <span className="set-x">×</span>
+                          <input
+                            className="set-input"
+                            inputMode="numeric"
+                            placeholder="reps"
+                            value={s.reps}
+                            onChange={(e) => setDraftSet(exI, setI, 'reps', e.target.value)}
+                          />
+                        </div>
+                      )
+                    )}
                   </div>
                 ))}
                 <div className="mono" style={{ fontSize: 13, marginTop: 12, color: 'var(--muted)' }}>

@@ -6,7 +6,7 @@ const DAY = 86400000;
 
 const dateMs = (iso) => new Date(iso + 'T12:00:00').getTime();
 
-import { setLogged } from './helpers.js';
+import { setLogged, fmtSet } from './helpers.js';
 
 /** Monday (ISO date string) of the week containing the given date. */
 export function mondayOf(iso) {
@@ -244,7 +244,7 @@ export function progressionTargets(history, max = 10) {
     const repsRange = lp.repsRange;
     const target = suggestNextWeight(lp, repsRange);
     const lastTxt = lp.sets
-      .map((s) => `${s.weight || '?'}×${s.reps || '?'}${s.effort ? `(${s.effort})` : ''}`)
+      .map((s) => `${fmtSet(s)}${s.effort ? `(${s.effort})` : ''}`)
       .join(' · ');
     out.push(
       `- ${ex.name}: last ${lastTxt}${target ? ` → ready for ${target}kg (all reps at top of range)` : ' → hold weight, push reps'}`
@@ -396,7 +396,7 @@ export function deloadSignal(history) {
 // Keyword classifier — order matters (e.g. "leg raise" is core, and
 // "leg press" must hit Legs before the generic "press" hits Chest).
 const MUSCLE_RULES = [
-  ['Cardio', /bike|cycling|treadmill|stair|elliptical|jump rope|sprint|incline walk|\berg\b|swim/i],
+  ['Cardio', /bike|cycling|treadmill|stair|elliptical|jump rope|sprint|incline walk|\berg\b|swim|\brun(?:ning)?\b|\bjogg?(?:ing)?\b|\brower\b|row(?:ing)?\s*machine|cross[- ]?trainer|air ?dyne|assault ?bike|brisk walk|walking pad|\bhike\b|hiking|\bruck(?:ing)?\b|\bcardio\b/i],
   ['Core', /plank|crunch|\babs?\b|core|russian|leg raise|knee raise|dead bug|pallof|rollout|woodchop/i],
   ['Legs', /squat|\bleg\b|lunge|calf|hamstring|quad|glute|hip thrust|\brdl\b|romanian|adductor|abductor|step[- ]?up|nordic/i],
   ['Back', /\brows?\b|rowing|pulldown|pull[- ]?down|pull[- ]?up|chin[- ]?up|\blats?\b|deadlift|shrug|back extension|face pull|hyperextension/i],
@@ -411,6 +411,9 @@ export function muscleGroupOf(name) {
   for (const [group, re] of MUSCLE_RULES) if (re.test(n)) return group;
   return 'Other';
 }
+
+/** Cardio exercises log time/distance instead of weight×reps. */
+export const isCardio = (name) => muscleGroupOf(name) === 'Cardio';
 
 /**
  * Training balance over the last `days`: per muscle group, sets +

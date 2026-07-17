@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { fmtDate, setLogged } from '../utils/helpers';
+import { fmtDate, fmtSet, setLogged } from '../utils/helpers';
 import { askCoach } from '../api/gemini';
 import { getAllHealth } from '../db/db';
 
@@ -70,7 +70,7 @@ export default function HistoryDetail({ session, history, onBack }) {
           <div className="ex-name" style={{ fontSize: 16, marginBottom: 4 }}>{ex.name}</div>
           {ex.sets.map((st, i) => (
             <div key={i} className="mono" style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>
-              Set {i + 1}: {st.weight || '?'}kg × {st.reps || '?'}
+              Set {i + 1}: {fmtSet(st)}
             </div>
           ))}
         </div>

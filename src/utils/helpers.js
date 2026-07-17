@@ -1,16 +1,32 @@
 // ── Date formatters & readiness calculation ─────────────────────
 
 // A set counts if it was ticked done OR has data typed into it —
-// entering weight/reps clearly means the set happened
-export const setLogged = (s) => !!(s && (s.done || s.weight || s.reps));
+// entering weight/reps (or min/km on cardio) clearly means it happened
+export const setLogged = (s) =>
+  !!(s && (s.done || s.weight || s.reps || s.time || s.dist));
+
+/**
+ * One logged set as text. Cardio sets carry time/dist ("30min · 5km"),
+ * strength sets carry weight/reps ("60kg×8").
+ */
+export function fmtSet(s) {
+  if (s?.time || s?.dist) {
+    return [s.time ? `${s.time}min` : '', s.dist ? `${s.dist}km` : '']
+      .filter(Boolean)
+      .join(' · ');
+  }
+  return `${s?.weight || '?'}kg×${s?.reps || '?'}`;
+}
 
 // ── Set-input sanitation ─────────────────────────────────────────
 // Clamp instead of reject: typos like 1000kg become 200, "88 reps"
 // becomes 30 — nothing silly reaches the log, charts, or the AI.
 export const MAX_WEIGHT_KG = 200;
 export const MAX_REPS = 30;
+export const MAX_TIME_MIN = 300;
+export const MAX_DIST_KM = 100;
 
-export function cleanWeight(v) {
+function cleanDecimal(v, max) {
   let s = String(v ?? '').replace(/[^\d.]/g, '');
   const firstDot = s.indexOf('.');
   if (firstDot !== -1) {
@@ -18,9 +34,13 @@ export function cleanWeight(v) {
   }
   if (s === '') return '';
   const n = parseFloat(s);
-  if (!Number.isNaN(n) && n > MAX_WEIGHT_KG) return String(MAX_WEIGHT_KG);
+  if (!Number.isNaN(n) && n > max) return String(max);
   return s;
 }
+
+export const cleanWeight = (v) => cleanDecimal(v, MAX_WEIGHT_KG);
+export const cleanTime = (v) => cleanDecimal(v, MAX_TIME_MIN);
+export const cleanDist = (v) => cleanDecimal(v, MAX_DIST_KM);
 
 export function cleanReps(v) {
   const s = String(v ?? '').replace(/\D/g, '');
