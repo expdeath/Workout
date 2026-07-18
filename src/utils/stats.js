@@ -482,7 +482,7 @@ const MUSCLE_RULES = [
   ['Legs', /squat|\bleg\b|lunge|calf|hamstring|quad|glute|hip thrust|\brdl\b|romanian|adductor|abductor|step[- ]?up|nordic|kettlebell swing|\bkb swing\b/i],
   ['Back', /\brows?\b|rowing|pulldown|pull[- ]?down|pull[- ]?up|chin[- ]?up|\blats?\b|deadlift|shrug|back extension|face pull|hyperextension/i],
   ['Shoulders', /shoulder|overhead|\bohp\b|lateral raise|side raise|rear delt|delt|arnold|military|upright/i],
-  ['Chest', /bench|chest|\bpecs?\b|\bfly\b|flye|dips?\b|push[- ]?up|crossover|incline\s+(?:machine|smith)?\s*press/i],
+  ['Chest', /bench|chest|\bpecs?\b|\bfly\b|flye|dips?\b|push[- ]?up|crossover|incline.*press/i],
   ['Arms', /curl|tricep|bicep|pushdown|push[- ]?down|extension|skull|hammer|preacher|kickback|forearm|wrist/i],
 ];
 
