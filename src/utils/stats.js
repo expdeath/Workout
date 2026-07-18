@@ -496,6 +496,23 @@ export function muscleGroupOf(name) {
 /** Cardio exercises log time/distance instead of weight×reps. */
 export const isCardio = (name) => muscleGroupOf(name) === 'Cardio';
 
+// Stretches, holds, and mobility drills — nothing numeric to log,
+// each round just gets ticked off
+const STRETCH_RE =
+  /stretch|mobility|cat[- ]?cow|world'?s greatest|90.?90|couch|floss|thoracic|opener|pigeon|pose|yoga|foam roll|dead ?bug|bird ?dog|hollow|plank|cobra|down(?:ward)? dog|hip (?:switch|circle|opener)|breathing/i;
+
+/**
+ * How an exercise gets logged:
+ *  'strength' → kg × reps · 'cardio' → min / km · 'check' → tick only.
+ * Stretch/recovery sessions default everything non-cardio to 'check'.
+ */
+export function logMode(name, sessionType) {
+  if (isCardio(name)) return 'cardio';
+  if (STRETCH_RE.test(String(name || ''))) return 'check';
+  if (/stretch|mobility|recovery/i.test(String(sessionType || ''))) return 'check';
+  return 'strength';
+}
+
 /**
  * Training balance over the last `days`: per muscle group, sets +
  * volume + days since last trained. Sorted by sets, busiest first.

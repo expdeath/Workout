@@ -7,7 +7,8 @@ export const setLogged = (s) =>
 
 /**
  * One logged set as text. Cardio sets carry time/dist ("30min · 5km"),
- * strength sets carry weight/reps ("60kg×8").
+ * strength sets weight/reps ("60kg×8"); check-only sets (stretches,
+ * holds) have no numbers — a tick is the whole story.
  */
 export function fmtSet(s) {
   if (s?.time || s?.dist) {
@@ -15,6 +16,7 @@ export function fmtSet(s) {
       .filter(Boolean)
       .join(' · ');
   }
+  if (!s?.weight && !s?.reps) return s?.done ? '✓' : '—';
   return `${s?.weight || '?'}kg×${s?.reps || '?'}`;
 }
 

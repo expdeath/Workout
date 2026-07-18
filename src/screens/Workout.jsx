@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
 import ActionSheet from '../components/ActionSheet';
 import { fmtDate, fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
-import { lastPerformance, suggestNextWeight, recoveryCaution, isCardio } from '../utils/stats';
+import { lastPerformance, suggestNextWeight, recoveryCaution, logMode } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
 import { getAllHealth } from '../db/db';
 import { getAISettings, setAISettings } from '../utils/storage';
@@ -272,15 +272,16 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
       )}
 
       {(p.exercises || []).map((ex, exI) => {
-        // cardio moves through time/distance, not load — min/km inputs,
-        // no weight suggestions, no plate math
-        const cardio = isCardio(ex.name);
+        // cardio logs min/km, stretches & holds just get ticked off —
+        // only strength rows carry kg×reps, suggestions, and plate math
+        const mode = logMode(ex.name, p.sessionType);
+        const cardio = mode === 'cardio';
         const lastPerf = lastPerformance(history, ex.name);
-        const suggest = cardio ? null : suggestNextWeight(lastPerf, ex.reps);
+        const suggest = mode !== 'strength' ? null : suggestNextWeight(lastPerf, ex.reps);
         // plate math targets the weight you're actually lifting: the
         // latest typed set, else the computed/AI suggestion
         const typed = [...t.log[exI]].reverse().find((s) => parseFloat(s.weight) > 0);
-        const plateTarget = cardio
+        const plateTarget = mode !== 'strength'
           ? null
           : parseFloat(typed?.weight) || suggest || parseFloat(ex.suggestedWeight) || null;
         const plateInfo = platesFor === exI ? plateBreakdown(plateTarget, barKg, plates) : null;
@@ -303,7 +304,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
             {ex.sets} × {ex.reps}
             {suggest
               ? ` · try ${suggest}kg`
-              : !cardio && ex.suggestedWeight
+              : mode === 'strength' && ex.suggestedWeight
               ? ` · try ${ex.suggestedWeight}`
               : ''}
             {plateTarget ? (
@@ -385,7 +386,15 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                 >
                   {set.done ? '✓' : setI + 1}
                 </button>
-                {cardio ? (
+                {mode === 'check' ? (
+                  <span
+                    className="set-x"
+                    style={{ flex: 1, fontSize: 13.5 }}
+                    onClick={() => toggleSet(exI, setI, set)}
+                  >
+                    {ex.reps}{set.done ? ' — done' : ' — tap to tick off'}
+                  </span>
+                ) : cardio ? (
                   <>
                     <input
                       className="set-input"
@@ -435,20 +444,22 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     />
                   </>
                 )}
-                <button
-                  className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
-                  aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}
-                  onClick={() =>
-                    updateSet(
-                      exI,
-                      setI,
-                      'effort',
-                      EFFORTS[(EFFORTS.indexOf(set.effort || '') + 1) % EFFORTS.length]
-                    )
-                  }
-                >
-                  {set.effort || 'rate'}
-                </button>
+                {mode !== 'check' && (
+                  <button
+                    className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
+                    aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}
+                    onClick={() =>
+                      updateSet(
+                        exI,
+                        setI,
+                        'effort',
+                        EFFORTS[(EFFORTS.indexOf(set.effort || '') + 1) % EFFORTS.length]
+                      )
+                    }
+                  >
+                    {set.effort || 'rate'}
+                  </button>
+                )}
               </div>
             ))}
           </div>

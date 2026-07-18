@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import ActionSheet from '../components/ActionSheet';
 import { fmtDate, fmtSet, setLogged, cleanWeight, cleanReps, cleanTime, cleanDist } from '../utils/helpers';
-import { isCardio } from '../utils/stats';
+import { logMode } from '../utils/stats';
 
 const sid = (s) => s.id || s.date;
 
@@ -128,7 +128,14 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
                       {ex.name}
                     </div>
                     {(draft.log?.[exI] || []).map((s, setI) =>
-                      isCardio(ex.name) ? (
+                      logMode(ex.name, draft.plan?.sessionType) === 'check' ? (
+                        <div key={setI} className="set-row">
+                          <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
+                          <span className="set-x" style={{ fontSize: 13 }}>
+                            {s.done ? '✓ done' : '— skipped'}
+                          </span>
+                        </div>
+                      ) : logMode(ex.name, draft.plan?.sessionType) === 'cardio' ? (
                         <div key={setI} className="set-row">
                           <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
                           <input
