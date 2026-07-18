@@ -278,6 +278,9 @@ export function parseHealthNumbers(text) {
     if (n > 1200) sleepH = n / 3600; // seconds
     else if (n > 20) sleepH = n / 60; // minutes
     else sleepH = n; // hours
+    // Watch and iPhone both log the same night and raw queries return
+    // both, doubling the sum — an implausibly long night means dedupe
+    if (sleepH > 11) sleepH = sleepH / 2;
     sleepH = sleepH > 0 && sleepH < 20 ? Math.round(sleepH * 10) / 10 : null;
   }
   // free-form fallbacks: "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20"
