@@ -7,7 +7,7 @@
 
 import { todayStr } from './helpers.js';
 import { parseHealthNumbers } from './stats.js';
-import { mergeHealth } from '../db/db.js';
+import { mergeHealth, getAllHealth } from '../db/db.js';
 
 const KEY = 'coach:health-';
 
@@ -74,6 +74,27 @@ export function storeTodaysHealth(text, store = localStorage) {
 export function looksLikeHealthData(text) {
   if (!text || text.length > 600) return false;
   return /\b(hrv|rhr|steps|sleep|bpm|resting|heart|vo2|spo2|kcal)\b/i.test(text) && /\d/.test(text);
+}
+
+/**
+ * Re-parse every stored raw payload with the current parser and fill
+ * fields the row is missing. Runs cheaply at boot, so parser upgrades
+ * (new metrics, unit fixes) apply to already-ingested days without
+ * re-running the Watch shortcut.
+ */
+export async function reparseHealthRows() {
+  try {
+    for (const r of await getAllHealth()) {
+      if (!r?.raw) continue;
+      const nums = parseHealthNumbers(r.raw);
+      const fill = Object.fromEntries(
+        Object.entries(nums).filter(([k, v]) => v && r[k] == null)
+      );
+      if (Object.keys(fill).length) await mergeHealth({ date: r.date, ...fill });
+    }
+  } catch (e) {
+    console.warn('[COACH] health re-parse failed', e);
+  }
 }
 
 /** Drop stored payloads older than today (they're single-use). */

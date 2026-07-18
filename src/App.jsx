@@ -17,6 +17,7 @@ import {
   pruneOldHealth,
   storeTodaysHealth,
   looksLikeHealthData,
+  reparseHealthRows,
 } from './utils/healthIngest';
 import { getApiKey } from './utils/storage';
 import {
@@ -98,6 +99,7 @@ export default function App() {
       setHistory(h);
       if (t && t.date === todayStr()) setTodayPlan(t);
       logEvent('app_open', { sessions: h.length });
+      reparseHealthRows(); // background — parser upgrades backfill old rows
       runSync(); // background — pulls sessions logged on other devices
       maybeWeeklyReview(h); // background — Sunday review generation
 
