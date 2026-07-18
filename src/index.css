@@ -1175,6 +1175,84 @@ a:hover {
   flex-shrink: 0;
 }
 
+/* ── Records screen: milestone badges + PR rows ─────────────────── */
+.badge-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border-radius: 999px;
+  background: var(--bg-pill);
+  border: 1px solid var(--border-dim);
+  opacity: 0.45;
+}
+
+.badge--earned {
+  opacity: 1;
+  border-color: var(--amber);
+  background: var(--amber-bg);
+}
+
+.badge__emoji {
+  font-size: 15px;
+}
+
+.badge__text {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-body);
+}
+
+.badge__progress {
+  color: var(--dim);
+}
+
+.pr-row {
+  padding: 12px 0 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.pr-row:last-child {
+  border-bottom: none;
+}
+
+.pr-row__detail {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+/* ── PR confetti burst on the finish screen ─────────────────────── */
+.confetti-burst {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 90;
+}
+
+.confetti-burst span {
+  position: absolute;
+  top: -14px;
+  width: 8px;
+  height: 13px;
+  border-radius: 2px;
+  animation: confetti-fall 2.4s ease-in forwards;
+}
+
+@keyframes confetti-fall {
+  0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(105vh) rotate(660deg); opacity: 0.4; }
+}
+
 /* ── Action sheet: thumb-sized menu rows on a bottom sheet ──────── */
 .action-sheet {
   position: fixed;

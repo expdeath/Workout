@@ -4,7 +4,7 @@ import { weekStats, deloadSignal } from '../utils/stats';
 
 const WEEK_MS = 7 * 86400000;
 
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onCoach }) {
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach }) {
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
@@ -25,6 +25,7 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
             </svg>
           </button>
           <button className="ghost-btn" onClick={onProgress}>Stats</button>
+          <button className="ghost-btn" aria-label="Records" onClick={onRecords}>🏆</button>
           <button className="ghost-btn" onClick={onHistory}>Log</button>
         </div>
       </header>

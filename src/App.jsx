@@ -41,6 +41,7 @@ import Workout from './screens/Workout';
 import Finish from './screens/Finish';
 import History from './screens/History';
 import HistoryDetail from './screens/HistoryDetail';
+import Records from './screens/Records';
 import Settings from './screens/Settings';
 
 // ------------------------------------------------------------------
@@ -594,6 +595,7 @@ export default function App() {
             weeklyReview={weeklyReview}
             monthlyReport={monthlyReport}
             onProgress={() => setScreen('progress')}
+            onRecords={() => setScreen('records')}
             onStart={async () => {
               setCi(await buildDefaultCheckin());
               setError('');
@@ -628,6 +630,10 @@ export default function App() {
 
         {screen === 'progress' && (
           <Progress history={history} onBack={() => setScreen('home')} />
+        )}
+
+        {screen === 'records' && (
+          <Records history={history} onBack={() => setScreen('home')} />
         )}
 
         {screen === 'workout' && todayPlan && (
@@ -706,7 +712,7 @@ export default function App() {
           screen (header button + rest bar live there), while generating,
           and on history detail (it has its own scoped chat). */}
       {!chatOpen &&
-        ['home', 'checkin', 'finish', 'progress', 'history', 'settings'].includes(screen) && (
+        ['home', 'checkin', 'finish', 'progress', 'history', 'records', 'settings'].includes(screen) && (
           <button
             className="chat-fab"
             aria-label="Ask the coach"
