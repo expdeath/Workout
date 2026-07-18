@@ -589,6 +589,18 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                 >
                   ⇄ Did something else…
                 </button>
+                <a
+                  className="action-sheet__item"
+                  style={{ textDecoration: 'none' }}
+                  href={`https://www.youtube.com/results?search_query=${encodeURIComponent(
+                    `how to ${ex.name} proper form`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setSheet(null)}
+                >
+                  ▶ Watch how-to video
+                </a>
                 <button
                   className="action-sheet__item"
                   onClick={() => {
