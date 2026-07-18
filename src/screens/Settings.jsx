@@ -3,28 +3,11 @@ import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/sto
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox } from '../db/sync';
 import { todaysHealth } from '../utils/healthIngest';
-import { parseHealthNumbers } from '../utils/stats';
+import { parseHealthNumbers, fmtHealthLine } from '../utils/stats';
 import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
 
 // Raw shortcut payload → compact readable summary for the Watch card
-function fmtWatchData(raw) {
-  const n = parseHealthNumbers(raw);
-  const r1 = (x) => Math.round(x * 10) / 10;
-  return [
-    n.hrv && `HRV ${r1(n.hrv)}ms`,
-    n.rhr && `RHR ${Math.round(n.rhr)}`,
-    n.sleepH && `sleep ${n.sleepH}h`,
-    n.steps && `${n.steps.toLocaleString()} steps`,
-    n.vo2max && `VO₂max ${r1(n.vo2max)}`,
-    n.kcal && `${Math.round(n.kcal)} kcal`,
-    n.exerciseMin && `${Math.round(n.exerciseMin)} min exercise`,
-    n.distKm && `${r1(n.distKm)} km`,
-    n.respRate && `RR ${r1(n.respRate)}`,
-    n.wristC && `wrist ${r1(n.wristC)}°C`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
+const fmtWatchData = (raw) => fmtHealthLine(parseHealthNumbers(raw));
 
 function Section({ title, status, statusColor, open, onToggle, children }) {
   return (

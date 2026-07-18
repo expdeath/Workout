@@ -7,6 +7,7 @@ import {
   progressionTargets,
   healthBaseline,
   parseHealthNumbers,
+  fmtHealthLine,
   deloadSignal,
   fatigueSignal,
   lastPerformance,
@@ -212,8 +213,13 @@ ${WISH[checkin.wish] ? '- SESSION PREFERENCE (honor this): ' + WISH[checkin.wish
 ${parseFloat(checkin.bodyKg) ? `- Body weight today: ${checkin.bodyKg}kg` : ''}
 ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 
-APPLE HEALTH DATA (pasted by user, may be empty):
+APPLE HEALTH DATA (raw Watch payload, may be empty):
 ${checkin.health || 'None provided today — rely on check-in + history.'}
+${(() => {
+  if (!checkin.health) return '';
+  const line = fmtHealthLine(parseHealthNumbers(checkin.health));
+  return line ? `Normalized by app (sleep deduped to hours — trust these units): ${line}` : '';
+})()}
 ${(() => {
   const t = healthTrend(healthLog);
   return t ? `WATCH DATA TREND (daily, most recent last):\n${t}` : '';
@@ -230,6 +236,18 @@ ${(() => {
   if (today.rhr && base.rhr) {
     const d = Math.round(((today.rhr - base.rhr) / base.rhr) * 100);
     lines.push(`RHR ${today.rhr} vs 30-day avg ${base.rhr} (${d >= 0 ? '+' : ''}${d}%)${d >= 7 ? ' — elevated, possible fatigue/illness' : ''}`);
+  }
+  if (today.sleepH && base.sleepH) {
+    const d = Math.round(((today.sleepH - base.sleepH) / base.sleepH) * 100);
+    lines.push(`Sleep ${today.sleepH}h vs 30-day avg ${base.sleepH}h${d <= -20 ? ' — clearly short, reduce intensity' : ''}`);
+  }
+  if (today.respRate && base.respRate) {
+    const d = Math.round(((today.respRate - base.respRate) / base.respRate) * 100);
+    lines.push(`Respiratory rate ${today.respRate} vs avg ${base.respRate}${d >= 10 ? ' — elevated, possible illness' : ''}`);
+  }
+  if (today.wristC && base.wristC) {
+    const d = Math.round((today.wristC - base.wristC) * 10) / 10;
+    lines.push(`Wrist temp ${today.wristC}°C vs avg ${base.wristC}°C${d >= 0.4 ? ` (+${d}°C — possible illness/strain, be conservative)` : ''}`);
   }
   return lines.length ? 'Baseline comparison (computed): ' + lines.join('; ') : '';
 })()}

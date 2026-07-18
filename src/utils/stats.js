@@ -320,31 +320,63 @@ export function parseHealthNumbers(text) {
 }
 
 /**
- * 30-day HRV/RHR baselines (needs ≥3 samples). Prefers the health
- * store's daily rows; past check-in strings fill any gaps.
+ * 30-day baselines (each needs ≥3 samples): HRV, RHR, sleep hours,
+ * respiratory rate, wrist temperature. Prefers the health store's
+ * daily rows; past check-in strings fill HRV/RHR gaps.
  */
 export function healthBaseline(history, healthLog = [], days = 30) {
   const cutoff = Date.now() - days * DAY;
-  const hrvs = [];
-  const rhrs = [];
+  const acc = { hrv: [], rhr: [], sleepH: [], respRate: [], wristC: [] };
+  const RANGE = {
+    hrv: [5, 300],
+    rhr: [30, 120],
+    sleepH: [2, 16],
+    respRate: [5, 40],
+    wristC: [30, 42],
+  };
+  const take = (key, v) => {
+    if (v && v >= RANGE[key][0] && v <= RANGE[key][1]) acc[key].push(v);
+  };
   const seen = new Set();
   for (const h of healthLog) {
     if (dateMs(h.date) < cutoff) continue;
     seen.add(h.date);
-    if (h.hrv && h.hrv > 5 && h.hrv < 300) hrvs.push(h.hrv);
-    if (h.rhr && h.rhr > 30 && h.rhr < 120) rhrs.push(h.rhr);
+    for (const k of Object.keys(acc)) take(k, h[k]);
   }
   for (const s of history) {
     if (dateMs(s.date) < cutoff || seen.has(s.date)) continue;
     const { hrv, rhr } = parseHealthNumbers(s.checkin?.health);
-    if (hrv && hrv > 5 && hrv < 300) hrvs.push(hrv);
-    if (rhr && rhr > 30 && rhr < 120) rhrs.push(rhr);
+    take('hrv', hrv);
+    take('rhr', rhr);
   }
   const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
-  return {
-    hrv: hrvs.length >= 3 ? Math.round(avg(hrvs)) : null,
-    rhr: rhrs.length >= 3 ? Math.round(avg(rhrs)) : null,
-  };
+  const out = {};
+  for (const [k, arr] of Object.entries(acc)) {
+    out[k] = arr.length >= 3 ? Math.round(avg(arr) * 10) / 10 : null;
+  }
+  out.hrv = out.hrv && Math.round(out.hrv);
+  out.rhr = out.rhr && Math.round(out.rhr);
+  return out;
+}
+
+/** Parsed health numbers → one compact human/AI-readable line. */
+export function fmtHealthLine(n) {
+  const r1 = (x) => Math.round(x * 10) / 10;
+  return [
+    n.hrv && `HRV ${r1(n.hrv)}ms`,
+    n.rhr && `RHR ${Math.round(n.rhr)}`,
+    n.sleepH && `sleep ${n.sleepH}h`,
+    n.steps && `${n.steps.toLocaleString()} steps`,
+    n.vo2max && `VO2max ${r1(n.vo2max)}`,
+    n.kcal && `${Math.round(n.kcal)}kcal active`,
+    n.exerciseMin && `${Math.round(n.exerciseMin)}min exercise`,
+    n.distKm && `${r1(n.distKm)}km`,
+    n.spo2 && `SpO2 ${r1(n.spo2)}%`,
+    n.respRate && `RR ${r1(n.respRate)}/min`,
+    n.wristC && `wrist ${r1(n.wristC)}°C`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 /** Text block of the last n days of Watch data, for the AI prompt. */
@@ -365,6 +397,7 @@ export function healthTrend(healthLog, n = 7) {
       if (h.distKm) bits.push(`${h.distKm}km`);
       if (h.spo2) bits.push(`SpO2 ${h.spo2}%`);
       if (h.respRate) bits.push(`RR ${h.respRate}/min`);
+      if (h.wristC) bits.push(`wrist ${h.wristC}°C`);
       return `${h.date}: ${bits.join(' · ') || h.raw || '—'}`;
     })
     .join('\n');
@@ -570,6 +603,12 @@ export function recoveryCaution(checkin, history, healthLog = []) {
   if (today.rhr && base.rhr) {
     const d = Math.round(((today.rhr - base.rhr) / base.rhr) * 100);
     if (d >= 7) bits.push('resting heart rate is running a bit high');
+  }
+  if (today.respRate && base.respRate && (today.respRate - base.respRate) / base.respRate >= 0.1) {
+    bits.push('your overnight breathing rate is running high');
+  }
+  if (today.wristC && base.wristC && today.wristC - base.wristC >= 0.4) {
+    bits.push('wrist temperature is above your normal — a common early illness sign');
   }
   if (/very sore/i.test(checkin?.soreness || '')) bits.push("you're still quite sore");
   if (fatigueSignal(history)) bits.push('volume and effort have been climbing for a few weeks');
