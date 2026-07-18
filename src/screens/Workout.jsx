@@ -4,7 +4,7 @@ import ActionSheet from '../components/ActionSheet';
 import { fmtDate, fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
 import { lastPerformance, suggestNextWeight, recoveryCaution, logMode } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
-import { getAllHealth } from '../db/db';
+import { getAllHealth, getMedia, putMedia, deleteMedia } from '../db/db';
 import { getAISettings, setAISettings } from '../utils/storage';
 
 // per-set effort tap cycles through these; '' means not rated
@@ -68,6 +68,61 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
     setCues(next);
     setAISettings({ cueNotes: next });
     setEditingCue(null);
+  };
+
+  // ── Per-exercise form photo/clip (device-local, next to the cue) ──
+  const [media, setMedia] = useState({}); // cueKey → { url, type }
+  const [viewer, setViewer] = useState(null); // { url, type } or null
+  const fileRef = useRef(null);
+  const fileForRef = useRef(null); // exercise name awaiting a file pick
+  useEffect(() => {
+    let urls = [];
+    let dead = false;
+    (async () => {
+      const next = {};
+      for (const ex of p.exercises || []) {
+        const rec = await getMedia(cueKey(ex.name)).catch(() => null);
+        if (rec?.blob) {
+          const url = URL.createObjectURL(rec.blob);
+          urls.push(url);
+          next[cueKey(ex.name)] = { url, type: rec.type || '' };
+        }
+      }
+      if (!dead) setMedia(next);
+    })();
+    return () => {
+      dead = true;
+      urls.forEach((u) => URL.revokeObjectURL(u));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(p.exercises || []).map((e) => e.name).join('|')]);
+
+  const onMediaFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const name = fileForRef.current;
+    if (!file || !name) return;
+    if (file.size > 60 * 1024 * 1024) {
+      alert('That file is over 60MB — record a shorter clip.');
+      return;
+    }
+    const key = cueKey(name);
+    await putMedia(key, file, file.type).catch(() => {});
+    setMedia((m) => {
+      if (m[key]?.url) URL.revokeObjectURL(m[key].url);
+      return { ...m, [key]: { url: URL.createObjectURL(file), type: file.type } };
+    });
+  };
+
+  const removeMedia = async (name) => {
+    const key = cueKey(name);
+    await deleteMedia(key).catch(() => {});
+    setMedia((m) => {
+      if (m[key]?.url) URL.revokeObjectURL(m[key].url);
+      const next = { ...m };
+      delete next[key];
+      return next;
+    });
   };
 
   // ── Custom swap: type what you actually did instead ──
@@ -374,14 +429,31 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     value={cueDraft}
                     onChange={(e) => setCueDraft(e.target.value)}
                   />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     <button className="chip chip-on" onClick={() => saveCue(ex.name)}>
                       Save note
                     </button>
+                    <button
+                      className="chip"
+                      onClick={() => {
+                        fileForRef.current = ex.name;
+                        fileRef.current?.click();
+                      }}
+                    >
+                      📷 {media[cueKey(ex.name)] ? 'Replace' : 'Add'} photo/clip
+                    </button>
+                    {media[cueKey(ex.name)] && (
+                      <button className="chip" onClick={() => removeMedia(ex.name)}>
+                        ✕ Remove media
+                      </button>
+                    )}
                     <button className="chip" onClick={() => setEditingCue(null)}>
                       Cancel
                     </button>
                   </div>
+                  <p className="mono" style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6 }}>
+                    Photos/clips stay on this device — they don't sync.
+                  </p>
                 </div>
               ) : cues[cueKey(ex.name)] ? (
                 <p
@@ -394,6 +466,22 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                   ✎ {cues[cueKey(ex.name)]}
                 </p>
               ) : null}
+              {media[cueKey(ex.name)] && editingCue !== exI && (
+                <button
+                  className="media-thumb"
+                  aria-label={`Form reference for ${ex.name}`}
+                  onClick={() => setViewer(media[cueKey(ex.name)])}
+                >
+                  {media[cueKey(ex.name)].type.startsWith('video') ? (
+                    <video src={media[cueKey(ex.name)].url} muted playsInline preload="metadata" />
+                  ) : (
+                    <img src={media[cueKey(ex.name)].url} alt="" />
+                  )}
+                  <span className="media-thumb__icon">
+                    {media[cueKey(ex.name)].type.startsWith('video') ? '▶' : '🔍'}
+                  </span>
+                </button>
+              )}
             </div>
           );
         };
@@ -743,6 +831,27 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
           </ActionSheet>
         );
       })()}
+
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*,video/*"
+        style={{ display: 'none' }}
+        onChange={onMediaFile}
+      />
+
+      {viewer && (
+        <div className="media-viewer" onClick={() => setViewer(null)}>
+          {viewer.type.startsWith('video') ? (
+            <video src={viewer.url} controls autoPlay playsInline onClick={(e) => e.stopPropagation()} />
+          ) : (
+            <img src={viewer.url} alt="Form reference" />
+          )}
+          <button className="media-viewer__close" onClick={() => setViewer(null)}>
+            ✕
+          </button>
+        </div>
+      )}
 
       {timer && (
         <div className={'rest-bar' + (remaining <= 0 ? ' rest-bar--go' : '')}>

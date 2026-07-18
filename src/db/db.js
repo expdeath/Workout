@@ -10,7 +10,9 @@ const DB_NAME = 'coach-db';
 // v2: sessions keyed by unique id instead of date, so multiple
 // workouts on the same day no longer overwrite each other
 // v3: health store — one row per day of Watch data (HRV/RHR/steps)
-const DB_VERSION = 3;
+// v4: media store — per-exercise form photos/clips (device-local only:
+//     blobs are far too big for the GitHub-JSON backup)
+const DB_VERSION = 4;
 
 export const sessionId = (s) => s.id || s.date;
 
@@ -32,6 +34,9 @@ function openDb() {
       }
       if (ev.oldVersion < 3 && !db.objectStoreNames.contains('health')) {
         db.createObjectStore('health', { keyPath: 'date' });
+      }
+      if (ev.oldVersion < 4 && !db.objectStoreNames.contains('media')) {
+        db.createObjectStore('media', { keyPath: 'key' });
       }
       if (ev.oldVersion < 2) {
         if (db.objectStoreNames.contains('sessions')) {
@@ -141,6 +146,28 @@ export async function mergeHealth(patch) {
   if (!patch?.date) return;
   const existing = await withStore('health', 'readonly', (s) => s.get(patch.date));
   await putHealth({ ...(existing || {}), ...patch, receivedAt: Date.now() });
+}
+
+// ── Exercise media (device-local, never synced) ──────────────────
+// One photo or short clip per exercise, keyed like cue notes
+// (lowercased exercise name). Blobs stay in IndexedDB on this device.
+
+export async function putMedia(key, blob, type) {
+  return withStore('media', 'readwrite', (s) =>
+    s.put({ key, blob, type, updatedAt: Date.now() })
+  );
+}
+
+export async function getMedia(key) {
+  try {
+    return await withStore('media', 'readonly', (s) => s.get(key));
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteMedia(key) {
+  return withStore('media', 'readwrite', (s) => s.delete(key));
 }
 
 // ── Event log ────────────────────────────────────────────────────
