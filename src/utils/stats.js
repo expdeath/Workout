@@ -479,10 +479,10 @@ export function deloadSignal(history) {
 const MUSCLE_RULES = [
   ['Cardio', /bike|cycling|treadmill|stair|elliptical|jump rope|sprint|incline walk|\berg\b|swim|\brun(?:ning)?\b|\bjogg?(?:ing)?\b|\brower\b|row(?:ing)?\s*machine|cross[- ]?trainer|air ?dyne|assault ?bike|brisk walk|walking pad|\bhike\b|hiking|\bruck(?:ing)?\b|\bcardio\b/i],
   ['Core', /plank|crunch|\babs?\b|core|russian|leg raise|knee raise|dead bug|pallof|rollout|woodchop/i],
-  ['Legs', /squat|\bleg\b|lunge|calf|hamstring|quad|glute|hip thrust|\brdl\b|romanian|adductor|abductor|step[- ]?up|nordic/i],
+  ['Legs', /squat|\bleg\b|lunge|calf|hamstring|quad|glute|hip thrust|\brdl\b|romanian|adductor|abductor|step[- ]?up|nordic|kettlebell swing|\bkb swing\b/i],
   ['Back', /\brows?\b|rowing|pulldown|pull[- ]?down|pull[- ]?up|chin[- ]?up|\blats?\b|deadlift|shrug|back extension|face pull|hyperextension/i],
   ['Shoulders', /shoulder|overhead|\bohp\b|lateral raise|side raise|rear delt|delt|arnold|military|upright/i],
-  ['Chest', /bench|chest|\bpecs?\b|\bfly\b|flye|dips?\b|push[- ]?up|crossover/i],
+  ['Chest', /bench|chest|\bpecs?\b|\bfly\b|flye|dips?\b|push[- ]?up|crossover|incline\s+(?:machine|smith)?\s*press/i],
   ['Arms', /curl|tricep|bicep|pushdown|push[- ]?down|extension|skull|hammer|preacher|kickback|forearm|wrist/i],
 ];
 

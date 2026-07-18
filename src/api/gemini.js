@@ -17,39 +17,55 @@ import {
 import { logEvent, getAllHealth } from '../db/db.js';
 
 // ── Workout database ─────────────────────────────────────────────
+// A MENU, not a script: each day lists staples plus a rotation pool.
+// The AI picks 4-6, keeps staples most weeks, and rotates pool picks
+// so sessions stay fresh without losing progression continuity.
 const WORKOUT_DB = `
-PUSH DAY — Warm-up: 15min Stairmaster OR chest press warm-up sets.
-1. Flat Dumbbell Press 3x10-12 (alt: Seated Chest Press Machine)
-2. Incline Dumbbell Press 3x10-12 (alt: Low-to-High Cable Fly)
-3. Machine Shoulder Press 3x10-12
-4. Cable Lateral Raise 3x12-15
-5. Rope Tricep Pushdown 3x12-15
+Exercise menu — staples anchor progression (keep them most weeks); ROTATE pool picks freely for variety. Respect equipment limits. 1-2 core finishers may be appended to any lifting day.
+
+PUSH DAY — Warm-up: 15min Stairmaster OR light warm-up sets of the first press.
+Staples:
+- Flat Dumbbell Press 3x10-12 (alt: Seated Chest Press Machine, Barbell Bench Press)
+- Incline Dumbbell Press 3x10-12 (alt: Incline Machine Press, Low-to-High Cable Fly)
+- Machine Shoulder Press 3x10-12 (alt: Seated Dumbbell Shoulder Press)
+- Cable Lateral Raise 3x12-15 (alt: Dumbbell Lateral Raise)
+- Rope Tricep Pushdown 3x12-15 (alt: Straight-Bar Pushdown)
+Pool: Pec Deck Fly 3x12-15 · Cable Crossover 3x12-15 · Machine Dips 3x8-10 (alt: Bench Dips) · Overhead Rope Tricep Extension 3x10-12 · Skull Crushers 3x10-12 · Close-Grip Bench Press 3x8-10 · Arnold Press 3x10-12 · Push-Ups 3xAMRAP (finisher)
 Cooldown: doorway chest stretch, overhead tricep stretch.
 
-PULL DAY — Warm-up: 15min stationary bike.
-1. Chest Supported Row 3x8-10
-2. Lat Pulldown 3x8-10
-3. Machine Rear Delt Fly 3x12-15
-4. Cable Curl 3x10-12
+PULL DAY — Warm-up: 15min stationary bike OR light first-row sets.
+Staples:
+- Chest Supported Row 3x8-10 (alt: Seated Cable Row)
+- Lat Pulldown 3x8-10 (alt: Assisted Pull-Up, Neutral-Grip Pulldown)
+- Machine Rear Delt Fly 3x12-15 (alt: Face Pull)
+- Cable Curl 3x10-12 (alt: Dumbbell Curl)
+Pool: One-Arm Dumbbell Row 3x8-10/side · Straight-Arm Pulldown 3x12-15 · Barbell Row 3x8-10 · Hammer Curl 3x10-12 · Incline Dumbbell Curl 3x10-12 · Preacher Curl 3x10-12 · Dumbbell Shrug 3x12-15 · Back Extension 3x12 · Romanian Deadlift 3x8-10 (also fits Legs)
 Cooldown: lat stretch, bicep stretch.
 
-LEG DAY — Warm-up: 15min stationary bike.
-1. Leg Press 3x10-12
-2. Seated Leg Curl 3x10-12
-3. Leg Extension 3x12-15
-4. Calf Press 3x15
+LEG DAY — Warm-up: 15min stationary bike + bodyweight squats x10.
+Staples:
+- Leg Press 3x10-12 (alt: Hack Squat, Goblet Squat)
+- Seated Leg Curl 3x10-12 (alt: Lying Leg Curl, Romanian Deadlift)
+- Leg Extension 3x12-15
+- Calf Press 3x15 (alt: Standing Calf Raise)
+Pool: Bulgarian Split Squat 3x8-10/side · Walking Lunges 3x10/side · Dumbbell Step-Ups 3x10/side · Hip Thrust 3x10-12 · Adductor Machine 3x12-15 · Abductor Machine 3x12-15 · Single-Leg Press 3x10/side · Smith Machine Squat 3x8-10
 Cooldown: quad stretch, hamstring stretch.
 
-ACTIVE RECOVERY — Option 1: 30min stationary bike zone 2.
-Option 2: 3 rounds — dead bugs x10/side, bird dog x10/side, plank 45s, side plank 30s/side, hollow hold 20-30s.
+CORE FINISHERS (append 1-2 to any day): Plank 3x45s · Side Plank 2x30s/side · Cable Crunch 3x12-15 · Hanging Knee Raise 3x10-12 · Pallof Press 3x10/side · Dead Bug 3x10/side · Russian Twist 3x20 · Ab Wheel Rollout 3x8-10
 
-CARDIO DAY — Option 1: 35-45min zone 2 — stationary bike, incline treadmill walk, or stairmaster.
+ACTIVE RECOVERY — Option 1: 30min stationary bike or incline walk, zone 2.
+Option 2: 3 rounds — dead bugs x10/side, bird dog x10/side, plank 45s, side plank 30s/side, hollow hold 20-30s.
+Option 3: 20min easy swim or rowing machine + 10min stretching.
+
+CARDIO DAY — Option 1: 35-45min zone 2 — stationary bike, incline treadmill walk, stairmaster, rowing machine, or easy run.
 Option 2: intervals — 10min easy bike, then 8 × (1min hard / 2min easy), 5min cooldown walk.
+Option 3: 25-30min run or 5k treadmill at steady pace.
+Option 4: 3 rounds — 500m row, 1min jump rope, 10 kettlebell swings, 1min rest.
 Finish: 5min full-body stretch.
 
-STRETCH & MOBILITY DAY — 10min easy bike, then 2 rounds: cat-cow x10, world's greatest stretch x5/side, 90/90 hip switches x10/side, couch stretch 45s/side, hamstring floss x10/side, thoracic wall opener 45s/side, doorway chest stretch 45s/side, deep squat hold 30s.
+STRETCH & MOBILITY DAY — 10min easy bike, then 2 rounds: cat-cow x10, world's greatest stretch x5/side, 90/90 hip switches x10/side, couch stretch 45s/side, hamstring floss x10/side, thoracic wall opener 45s/side, doorway chest stretch 45s/side, deep squat hold 30s. Optional extras: pigeon pose 45s/side, child's pose 60s, band shoulder dislocates x10, calf stretch 45s/side.
 
-FULL BODY MIX (fun day) — pick 5-6, 2 sets each, moderate load, superset pairs, 60s rests: leg press, chest press machine, chest supported row, cable lateral raise, cable curl, rope pushdown, plank 45s.
+FULL BODY MIX (fun day) — pick 5-6, 2 sets each, moderate load, superset pairs, 60s rests: leg press, goblet squat, chest press machine, chest supported row, lat pulldown, hip thrust, cable lateral raise, cable curl, rope pushdown, kettlebell swing, plank 45s.
 `;
 
 // ── Coaching system prompt ───────────────────────────────────────
@@ -64,7 +80,7 @@ function coachRules() {
 Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt to today's check-in (soreness, tightness, energy).
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
 Logged sets may carry the athlete's own effort tag — (easy) = clear room to progress, (good) = about right, (grind) = near-failure. Never add load to a lift whose last sets were grinds; treat all-easy sets as a green light for a bigger jump.
-Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log.
+Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log. The workout database separates STAPLES (keep most weeks — they anchor progression tracking) from a rotation POOL: swap in 1-2 pool exercises per session for freshness, and bring back ones not seen in the log lately. Occasionally append a core finisher to a lifting day when time allows.
 VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after 3+ consecutive lifting days, or when no cardio or mobility day appears in the last 7-10 days, schedule a Cardio or Stretch & Mobility day (recovery quality decides which). A Full Body mix day is a good occasional change of pace. If the check-in states a session preference, honor it — it overrides the rotation. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 }
