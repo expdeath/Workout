@@ -270,7 +270,9 @@ export function parseHealthNumbers(text) {
   let sleepH = null;
   // Shortcut label first: "SleepHrs: <duration sum>" — the Watch sums
   // sample durations whose unit varies by iOS (seconds/minutes/hours)
-  const slLabel = /sleep\s*hrs?[^\d]{0,10}([\d.]+)/i.exec(t);
+  // digits must follow the label directly — an empty value would
+  // otherwise swallow the next metric's number
+  const slLabel = /sleep\s*hrs?:?\s*([\d.]+)/i.exec(t);
   if (slLabel) {
     const n = parseFloat(slLabel[1]);
     if (n > 1200) sleepH = n / 3600; // seconds
