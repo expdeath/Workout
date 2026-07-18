@@ -1,7 +1,7 @@
 // ── Gemini API integration ───────────────────────────────────────
 import { parsePlan } from '../utils/parser.js';
 import { getApiKey, getAISettings } from '../utils/storage.js';
-import { todayStr, setLogged, fmtSet } from '../utils/helpers.js';
+import { todayStr, setLogged, fmtSet, MAX_WEIGHT_KG } from '../utils/helpers.js';
 import { buildLongTermSummary } from '../utils/aiContext.js';
 import {
   progressionTargets,
@@ -85,8 +85,10 @@ VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 }
 
-// ── JSON schema spec sent to the model ──────────────────────────
-const JSON_SPEC = `Respond with ONLY minified valid JSON — no markdown fences, no preamble, no trailing text. BE EXTREMELY CONCISE in every string; total response must stay under 900 tokens. Schema:
+// ── Semantic rules for the plan JSON ─────────────────────────────
+// Structure is enforced by responseSchema; this carries only what the
+// schema can't express: length limits, content rules, superset logic.
+const JSON_SPEC = `BE EXTREMELY CONCISE in every string; total response must stay under 900 tokens. Field rules:
 {"sessionType":"Push|Pull|Legs|Full Body|Cardio|Stretch & Mobility|Active Recovery|Rest Day",
 "title":"max 6 words",
 "recoveryScore":0-100,
@@ -104,7 +106,10 @@ Supersets: when time is tight or two accessories pair well (non-competing muscle
 const PLAN_SCHEMA = {
   type: 'OBJECT',
   properties: {
-    sessionType: { type: 'STRING' },
+    sessionType: {
+      type: 'STRING',
+      enum: ['Push', 'Pull', 'Legs', 'Full Body', 'Cardio', 'Stretch & Mobility', 'Active Recovery', 'Rest Day'],
+    },
     title: { type: 'STRING' },
     recoveryScore: { type: 'INTEGER' },
     reasoning: { type: 'STRING' },
@@ -143,6 +148,10 @@ const PLAN_SCHEMA = {
  * Deterministic guardrails on the model's plan: suggested weights stay
  * within a plausible jump from logged history, session fits the time.
  */
+const MAX_JUMP_FACTOR = 1.15; // suggested load ≤ 15% over last logged
+const MIN_JUMP_KG = 2.5; // …but always allow one small plate step
+const PLATE_STEP_KG = 2.5; // capped suggestions round to this
+
 function capSuggestedWeight(ex, history) {
   const m = /([\d.]+)/.exec(String(ex.suggestedWeight || ''));
   if (!m) return false;
@@ -151,9 +160,11 @@ function capSuggestedWeight(ex, history) {
   const lastW = lp
     ? Math.max(...lp.sets.map((s) => parseFloat(s.weight)).filter((n) => !Number.isNaN(n)), 0)
     : 0;
-  const cap = lastW ? Math.min(Math.max(lastW * 1.15, lastW + 2.5), 200) : 200;
+  const cap = lastW
+    ? Math.min(Math.max(lastW * MAX_JUMP_FACTOR, lastW + MIN_JUMP_KG), MAX_WEIGHT_KG)
+    : MAX_WEIGHT_KG;
   if (w <= cap) return false;
-  ex.suggestedWeight = `${Math.round((cap / 2.5)) * 2.5}kg`;
+  ex.suggestedWeight = `${Math.round(cap / PLATE_STEP_KG) * PLATE_STEP_KG}kg`;
   return true;
 }
 
@@ -186,62 +197,8 @@ const WISH = {
   surprise: 'The athlete asked you to SURPRISE them — build something genuinely different from the recent sessions (mixed circuit, superset full-body, conditioning + core, new variations). Keep it safe and equipment-realistic, but make it fun.',
 };
 
-// exported for prompt inspection/testing — the app calls it via generateWorkoutPlan
-export function buildUserMessage(checkin, history, healthLog = []) {
-  const recent = history.slice(-6);
-  const histText = recent.length
-    ? recent
-        .map(
-          (h) =>
-            `${h.date} — ${h.plan.sessionType}: ` +
-            (h.plan.exercises || [])
-              .map((ex, i) => {
-                const sets = (h.log?.[i] || [])
-                  .filter(setLogged)
-                  .map((s) => `${fmtSet(s)}${s.effort ? `(${s.effort})` : ''}`)
-                  .join(', ');
-                return `${ex.name} [${sets || 'no sets logged'}]`;
-              })
-              .join('; ') +
-            (h.finished
-              ? ` | session RPE ${h.fin?.rpe ?? '?'}${h.durationMin ? ` | took ${h.durationMin}min` : ''}${h.fin?.pain ? ' | pain: ' + h.fin.pain : ''}${h.fin?.feedback ? ' | notes: ' + h.fin.feedback : ''}`
-              : ' | NOT COMPLETED')
-        )
-        .join('\n')
-    : 'No logged sessions yet in this app. Treat as a fresh start — use the base workout database, moderate volume, and ask nothing (choose sensibly).';
-
-  const daysSince = recent.length
-    ? Math.round(
-        (new Date(todayStr()) - new Date(recent[recent.length - 1].date)) /
-          86400000
-      )
-    : null;
-
-  return `
-TODAY: ${todayStr()} (${new Date().toLocaleDateString(undefined, { weekday: 'long' })})
-
-CHECK-IN:
-- Energy: ${checkin.energy}/10
-- Sleep last night: ${checkin.sleep}
-- Soreness: ${checkin.soreness}${checkin.soreAreas ? ' (' + checkin.soreAreas + ')' : ''}
-- Lower back tight today: ${checkin.backTight ? 'YES — adapt exercise selection' : 'no'}
-- Time available today (gym time, walking excluded): ${checkin.timeAvail} min
-${WISH[checkin.wish] ? '- SESSION PREFERENCE (honor this): ' + WISH[checkin.wish] : ''}
-${parseFloat(checkin.bodyKg) ? `- Body weight today: ${checkin.bodyKg}kg` : ''}
-${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
-
-APPLE HEALTH DATA (raw Watch payload, may be empty):
-${checkin.health || 'None provided today — rely on check-in + history.'}
-${(() => {
-  if (!checkin.health) return '';
-  const line = fmtHealthLine(parseHealthNumbers(checkin.health));
-  return line ? `Normalized by app (sleep deduped to hours — trust these units): ${line}` : '';
-})()}
-${(() => {
-  const t = healthTrend(healthLog);
-  return t ? `WATCH DATA TREND (daily, most recent last):\n${t}` : '';
-})()}
-${(() => {
+/** Baseline-vs-today comparison lines for every Watch signal we track. */
+function baselineComparison(checkin, history, healthLog) {
   if (!checkin.health) return '';
   const today = parseHealthNumbers(checkin.health);
   const base = healthBaseline(history, healthLog);
@@ -267,27 +224,76 @@ ${(() => {
     lines.push(`Wrist temp ${today.wristC}°C vs avg ${base.wristC}°C${d >= 0.4 ? ` (+${d}°C — possible illness/strain, be conservative)` : ''}`);
   }
   return lines.length ? 'Baseline comparison (computed): ' + lines.join('; ') : '';
-})()}
-${(() => {
-  const d = deloadSignal(history);
-  return d ? `\nDELOAD WATCH (computed): ${d.reason} Honor this unless today's readiness is clearly excellent.` : '';
-})()}
-${(() => { const m = muscleGapNote(history); return m ? `\n${m}` : ''; })()}
-${(() => {
-  const g = (getAISettings().goals || '').trim();
-  return g ? `\nATHLETE'S STATED GOALS (steer selection and progression toward these):\n${g}` : '';
-})()}
-${(() => {
-  const eq = (getAISettings().equipment || '').trim();
-  return eq ? `\nGYM EQUIPMENT & LIMITS (HARD CONSTRAINT — never prescribe anything unavailable; respect load limits):\n${eq}` : '';
-})()}
-${(() => {
-  const cues = getAISettings().cueNotes || {};
-  const lines = Object.entries(cues).slice(0, 15).map(([n, t]) => `- ${n}: ${t}`);
-  return lines.length
-    ? `\nATHLETE'S OWN EXERCISE NOTES (persistent cue cards — respect them when picking/prescribing):\n${lines.join('\n')}`
+}
+
+/** One history session → one training-log line with logged sets. */
+function sessionLogLine(h) {
+  const exercises = (h.plan.exercises || [])
+    .map((ex, i) => {
+      const sets = (h.log?.[i] || [])
+        .filter(setLogged)
+        .map((s) => `${fmtSet(s)}${s.effort ? `(${s.effort})` : ''}`)
+        .join(', ');
+      return `${ex.name} [${sets || 'no sets logged'}]`;
+    })
+    .join('; ');
+  const outcome = h.finished
+    ? ` | session RPE ${h.fin?.rpe ?? '?'}${h.durationMin ? ` | took ${h.durationMin}min` : ''}${h.fin?.pain ? ' | pain: ' + h.fin.pain : ''}${h.fin?.feedback ? ' | notes: ' + h.fin.feedback : ''}`
+    : ' | NOT COMPLETED';
+  return `${h.date} — ${h.plan.sessionType}: ${exercises}${outcome}`;
+}
+
+// exported for prompt inspection/testing — the app calls it via generateWorkoutPlan
+export function buildUserMessage(checkin, history, healthLog = []) {
+  const settings = getAISettings();
+  const recent = history.slice(-6);
+  const histText = recent.length
+    ? recent.map(sessionLogLine).join('\n')
+    : 'No logged sessions yet in this app. Treat as a fresh start — use the base workout database, moderate volume, and ask nothing (choose sensibly).';
+  const daysSince = recent.length
+    ? Math.round(
+        (new Date(todayStr()) - new Date(recent[recent.length - 1].date)) / 86400000
+      )
+    : null;
+  const lastDebrief = recent.length ? recent[recent.length - 1].debrief : '';
+
+  const normalized = checkin.health
+    ? fmtHealthLine(parseHealthNumbers(checkin.health))
     : '';
-})()}
+  const trend = healthTrend(healthLog);
+  const baselines = baselineComparison(checkin, history, healthLog);
+  const deload = deloadSignal(history);
+  const muscleGap = muscleGapNote(history);
+  const goals = (settings.goals || '').trim();
+  const equipment = (settings.equipment || '').trim();
+  const cueLines = Object.entries(settings.cueNotes || {})
+    .slice(0, 15)
+    .map(([n, txt]) => `- ${n}: ${txt}`)
+    .join('\n');
+
+  return `
+TODAY: ${todayStr()} (${new Date().toLocaleDateString(undefined, { weekday: 'long' })})
+
+CHECK-IN:
+- Energy: ${checkin.energy}/10
+- Sleep last night: ${checkin.sleep}
+- Soreness: ${checkin.soreness}${checkin.soreAreas ? ' (' + checkin.soreAreas + ')' : ''}
+- Lower back tight today: ${checkin.backTight ? 'YES — adapt exercise selection' : 'no'}
+- Time available today (gym time, walking excluded): ${checkin.timeAvail} min
+${WISH[checkin.wish] ? '- SESSION PREFERENCE (honor this): ' + WISH[checkin.wish] : ''}
+${parseFloat(checkin.bodyKg) ? `- Body weight today: ${checkin.bodyKg}kg` : ''}
+${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
+
+APPLE HEALTH DATA (raw Watch payload, may be empty):
+${checkin.health || 'None provided today — rely on check-in + history.'}
+${normalized ? `Normalized by app (sleep deduped to hours — trust these units): ${normalized}` : ''}
+${trend ? `WATCH DATA TREND (daily, most recent last):\n${trend}` : ''}
+${baselines}
+${deload ? `\nDELOAD WATCH (computed): ${deload.reason} Honor this unless today's readiness is clearly excellent.` : ''}
+${muscleGap ? `\n${muscleGap}` : ''}
+${goals ? `\nATHLETE'S STATED GOALS (steer selection and progression toward these):\n${goals}` : ''}
+${equipment ? `\nGYM EQUIPMENT & LIMITS (HARD CONSTRAINT — never prescribe anything unavailable; respect load limits):\n${equipment}` : ''}
+${cueLines ? `\nATHLETE'S OWN EXERCISE NOTES (persistent cue cards — respect them when picking/prescribing):\n${cueLines}` : ''}
 
 PROGRESSION TARGETS (computed deterministically from the logs — anchor suggestedWeight on these):
 ${progressionTargets(history) || 'No logged sets yet.'}
@@ -298,12 +304,19 @@ ${buildLongTermSummary(history) || 'Not enough history yet — rely on the recen
 TRAINING LOG (last sessions in detail, most recent last):
 ${histText}
 ${daysSince !== null ? `Days since last logged session: ${daysSince}${daysSince >= 7 ? ' — RETURNING FROM BREAK, apply reduced-volume rules.' : ''}` : ''}
-${recent.length && recent[recent.length - 1].debrief ? `\nYOUR OWN COACHING NOTE AFTER THE LAST SESSION (follow through on it): ${recent[recent.length - 1].debrief}` : ''}
-
-BASE WORKOUT DATABASE:
-${(getAISettings().routine || '').trim() || WORKOUT_DB}
+${lastDebrief ? `\nYOUR OWN COACHING NOTE AFTER THE LAST SESSION (follow through on it): ${lastDebrief}` : ''}
 
 Decide the right session for today and build it. ${JSON_SPEC}`;
+}
+
+/** System instruction for plan generation only: coaching rules + the
+ *  exercise menu. Kept out of coachRules() so chat/debrief/review
+ *  calls don't pay the menu's token cost. */
+function planSystem() {
+  return `${coachRules()}
+
+BASE WORKOUT DATABASE:
+${(getAISettings().routine || '').trim() || WORKOUT_DB}`;
 }
 
 // Models to try in order — if one is overloaded, try the next.
@@ -326,10 +339,6 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
 
   const userMsg = buildUserMessage(checkin, history, healthLog);
 
-  // 60-second timeout for the API call
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60000);
-
   const startedAt = Date.now();
   logEvent('ai_request', { model });
 
@@ -340,14 +349,14 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
       `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
       {
         method: 'POST',
-        signal: controller.signal,
+        signal: AbortSignal.timeout(60000),
         headers: {
           'Content-Type': 'application/json',
           'X-goog-api-key': apiKey,
         },
         body: JSON.stringify({
           system_instruction: {
-            parts: [{ text: coachRules() }],
+            parts: [{ text: planSystem() }],
           },
           contents: [
             {
@@ -372,14 +381,13 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
     );
     console.log('[COACH] Got response:', response.status);
   } catch (fetchErr) {
-    clearTimeout(timeout);
     logEvent('ai_error', { model, kind: fetchErr.name, message: fetchErr.message });
-    if (fetchErr.name === 'AbortError') {
+    // AbortSignal.timeout rejects with TimeoutError (AbortError kept for older engines)
+    if (fetchErr.name === 'TimeoutError' || fetchErr.name === 'AbortError') {
       throw new Error('Request timed out after 60 seconds. The AI might be overloaded — try again.');
     }
     throw new Error(`Network error: ${fetchErr.message}`);
   }
-  clearTimeout(timeout);
 
   if (!response.ok) {
     logEvent('ai_error', { model, status: response.status, latencyMs: Date.now() - startedAt });
@@ -485,15 +493,13 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
 
   let lastErr;
   for (const model of MODELS.slice(0, 2)) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
     const startedAt = Date.now();
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          signal: controller.signal,
+          signal: AbortSignal.timeout(20000),
           headers: {
             'Content-Type': 'application/json',
             'X-goog-api-key': apiKey,
@@ -511,7 +517,6 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
           }),
         }
       );
-      clearTimeout(timeout);
       if (!response.ok) throw new Error(`status ${response.status}`);
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts
@@ -523,7 +528,6 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
       logEvent(eventType, { model, latencyMs: Date.now() - startedAt, raw: text });
       return text;
     } catch (e) {
-      clearTimeout(timeout);
       lastErr = e;
     }
   }
@@ -579,14 +583,12 @@ CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.
 
   let lastErr;
   for (const model of MODELS.slice(0, 2)) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          signal: controller.signal,
+          signal: AbortSignal.timeout(25000),
           headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: system }] },
@@ -601,7 +603,6 @@ CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.
           }),
         }
       );
-      clearTimeout(timeout);
       if (!response.ok) throw new Error(`status ${response.status}`);
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts
@@ -613,7 +614,6 @@ CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.
       logEvent('coach_chat', { model, chars: text.length });
       return text;
     } catch (e) {
-      clearTimeout(timeout);
       lastErr = e;
     }
   }
@@ -728,15 +728,13 @@ Keep "why" under 10 words. Anchor any suggestedWeight on the logged history — 
 
   let lastErr;
   for (const model of MODELS.slice(0, 2)) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25000);
     const startedAt = Date.now();
     try {
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          signal: controller.signal,
+          signal: AbortSignal.timeout(25000),
           headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
           body: JSON.stringify({
             system_instruction: { parts: [{ text: coachRules() }] },
@@ -753,7 +751,6 @@ Keep "why" under 10 words. Anchor any suggestedWeight on the logged history — 
           }),
         }
       );
-      clearTimeout(timeout);
       if (!response.ok) throw new Error(`status ${response.status}`);
       const data = await response.json();
       const text = data.candidates?.[0]?.content?.parts
@@ -789,7 +786,6 @@ Keep "why" under 10 words. Anchor any suggestedWeight on the logged history — 
       });
       return parsed;
     } catch (e) {
-      clearTimeout(timeout);
       lastErr = e;
     }
   }
