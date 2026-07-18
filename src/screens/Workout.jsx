@@ -271,201 +271,261 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
         </div>
       )}
 
-      {(p.exercises || []).map((ex, exI) => {
-        // cardio logs min/km, stretches & holds just get ticked off —
-        // only strength rows carry kg×reps, suggestions, and plate math
-        const mode = logMode(ex.name, p.sessionType);
-        const cardio = mode === 'cardio';
-        const lastPerf = lastPerformance(history, ex.name);
-        const suggest = mode !== 'strength' ? null : suggestNextWeight(lastPerf, ex.reps);
-        // plate math targets the weight you're actually lifting: the
-        // latest typed set, else the computed/AI suggestion
-        const typed = [...t.log[exI]].reverse().find((s) => parseFloat(s.weight) > 0);
-        const plateTarget = mode !== 'strength'
-          ? null
-          : parseFloat(typed?.weight) || suggest || parseFloat(ex.suggestedWeight) || null;
-        const plateInfo = platesFor === exI ? plateBreakdown(plateTarget, barKg, plates) : null;
-        return (
-        <div key={exI} className="ex-card card--animate">
-          <div className="row-between">
-            <div className="ex-name">{ex.name}</div>
-            <div className="mono ex-meta">
-              RPE {ex.rpe} · rest {ex.rest}
-              <button
-                className="menu-btn"
-                aria-label={`Options for ${ex.name}`}
-                onClick={() => setSheet({ exI, mode: 'menu' })}
-              >
-                ⋯
-              </button>
-            </div>
-          </div>
-          <div className="mono ex-prescription">
-            {ex.sets} × {ex.reps}
-            {suggest
-              ? ` · try ${suggest}kg`
-              : mode === 'strength' && ex.suggestedWeight
-              ? ` · try ${ex.suggestedWeight}`
-              : ''}
-            {plateTarget ? (
-              <button
-                className={'plate-btn' + (platesFor === exI ? ' plate-btn--on' : '')}
-                aria-label={`Plate breakdown for ${plateTarget}kg`}
-                onClick={() => setPlatesFor(platesFor === exI ? null : exI)}
-              >
-                ⚖ plates
-              </button>
-            ) : null}
-          </div>
-          {plateInfo && (
-            <div className="mono plate-line">
-              {plateInfo.perSide.length
-                ? `${plateTarget}kg → ${plateInfo.bar}kg bar + ${plateInfo.perSide.join(' + ')} per side`
-                : `${plateTarget}kg → bar only (${plateInfo.bar}kg${
-                    plateTarget < plateInfo.bar ? ' — lighter than the bar' : ''
-                  })`}
-              {plateInfo.perSide.length && !plateInfo.exact
-                ? ` · closest load ${plateInfo.loaded}kg`
-                : ''}
-            </div>
-          )}
-          {lastPerf && (
-            <div className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
-              last time ({fmtDate(lastPerf.date)}):{' '}
-              {lastPerf.sets.map(fmtSet).join(' · ')}
-              {suggest ? ' — all reps hit, go up' : ''}
-            </div>
-          )}
-          {ex.superset && (
-            <div className="mono superset-badge">
-              ⇋ superset {ex.superset}
-              {(() => {
-                const partner = p.exercises.find(
-                  (e, i2) => i2 !== exI && e.superset === ex.superset
-                );
-                return partner ? ` — alternate sets with ${partner.name}` : '';
-              })()}
-            </div>
-          )}
-          {ex.notes && <p className="body ex-notes">{ex.notes}</p>}
-          {editingCue === exI ? (
-            <div>
-              <textarea
-                className="input textarea"
-                style={{ minHeight: 60, marginTop: 8 }}
-                placeholder="Note to self — sticks to this exercise forever. e.g. seat height 4 · tuck elbows, left shoulder"
-                value={cueDraft}
-                onChange={(e) => setCueDraft(e.target.value)}
-              />
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button className="chip chip-on" onClick={() => saveCue(ex.name)}>
-                  Save note
-                </button>
-                <button className="chip" onClick={() => setEditingCue(null)}>
-                  Cancel
-                </button>
+      {(() => {
+        // Per-exercise context: how it's logged (kg×reps / min·km /
+        // tick-off), history, suggestions, plate-math target.
+        const exMeta = (exI) => {
+          const ex = p.exercises[exI];
+          const mode = logMode(ex.name, p.sessionType);
+          const lastPerf = lastPerformance(history, ex.name);
+          const suggest = mode !== 'strength' ? null : suggestNextWeight(lastPerf, ex.reps);
+          const typed = [...t.log[exI]].reverse().find((s) => parseFloat(s.weight) > 0);
+          const plateTarget =
+            mode !== 'strength'
+              ? null
+              : parseFloat(typed?.weight) || suggest || parseFloat(ex.suggestedWeight) || null;
+          return { ex, exI, mode, lastPerf, suggest, plateTarget };
+        };
+
+        const dot = (color) => (
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: 4,
+              background: color,
+              flexShrink: 0,
+              marginRight: 8,
+              display: 'inline-block',
+            }}
+          />
+        );
+
+        const renderHeader = (m, dotColor, paired) => {
+          const { ex, exI, mode, lastPerf, suggest, plateTarget } = m;
+          const plateInfo =
+            platesFor === exI ? plateBreakdown(plateTarget, barKg, plates) : null;
+          return (
+            <div key={`h${exI}`}>
+              <div className="row-between">
+                <div className="ex-name" style={{ display: 'flex', alignItems: 'center' }}>
+                  {dotColor ? dot(dotColor) : null}
+                  {ex.name}
+                </div>
+                <div className="mono ex-meta">
+                  RPE {ex.rpe} · rest {ex.rest}
+                  <button
+                    className="menu-btn"
+                    aria-label={`Options for ${ex.name}`}
+                    onClick={() => setSheet({ exI, mode: 'menu' })}
+                  >
+                    ⋯
+                  </button>
+                </div>
               </div>
+              <div className="mono ex-prescription">
+                {ex.sets} × {ex.reps}
+                {suggest
+                  ? ` · try ${suggest}kg`
+                  : mode === 'strength' && ex.suggestedWeight
+                  ? ` · try ${ex.suggestedWeight}`
+                  : ''}
+                {plateTarget ? (
+                  <button
+                    className={'plate-btn' + (platesFor === exI ? ' plate-btn--on' : '')}
+                    aria-label={`Plate breakdown for ${plateTarget}kg`}
+                    onClick={() => setPlatesFor(platesFor === exI ? null : exI)}
+                  >
+                    ⚖ plates
+                  </button>
+                ) : null}
+              </div>
+              {plateInfo && (
+                <div className="mono plate-line">
+                  {plateInfo.perSide.length
+                    ? `${plateTarget}kg → ${plateInfo.bar}kg bar + ${plateInfo.perSide.join(' + ')} per side`
+                    : `${plateTarget}kg → bar only (${plateInfo.bar}kg${
+                        plateTarget < plateInfo.bar ? ' — lighter than the bar' : ''
+                      })`}
+                  {plateInfo.perSide.length && !plateInfo.exact
+                    ? ` · closest load ${plateInfo.loaded}kg`
+                    : ''}
+                </div>
+              )}
+              {lastPerf && (
+                <div className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
+                  last time ({fmtDate(lastPerf.date)}):{' '}
+                  {lastPerf.sets.map(fmtSet).join(' · ')}
+                  {suggest ? ' — all reps hit, go up' : ''}
+                </div>
+              )}
+              {!paired && ex.superset && (
+                <div className="mono superset-badge">
+                  ⇋ superset {ex.superset}
+                </div>
+              )}
+              {ex.notes && <p className="body ex-notes">{ex.notes}</p>}
+              {editingCue === exI ? (
+                <div>
+                  <textarea
+                    className="input textarea"
+                    style={{ minHeight: 60, marginTop: 8 }}
+                    placeholder="Note to self — sticks to this exercise forever. e.g. seat height 4 · tuck elbows, left shoulder"
+                    value={cueDraft}
+                    onChange={(e) => setCueDraft(e.target.value)}
+                  />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="chip chip-on" onClick={() => saveCue(ex.name)}>
+                      Save note
+                    </button>
+                    <button className="chip" onClick={() => setEditingCue(null)}>
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : cues[cueKey(ex.name)] ? (
+                <p
+                  className="body cue-note"
+                  onClick={() => {
+                    setCueDraft(cues[cueKey(ex.name)]);
+                    setEditingCue(exI);
+                  }}
+                >
+                  ✎ {cues[cueKey(ex.name)]}
+                </p>
+              ) : null}
             </div>
-          ) : cues[cueKey(ex.name)] ? (
-            <p
-              className="body cue-note"
-              onClick={() => {
-                setCueDraft(cues[cueKey(ex.name)]);
-                setEditingCue(exI);
-              }}
-            >
-              ✎ {cues[cueKey(ex.name)]}
-            </p>
-          ) : null}
-          <div className="sets-list">
-            {t.log[exI].map((set, setI) => (
-              <div key={setI} className="set-row">
-                <button
-                  className={'set-chk' + (set.done ? ' set-chk-on' : '')}
+          );
+        };
+
+        const renderRow = (m, setI, dotColor) => {
+          const { ex, exI, mode, lastPerf, suggest } = m;
+          const set = t.log[exI][setI];
+          if (!set) return null;
+          return (
+            <div key={`${exI}-${setI}`} className="set-row">
+              {dotColor ? dot(dotColor) : null}
+              <button
+                className={'set-chk' + (set.done ? ' set-chk-on' : '')}
+                onClick={() => toggleSet(exI, setI, set)}
+              >
+                {set.done ? '✓' : setI + 1}
+              </button>
+              {mode === 'check' ? (
+                <span
+                  className="set-x"
+                  style={{ flex: 1, fontSize: 13.5 }}
                   onClick={() => toggleSet(exI, setI, set)}
                 >
-                  {set.done ? '✓' : setI + 1}
-                </button>
-                {mode === 'check' ? (
-                  <span
-                    className="set-x"
-                    style={{ flex: 1, fontSize: 13.5 }}
-                    onClick={() => toggleSet(exI, setI, set)}
-                  >
-                    {ex.reps}{set.done ? ' — done' : ' — tap to tick off'}
-                  </span>
-                ) : cardio ? (
-                  <>
-                    <input
-                      className="set-input"
-                      inputMode="decimal"
-                      placeholder={lastPerf?.sets?.[setI]?.time || 'min'}
-                      value={set.time || ''}
-                      onChange={(e) =>
-                        updateSet(exI, setI, 'time', e.target.value)
-                      }
-                    />
-                    <span className="set-x">min</span>
-                    <input
-                      className="set-input"
-                      inputMode="decimal"
-                      placeholder={lastPerf?.sets?.[setI]?.dist || 'km'}
-                      value={set.dist || ''}
-                      onChange={(e) =>
-                        updateSet(exI, setI, 'dist', e.target.value)
-                      }
-                    />
-                    <span className="set-x">km</span>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      className="set-input"
-                      inputMode="decimal"
-                      placeholder={
-                        suggest
-                          ? String(suggest)
-                          : lastPerf?.sets?.[setI]?.weight || 'kg'
-                      }
-                      value={set.weight}
-                      onChange={(e) =>
-                        updateSet(exI, setI, 'weight', e.target.value)
-                      }
-                    />
-                    <span className="set-x">×</span>
-                    <input
-                      className="set-input"
-                      inputMode="numeric"
-                      placeholder={lastPerf?.sets?.[setI]?.reps || 'reps'}
-                      value={set.reps}
-                      onChange={(e) =>
-                        updateSet(exI, setI, 'reps', e.target.value)
-                      }
-                    />
-                  </>
-                )}
-                {mode !== 'check' && (
-                  <button
-                    className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
-                    aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}
-                    onClick={() =>
-                      updateSet(
-                        exI,
-                        setI,
-                        'effort',
-                        EFFORTS[(EFFORTS.indexOf(set.effort || '') + 1) % EFFORTS.length]
-                      )
+                  {ex.reps}{set.done ? ' — done' : ' — tap to tick off'}
+                </span>
+              ) : mode === 'cardio' ? (
+                <>
+                  <input
+                    className="set-input"
+                    inputMode="decimal"
+                    placeholder={lastPerf?.sets?.[setI]?.time || 'min'}
+                    value={set.time || ''}
+                    onChange={(e) => updateSet(exI, setI, 'time', e.target.value)}
+                  />
+                  <span className="set-x">min</span>
+                  <input
+                    className="set-input"
+                    inputMode="decimal"
+                    placeholder={lastPerf?.sets?.[setI]?.dist || 'km'}
+                    value={set.dist || ''}
+                    onChange={(e) => updateSet(exI, setI, 'dist', e.target.value)}
+                  />
+                  <span className="set-x">km</span>
+                </>
+              ) : (
+                <>
+                  <input
+                    className="set-input"
+                    inputMode="decimal"
+                    placeholder={
+                      suggest ? String(suggest) : lastPerf?.sets?.[setI]?.weight || 'kg'
                     }
-                  >
-                    {set.effort || 'rate'}
-                  </button>
-                )}
+                    value={set.weight}
+                    onChange={(e) => updateSet(exI, setI, 'weight', e.target.value)}
+                  />
+                  <span className="set-x">×</span>
+                  <input
+                    className="set-input"
+                    inputMode="numeric"
+                    placeholder={lastPerf?.sets?.[setI]?.reps || 'reps'}
+                    value={set.reps}
+                    onChange={(e) => updateSet(exI, setI, 'reps', e.target.value)}
+                  />
+                </>
+              )}
+              {mode !== 'check' && (
+                <button
+                  className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
+                  aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}
+                  onClick={() =>
+                    updateSet(
+                      exI,
+                      setI,
+                      'effort',
+                      EFFORTS[(EFFORTS.indexOf(set.effort || '') + 1) % EFFORTS.length]
+                    )
+                  }
+                >
+                  {set.effort || 'rate'}
+                </button>
+              )}
+            </div>
+          );
+        };
+
+        // Superset flow: two exercises sharing a letter merge into one
+        // card with rows interleaved A1 B1 A2 B2 — tick straight down,
+        // no scrolling between cards.
+        const renderedIdx = new Set();
+        const cards = [];
+        (p.exercises || []).forEach((ex, exI) => {
+          if (renderedIdx.has(exI)) return;
+          const partnerI = ex.superset
+            ? p.exercises.findIndex((e, i2) => i2 !== exI && e?.superset === ex.superset)
+            : -1;
+          if (partnerI > exI) {
+            renderedIdx.add(exI);
+            renderedIdx.add(partnerI);
+            const a = exMeta(exI);
+            const b = exMeta(partnerI);
+            const rounds = Math.max(t.log[exI].length, t.log[partnerI].length);
+            const rows = [];
+            for (let r = 0; r < rounds; r++) {
+              rows.push(renderRow(a, r, 'var(--teal)'));
+              rows.push(renderRow(b, r, 'var(--amber)'));
+            }
+            cards.push(
+              <div key={`ss-${exI}`} className="ex-card card--animate">
+                <div className="mono superset-badge" style={{ marginTop: 0, marginBottom: 8 }}>
+                  ⇋ superset {ex.superset} — one set of each, top to bottom
+                </div>
+                {renderHeader(a, 'var(--teal)', true)}
+                <div style={{ height: 12 }} />
+                {renderHeader(b, 'var(--amber)', true)}
+                <div className="sets-list">{rows}</div>
               </div>
-            ))}
-          </div>
-        </div>
-        );
-      })}
+            );
+          } else {
+            renderedIdx.add(exI);
+            const m = exMeta(exI);
+            cards.push(
+              <div key={exI} className="ex-card card--animate">
+                {renderHeader(m, null, false)}
+                <div className="sets-list">
+                  {t.log[exI].map((set, setI) => renderRow(m, setI, null))}
+                </div>
+              </div>
+            );
+          }
+        });
+        return cards;
+      })()}
 
       {p.cardio && (
         <div className="card card--animate">
