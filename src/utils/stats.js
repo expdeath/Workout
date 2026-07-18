@@ -267,16 +267,28 @@ export function parseHealthNumbers(text) {
   const hrv = /hrv[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
   const rhr = /(?:rhr|resting[^\d]{0,12}(?:heart[^\d]{0,8})?(?:rate)?)[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
   const steps = /\bsteps[^\d]{0,14}([\d,]+(?:\.\d+)?)/i.exec(t)?.[1];
-  // "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20" · "SleepHrs: 7.4 hr"
-  const sl =
-    /sle(?:ep|pt)[^\d]{0,14}(\d{1,2})(?::(\d{2})|\s*h(?:ours?|rs?)?(?:\s*(\d{1,2})\s*m)?|(\.\d+))?/i.exec(t);
   let sleepH = null;
-  if (sl) {
-    sleepH = parseInt(sl[1], 10);
-    if (sl[2]) sleepH += parseInt(sl[2], 10) / 60; // 7:20
-    else if (sl[3]) sleepH += parseInt(sl[3], 10) / 60; // 7h 20m
-    else if (sl[4]) sleepH += parseFloat(sl[4]); // 6.5
+  // Shortcut label first: "SleepHrs: <duration sum>" — the Watch sums
+  // sample durations whose unit varies by iOS (seconds/minutes/hours)
+  const slLabel = /sleep\s*hrs?[^\d]{0,10}([\d.]+)/i.exec(t);
+  if (slLabel) {
+    const n = parseFloat(slLabel[1]);
+    if (n > 1200) sleepH = n / 3600; // seconds
+    else if (n > 20) sleepH = n / 60; // minutes
+    else sleepH = n; // hours
     sleepH = sleepH > 0 && sleepH < 20 ? Math.round(sleepH * 10) / 10 : null;
+  }
+  // free-form fallbacks: "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20"
+  if (sleepH === null) {
+    const sl =
+      /sle(?:ep|pt)[^\d]{0,14}(\d{1,2})(?::(\d{2})|\s*h(?:ours?|rs?)?(?:\s*(\d{1,2})\s*m)?|(\.\d+))?/i.exec(t);
+    if (sl) {
+      sleepH = parseInt(sl[1], 10);
+      if (sl[2]) sleepH += parseInt(sl[2], 10) / 60; // 7:20
+      else if (sl[3]) sleepH += parseInt(sl[3], 10) / 60; // 7h 20m
+      else if (sl[4]) sleepH += parseFloat(sl[4]); // 6.5
+      sleepH = sleepH > 0 && sleepH < 20 ? Math.round(sleepH * 10) / 10 : null;
+    }
   }
   return {
     hrv: hrv ? parseFloat(hrv) : null,

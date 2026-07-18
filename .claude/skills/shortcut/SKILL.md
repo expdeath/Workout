@@ -58,6 +58,32 @@ Text tokens embed variables as `￼` placeholder chars with an
 `attachmentsByRange` dict keyed `"{charIndex, 1}"` — indexes count the
 placeholder itself, and every attachment is exactly 1 char.
 
+## Health sample types — naming and category traps
+
+The filter's Type enumeration must use the SHORTCUTS PICKER's names,
+which follow the Health app's display names — not HealthKit developer
+names. Verified working: `Heart Rate Variability`, `Resting Heart Rate`,
+`Steps`, `Sleep` (NOT "Sleep Analysis" — that string is silently treated
+as an unknown/quantity type: phantom Unit row, zero results), `Cardio
+Fitness` (NOT "VO2 Max"), `Active Energy`, `Exercise Minutes`,
+`Walking + Running Distance`, `Respiratory Rate`, `Wrist Temperature`.
+When unsure, have the user re-pick the type in the Shortcuts editor —
+the picker writes ground truth — and read what it chose.
+
+Sleep is a category type: samples coerce to stage-name TEXT, so
+Statistics errors with "couldn't convert from Text to Number". Sum the
+samples' `Duration` property instead — put an aggrandizement on the
+statistics input token:
+`'Aggrandizements': [{'Type':'WFPropertyVariableAggrandizement','PropertyName':'Duration'}]`
+The duration sum arrives in SECONDS. Also add a `Value is Asleep`
+filter, otherwise In Bed segments double the total. Never set
+`WFHKSampleFilteringUnit` on a category type — it breaks the query.
+
+A Find action with zero results shows a blocking "No Samples Found"
+alert that ABORTS the whole run (no upload). Health read permissions:
+Health app → profile → Privacy → Apps → Shortcuts. Health actions
+error on macOS, so full runs are iPhone-only.
+
 ## Gotchas that cost real debugging time
 
 - **Base64 line breaks**: Shortcuts wraps base64 at 76 chars by default;
