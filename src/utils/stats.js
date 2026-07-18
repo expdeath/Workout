@@ -383,21 +383,22 @@ export function fmtHealthLine(n) {
 export function healthTrend(healthLog, n = 7) {
   const rows = (healthLog || []).slice(-n);
   if (rows.length < 2) return '';
+  const r1 = (x) => Math.round(x * 10) / 10;
   return rows
     .map((h) => {
       const bits = [];
-      if (h.hrv) bits.push(`HRV ${h.hrv}ms`);
-      if (h.rhr) bits.push(`RHR ${h.rhr}`);
-      if (h.sleepH) bits.push(`sleep ${h.sleepH}h`);
-      if (h.weightKg) bits.push(`bodyweight ${h.weightKg}kg`);
+      if (h.hrv) bits.push(`HRV ${r1(h.hrv)}ms`);
+      if (h.rhr) bits.push(`RHR ${Math.round(h.rhr)}`);
+      if (h.sleepH) bits.push(`sleep ${r1(h.sleepH)}h`);
+      if (h.weightKg) bits.push(`bodyweight ${r1(h.weightKg)}kg`);
       if (h.steps) bits.push(`${h.steps.toLocaleString()} steps`);
-      if (h.vo2max) bits.push(`VO2max ${h.vo2max}`);
+      if (h.vo2max) bits.push(`VO2max ${r1(h.vo2max)}`);
       if (h.kcal) bits.push(`${Math.round(h.kcal)}kcal active`);
       if (h.exerciseMin) bits.push(`${Math.round(h.exerciseMin)}min exercise`);
-      if (h.distKm) bits.push(`${h.distKm}km`);
-      if (h.spo2) bits.push(`SpO2 ${h.spo2}%`);
-      if (h.respRate) bits.push(`RR ${h.respRate}/min`);
-      if (h.wristC) bits.push(`wrist ${h.wristC}°C`);
+      if (h.distKm) bits.push(`${r1(h.distKm)}km`);
+      if (h.spo2) bits.push(`SpO2 ${r1(h.spo2)}%`);
+      if (h.respRate) bits.push(`RR ${r1(h.respRate)}/min`);
+      if (h.wristC) bits.push(`wrist ${r1(h.wristC)}°C`);
       return `${h.date}: ${bits.join(' · ') || h.raw || '—'}`;
     })
     .join('\n');

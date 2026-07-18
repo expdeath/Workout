@@ -170,7 +170,8 @@ const WISH = {
   surprise: 'The athlete asked you to SURPRISE them — build something genuinely different from the recent sessions (mixed circuit, superset full-body, conditioning + core, new variations). Keep it safe and equipment-realistic, but make it fun.',
 };
 
-function buildUserMessage(checkin, history, healthLog = []) {
+// exported for prompt inspection/testing — the app calls it via generateWorkoutPlan
+export function buildUserMessage(checkin, history, healthLog = []) {
   const recent = history.slice(-6);
   const histText = recent.length
     ? recent
