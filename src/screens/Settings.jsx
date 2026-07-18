@@ -447,10 +447,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         {sync.repo && sync.token ? (
           <>
             <p className="body" style={{ color: 'var(--muted)' }}>
-              The v9 shortcut uploads its numbers straight to your data
-              repo — one silent web request, no browser, works with the
-              phone locked. The app collects them on its next sync (every
-              app open, and every 5 minutes while open).
+              The v10 shortcut uploads its numbers straight to your data
+              repo — one web request, no browser, works with the phone
+              locked — and then shows you GitHub's reply, so a failed
+              upload is visible instead of silent. The app collects the
+              data on its next sync (every app open, and every 5 minutes
+              while open).
               <br /><br />
               1. Delete older "gym-checkin" copies from the Shortcuts app
               <br />
@@ -466,7 +468,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
                 className="ghost-btn"
                 onClick={() =>
                   navigator.clipboard?.writeText(
-                    new URL('gym-checkin-v9.shortcut', window.location.href).toString()
+                    new URL('gym-checkin-v10.shortcut', window.location.href).toString()
                   )
                 }
               >
@@ -490,13 +492,20 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
               two values into the first two Text boxes after the "Copy to
               clipboard" step.)
               <br /><br />
-              3. Run it once — allow the Health prompts, and a{' '}
-              <span className="mono">health-inbox/</span> file appears in
-              your repo, vanishing after the app's next sync.
+              3. Run it once — allow the Health prompts. At the end it
+              shows <b>"GitHub said:"</b> — a reply mentioning{' '}
+              <span className="mono">content</span> and{' '}
+              <span className="mono">commit</span> means the upload landed
+              (a <span className="mono">health-inbox/</span> file appears
+              in your repo, vanishing after the app's next sync).{' '}
+              <span className="mono">Bad credentials</span> means the
+              token answer is wrong; <span className="mono">Not Found</span>{' '}
+              means the repo answer is wrong — fix them in the shortcut's
+              first two Text boxes after the "Copy to clipboard" step.
               <br />
               4. Automate it: Shortcuts → Automation → + → Time of Day
               (your usual pre-gym time) → Run Immediately → pick{' '}
-              <b>"Gym Check-in v9"</b>.
+              <b>"Gym Check-in v10"</b>.
             </p>
             {(() => {
               const inbox = getLastInbox();
