@@ -3,7 +3,28 @@ import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/sto
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox } from '../db/sync';
 import { todaysHealth } from '../utils/healthIngest';
+import { parseHealthNumbers } from '../utils/stats';
 import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
+
+// Raw shortcut payload → compact readable summary for the Watch card
+function fmtWatchData(raw) {
+  const n = parseHealthNumbers(raw);
+  const r1 = (x) => Math.round(x * 10) / 10;
+  return [
+    n.hrv && `HRV ${r1(n.hrv)}ms`,
+    n.rhr && `RHR ${Math.round(n.rhr)}`,
+    n.sleepH && `sleep ${n.sleepH}h`,
+    n.steps && `${n.steps.toLocaleString()} steps`,
+    n.vo2max && `VO₂max ${r1(n.vo2max)}`,
+    n.kcal && `${Math.round(n.kcal)} kcal`,
+    n.exerciseMin && `${Math.round(n.exerciseMin)} min exercise`,
+    n.distKm && `${r1(n.distKm)} km`,
+    n.respRate && `RR ${r1(n.respRate)}`,
+    n.wristC && `wrist ${r1(n.wristC)}°C`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
 
 function Section({ title, status, statusColor, open, onToggle, children }) {
   return (
@@ -437,135 +458,114 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         open={open.watch}
         onToggle={() => toggle('watch')}
       >
-        <p className="body" style={{ color: 'var(--muted)' }}>
-          Apple only lets native apps talk to the Watch, so a Shortcut reads
-          your numbers (HRV, resting HR, steps, sleep) from Health and
-          delivers them here — your next check-in arrives pre-filled.
-        </p>
-
-        <div className="q-label">Recommended: background delivery</div>
-        {sync.repo && sync.token ? (
-          <>
-            <p className="body" style={{ color: 'var(--muted)' }}>
-              The v10 shortcut uploads its numbers straight to your data
-              repo — one web request, no browser, works with the phone
-              locked — and then shows you GitHub's reply, so a failed
-              upload is visible instead of silent. The app collects the
-              data on its next sync (every app open, and every 5 minutes
-              while open).
-              <br /><br />
-              1. Delete older "gym-checkin" copies from the Shortcuts app
-              <br />
-              2. Install it <b>from Safari</b> (iOS won't import from
-              inside this app): copy the install link below, paste it into
-              Safari's address bar, tap <b>Download</b>, then open it from
-              Safari's Downloads (the ⬇ button) → <b>Add Shortcut</b>. If a
-              text preview opens instead, tap Share → <b>Shortcuts</b>.
-              It asks for two values on import — copy them from here:
-            </p>
-            <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
-              <button
-                className="ghost-btn"
-                onClick={() =>
-                  navigator.clipboard?.writeText(
-                    new URL('gym-checkin-v10.shortcut', window.location.href).toString()
-                  )
-                }
-              >
-                Copy install link
-              </button>
-              <button
-                className="ghost-btn"
-                onClick={() => navigator.clipboard?.writeText(sync.repo)}
-              >
-                Copy repo ({sync.repo})
-              </button>
-              <button
-                className="ghost-btn"
-                onClick={() => navigator.clipboard?.writeText(sync.token)}
-              >
-                Copy token
-              </button>
-            </div>
-            <p className="body" style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
-              (If iOS skips the questions, open the shortcut and paste the
-              two values into the first two Text boxes after the "Copy to
-              clipboard" step.)
-              <br /><br />
-              3. Run it once — allow the Health prompts. At the end it
-              shows <b>"GitHub said:"</b> — a reply mentioning{' '}
-              <span className="mono">content</span> and{' '}
-              <span className="mono">commit</span> means the upload landed
-              (a <span className="mono">health-inbox/</span> file appears
-              in your repo, vanishing after the app's next sync).{' '}
-              <span className="mono">Bad credentials</span> means the
-              token answer is wrong; <span className="mono">Not Found</span>{' '}
-              means the repo answer is wrong — fix them in the shortcut's
-              first two Text boxes after the "Copy to clipboard" step.
-              <br />
-              4. Automate it: Shortcuts → Automation → + → Time of Day
-              (your usual pre-gym time) → Run Immediately → pick{' '}
-              <b>"Gym Check-in v10"</b>.
-            </p>
-            {(() => {
-              const inbox = getLastInbox();
-              return inbox ? (
-                <p className="mono" style={{ fontSize: 12.5, color: 'var(--teal)' }}>
-                  📥 Last delivery collected: {inbox.files} file{inbox.files > 1 ? 's' : ''},{' '}
-                  {new Date(inbox.at).toLocaleString()}
-                </p>
-              ) : (
-                <p className="mono" style={{ fontSize: 12.5, color: 'var(--dim)' }}>
-                  📥 Nothing collected from the inbox yet.
-                </p>
-              );
-            })()}
-          </>
+        {watchReceived ? (
+          <p className="body" style={{ color: 'var(--teal)' }}>
+            ⌚ Today: {fmtWatchData(watchReceived) || watchReceived}
+          </p>
         ) : (
           <p className="body" style={{ color: 'var(--muted)' }}>
-            Set up <b>Sync & Backup</b> above first — background delivery
-            drops the data into that same private repo, using the same token.
+            ⌚ Nothing received today yet — run the Gym Check-in shortcut.
           </p>
         )}
+        {(() => {
+          const inbox = getLastInbox();
+          return inbox ? (
+            <p className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
+              📥 Last delivery: {inbox.files} file{inbox.files > 1 ? 's' : ''},{' '}
+              {new Date(inbox.at).toLocaleString()}
+            </p>
+          ) : null;
+        })()}
+        <p className="body" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
+          A Shortcut on your phone reads Health data (sleep, HRV, VO₂max,
+          calories…) and uploads it to your data repo; the app collects it
+          on every sync and pre-fills your check-in.
+        </p>
 
-        <details style={{ marginTop: 14 }}>
+        <details style={{ marginTop: 12 }}>
           <summary
             className="mono"
             style={{ fontSize: 12.5, color: 'var(--dim)', cursor: 'pointer' }}
           >
-            Old method (v8, unreliable) — only if v10 won't install
+            Install or reinstall the shortcut
           </summary>
-          <p className="body" style={{ color: 'var(--muted)', marginTop: 8 }}>
-            ⚠ Don't use this if v10 works — it hands data over by opening
-            the app, and iOS silently drops that when the phone is locked
-            or the app is already open.
-            <br />
-            <a className="link" href="gym-checkin-v8.shortcut" download>
-              Install the Gym Check-in v8 shortcut
-            </a>{' '}
-            → <b>Add Shortcut</b>, then run it once and allow the Health
-            prompts.
-          </p>
-        </details>
-        <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: watchReceived ? 'var(--teal)' : 'var(--dim)' }}>
-          {watchReceived
-            ? `⌚ Received today: ${watchReceived}`
-            : '⌚ Nothing received today yet — run the shortcut to test.'}
-        </p>
-        {(() => {
-          try {
-            const d = JSON.parse(localStorage.getItem('coach:url-debug'));
-            if (!d) return null;
-            return (
-              <p className="mono" style={{ marginTop: 6, fontSize: 11.5, color: 'var(--dim)', wordBreak: 'break-all' }}>
-                debug — last URL payload ({new Date(d.at).toLocaleTimeString()}):
-                {' '}query "{d.search || '—'}" · fragment "{d.hash || '—'}"
+          {sync.repo && sync.token ? (
+            <>
+              <p className="body" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
+                1. Delete older "gym-checkin" copies from the Shortcuts app.
+                <br />
+                2. Install <b>from Safari</b> (iOS won't import from inside
+                this app): copy the install link, paste it into Safari, tap{' '}
+                <b>Download</b>, open it from Safari's Downloads (⬇) →{' '}
+                <b>Add Shortcut</b>. Answer the two questions with the repo
+                and token:
               </p>
-            );
-          } catch {
-            return null;
-          }
-        })()}
+              <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                <button
+                  className="ghost-btn"
+                  onClick={() =>
+                    navigator.clipboard?.writeText(
+                      new URL('gym-checkin-v10.shortcut', window.location.href).toString()
+                    )
+                  }
+                >
+                  Copy install link
+                </button>
+                <button
+                  className="ghost-btn"
+                  onClick={() => navigator.clipboard?.writeText(sync.repo)}
+                >
+                  Copy repo
+                </button>
+                <button
+                  className="ghost-btn"
+                  onClick={() => navigator.clipboard?.writeText(sync.token)}
+                >
+                  Copy token
+                </button>
+              </div>
+              <p className="body" style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
+                3. Run it once and allow the Health prompts. The final{' '}
+                <b>"GitHub said:"</b> popup shows the upload result:{' '}
+                <span className="mono">content</span>/<span className="mono">commit</span>{' '}
+                = landed · <span className="mono">Bad credentials</span> = wrong
+                token · <span className="mono">Not Found</span> = wrong repo
+                (fix either in the shortcut's first two Text boxes; same place
+                if iOS skipped the questions).
+                <br />
+                4. Automate: Shortcuts → Automation → + → Time of Day → Run
+                Immediately → pick the gym-checkin shortcut.
+              </p>
+              <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--dim)' }}>
+                Fallback if it won't install:{' '}
+                <a className="link" href="gym-checkin-v8.shortcut" download>
+                  v8 shortcut
+                </a>{' '}
+                — hands data over by opening the app; unreliable when the
+                phone is locked.
+              </p>
+              {(() => {
+                try {
+                  const d = JSON.parse(localStorage.getItem('coach:url-debug'));
+                  if (!d) return null;
+                  return (
+                    <p className="mono" style={{ marginTop: 6, fontSize: 11.5, color: 'var(--dim)', wordBreak: 'break-all' }}>
+                      debug — last URL payload ({new Date(d.at).toLocaleTimeString()}):
+                      {' '}query "{d.search || '—'}" · fragment "{d.hash || '—'}"
+                    </p>
+                  );
+                } catch {
+                  return null;
+                }
+              })()}
+            </>
+          ) : (
+            <p className="body" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
+              Set up <b>Sync & Backup</b> above first — the shortcut delivers
+              into that same private repo, using the same token.
+            </p>
+          )}
+        </details>
       </Section>
 
       <Section title="About" open={open.about} onToggle={() => toggle('about')}>
