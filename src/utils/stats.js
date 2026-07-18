@@ -253,13 +253,21 @@ export function progressionTargets(history, max = 10) {
   return out.join('\n');
 }
 
-/** Pull HRV / resting-HR / steps / sleep numbers out of a free-form health string. */
+/** Pull HRV / resting-HR / steps / sleep / VO₂max / energy / SpO₂ …
+ *  numbers out of a free-form health string (Watch shortcut payload). */
 export function parseHealthNumbers(text) {
   const t = String(text || '');
+  const num = (re, clamp = null) => {
+    const m = re.exec(t)?.[1];
+    if (!m) return null;
+    const n = parseFloat(m.replace(/,/g, ''));
+    if (Number.isNaN(n)) return null;
+    return clamp && !(n >= clamp[0] && n <= clamp[1]) ? null : n;
+  };
   const hrv = /hrv[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
   const rhr = /(?:rhr|resting[^\d]{0,12}(?:heart[^\d]{0,8})?(?:rate)?)[^\d]{0,14}([\d.]+)/i.exec(t)?.[1];
-  const steps = /steps[^\d]{0,14}([\d,]+(?:\.\d+)?)/i.exec(t)?.[1];
-  // "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20"
+  const steps = /\bsteps[^\d]{0,14}([\d,]+(?:\.\d+)?)/i.exec(t)?.[1];
+  // "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20" · "SleepHrs: 7.4 hr"
   const sl =
     /sle(?:ep|pt)[^\d]{0,14}(\d{1,2})(?::(\d{2})|\s*h(?:ours?|rs?)?(?:\s*(\d{1,2})\s*m)?|(\.\d+))?/i.exec(t);
   let sleepH = null;
@@ -275,6 +283,20 @@ export function parseHealthNumbers(text) {
     rhr: rhr ? parseFloat(rhr) : null,
     steps: steps ? Math.round(parseFloat(steps.replace(/,/g, ''))) : null,
     sleepH,
+    vo2max: num(/vo2\s*max[^\d]{0,14}([\d.]+)/i, [10, 90]),
+    kcal: num(/(?:active\s*kcal|active\s*energy)[^\d]{0,14}([\d,]+(?:\.\d+)?)/i, [1, 8000]),
+    exerciseMin: num(/exercise\s*min[^\d]{0,14}([\d,]+(?:\.\d+)?)/i, [1, 1000]),
+    distKm: num(/distance\s*km[^\d]{0,14}([\d.]+)/i, [0.1, 200]),
+    // HealthKit reports oxygen saturation as a 0–1 fraction; Shortcuts
+    // may render either "0.96" or "96%"
+    spo2: (() => {
+      const n = num(/spo2[^\d]{0,14}([\d.]+)/i);
+      if (n === null) return null;
+      const pct = n <= 1 ? Math.round(n * 1000) / 10 : n;
+      return pct >= 70 && pct <= 100 ? pct : null;
+    })(),
+    respRate: num(/resp\s*rate[^\d]{0,14}([\d.]+)/i, [5, 40]),
+    wristC: num(/wrist\s*temp[^\d]{0,14}([\d.]+)/i, [20, 45]),
   };
 }
 
@@ -318,6 +340,12 @@ export function healthTrend(healthLog, n = 7) {
       if (h.sleepH) bits.push(`sleep ${h.sleepH}h`);
       if (h.weightKg) bits.push(`bodyweight ${h.weightKg}kg`);
       if (h.steps) bits.push(`${h.steps.toLocaleString()} steps`);
+      if (h.vo2max) bits.push(`VO2max ${h.vo2max}`);
+      if (h.kcal) bits.push(`${Math.round(h.kcal)}kcal active`);
+      if (h.exerciseMin) bits.push(`${Math.round(h.exerciseMin)}min exercise`);
+      if (h.distKm) bits.push(`${h.distKm}km`);
+      if (h.spo2) bits.push(`SpO2 ${h.spo2}%`);
+      if (h.respRate) bits.push(`RR ${h.respRate}/min`);
       return `${h.date}: ${bits.join(' · ') || h.raw || '—'}`;
     })
     .join('\n');

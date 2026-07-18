@@ -14,16 +14,11 @@ const KEY = 'coach:health-';
 /** Persist the day's parsed numbers into the health store (synced). */
 function recordHealth(text) {
   try {
-    const { hrv, rhr, steps, sleepH } = parseHealthNumbers(text);
-    if (hrv || rhr || steps || sleepH) {
-      mergeHealth({
-        date: todayStr(),
-        hrv: hrv || null,
-        rhr: rhr || null,
-        steps: steps || null,
-        sleepH: sleepH || null,
-        raw: text.slice(0, 300),
-      }).catch(() => {});
+    const nums = parseHealthNumbers(text);
+    if (Object.values(nums).some(Boolean)) {
+      const row = { date: todayStr(), raw: text.slice(0, 300) };
+      for (const [k, v] of Object.entries(nums)) row[k] = v || null;
+      mergeHealth(row).catch(() => {});
     }
   } catch { /* parsing is best-effort */ }
 }
@@ -78,7 +73,7 @@ export function storeTodaysHealth(text, store = localStorage) {
 /** Heuristic: does clipboard text look like Watch/Health data? */
 export function looksLikeHealthData(text) {
   if (!text || text.length > 600) return false;
-  return /\b(hrv|rhr|steps|sleep|bpm|resting|heart)\b/i.test(text) && /\d/.test(text);
+  return /\b(hrv|rhr|steps|sleep|bpm|resting|heart|vo2|spo2|kcal)\b/i.test(text) && /\d/.test(text);
 }
 
 /** Drop stored payloads older than today (they're single-use). */
