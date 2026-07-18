@@ -17,7 +17,9 @@ function recordHealth(text) {
     const nums = parseHealthNumbers(text);
     if (Object.values(nums).some(Boolean)) {
       const row = { date: todayStr(), raw: text.slice(0, 300) };
-      for (const [k, v] of Object.entries(nums)) row[k] = v || null;
+      // only write fields this payload actually carries — a partial
+      // payload must not null out values an earlier one delivered
+      for (const [k, v] of Object.entries(nums)) if (v) row[k] = v;
       mergeHealth(row).catch(() => {});
     }
   } catch { /* parsing is best-effort */ }
