@@ -638,6 +638,70 @@ export function recoveryCaution(checkin, history, healthLog = []) {
   return `Heads-up: ${list}. Extra work is your call — maybe keep a rep or two in the tank.`;
 }
 
+/**
+ * Everything that happened in one calendar month (ym = 'YYYY-MM'),
+ * with prior-month comparisons — feeds the AI monthly report.
+ * Returns null when the month has no sessions.
+ */
+export function monthSummary(history, healthLog = [], ym) {
+  const [y, m] = ym.split('-').map(Number);
+  const prev = new Date(y, m - 2, 15);
+  const prevYm = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+  const sessions = history.filter((s) => s.date?.startsWith(ym));
+  if (!sessions.length) return null;
+  const prevSessions = history.filter((s) => s.date?.startsWith(prevYm));
+
+  const volume = sessions.reduce((a, s) => a + sessionVolume(s), 0);
+  const prevVolume = prevSessions.reduce((a, s) => a + sessionVolume(s), 0);
+
+  // lifts whose best set this month beat their best from before it
+  const ups = [];
+  for (const ex of exerciseSeries(history)) {
+    const inPts = ex.points.filter((p) => p.date.startsWith(ym));
+    const before = ex.points.filter((p) => p.date < `${ym}-01`);
+    if (!inPts.length || !before.length) continue;
+    const to = Math.max(...inPts.map((p) => p.w));
+    const from = Math.max(...before.map((p) => p.w));
+    if (to > from) ups.push(`${ex.name} ${from}→${to}kg`);
+  }
+
+  const split = {};
+  for (const s of sessions) {
+    const t = s.plan?.sessionType || 'Other';
+    split[t] = (split[t] || 0) + 1;
+  }
+  const avg = (arr) =>
+    arr.length ? Math.round((arr.reduce((a, b) => a + b, 0) / arr.length) * 10) / 10 : null;
+  const pick = (rows, k) => rows.map((r) => r?.[k]).filter((v) => v > 0);
+  const hRows = healthLog.filter((h) => h.date?.startsWith(ym));
+  const hPrev = healthLog.filter((h) => h.date?.startsWith(prevYm));
+  const weights = pick(hRows, 'weightKg');
+  const rpes = sessions.map((s) => Number(s.fin?.rpe)).filter((n) => !Number.isNaN(n));
+
+  return {
+    month: ym,
+    count: sessions.length,
+    prevCount: prevSessions.length,
+    volume,
+    prevVolume,
+    split: Object.entries(split)
+      .sort((a, b) => b[1] - a[1])
+      .map(([t, n]) => `${t} ${n}`)
+      .join(', '),
+    avgRpe: avg(rpes),
+    progressions: ups.slice(0, 6).join(', ') || 'none',
+    sleepAvg: avg(pick(hRows, 'sleepH')),
+    sleepPrev: avg(pick(hPrev, 'sleepH')),
+    rhrAvg: avg(pick(hRows, 'rhr')),
+    rhrPrev: avg(pick(hPrev, 'rhr')),
+    hrvAvg: avg(pick(hRows, 'hrv')),
+    vo2Avg: avg(pick(hRows, 'vo2max')),
+    vo2Prev: avg(pick(hPrev, 'vo2max')),
+    weightStart: weights[0] || null,
+    weightEnd: weights[weights.length - 1] || null,
+  };
+}
+
 /** Compact text summary of the last 7 days, for the AI weekly review. */
 export function lastWeekSummary(history) {
   const cutoff = Date.now() - 7 * DAY;

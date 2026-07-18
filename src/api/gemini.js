@@ -824,6 +824,28 @@ LIFTS THAT MOVED UP: ${summary.progressions}`,
   );
 }
 
+/** Monthly "what changed" report — richer than the weekly, uses Watch data. */
+export function generateMonthlyReport(s) {
+  const line = (label, cur, prev, unit = '') =>
+    cur ? `${label}: ${cur}${unit}${prev ? ` (prior month ${prev}${unit})` : ''}` : '';
+  return callGeminiText(
+    `Write the athlete's MONTHLY report for ${s.month}: EXACTLY 3-5 short sentences, plain text, max 90 words. Cover: how the month went (sessions, volume, lifts that moved), what the recovery data says (sleep/RHR/VO2max trends if present), and ONE concrete focus for next month. Honest and specific, no hype, no markdown.
+
+FACTS:
+Sessions: ${s.count}${s.prevCount ? ` (prior month ${s.prevCount})` : ''} — split: ${s.split}
+Total volume: ${s.volume}kg${s.prevVolume ? ` (prior ${s.prevVolume}kg)` : ''}
+Lifts that moved up: ${s.progressions}
+${line('Avg session RPE', s.avgRpe)}
+${line('Avg sleep', s.sleepAvg, s.sleepPrev, 'h')}
+${line('Avg resting HR', s.rhrAvg, s.rhrPrev)}
+${line('Avg HRV', s.hrvAvg, null, 'ms')}
+${line('VO2max', s.vo2Avg, s.vo2Prev)}
+${s.weightStart && s.weightEnd ? `Bodyweight: ${s.weightStart} → ${s.weightEnd}kg` : ''}`,
+    220,
+    'ai_monthly_report'
+  );
+}
+
 /**
  * Generate a workout plan with automatic retry for rate limits.
  * @param {object} checkin - Check-in data

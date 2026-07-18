@@ -9,8 +9,8 @@ import {
   cleanDist,
   setLogged,
 } from './utils/helpers';
-import { generateWorkoutPlan, generateDebrief, generateWeeklyReview } from './api/gemini';
-import { lastWeekSummary, mondayOf, detectPRs } from './utils/stats';
+import { generateWorkoutPlan, generateDebrief, generateWeeklyReview, generateMonthlyReport } from './api/gemini';
+import { lastWeekSummary, mondayOf, detectPRs, monthSummary } from './utils/stats';
 import {
   ingestHealthFromUrl,
   todaysHealth,
@@ -28,6 +28,7 @@ import {
   logEvent,
   migrateFromLocalStorage,
   mergeHealth,
+  getAllHealth,
 } from './db/db';
 import { syncNow } from './db/sync';
 
@@ -67,6 +68,13 @@ export default function App() {
       return null;
     }
   });
+  const [monthlyReport, setMonthlyReport] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('coach:monthly-report'));
+    } catch {
+      return null;
+    }
+  });
 
   // Check-in state — pre-filled with a "normal day"
   const [ci, setCi] = useState({
@@ -102,6 +110,7 @@ export default function App() {
       reparseHealthRows(); // background — parser upgrades backfill old rows
       runSync(); // background — pulls sessions logged on other devices
       maybeWeeklyReview(h); // background — Sunday review generation
+      maybeMonthlyReport(h); // background — new-month report generation
 
       // If no API key, go to settings first
       if (!getApiKey()) {
@@ -299,6 +308,29 @@ export default function App() {
       setWeeklyReview(review);
     } catch (e) {
       console.warn('[COACH] weekly review failed', e);
+    }
+  }
+
+  // ── Monthly report: generated in the first week of a new month,
+  //    summarizing the month that just ended ──
+  async function maybeMonthlyReport(hist) {
+    try {
+      const now = new Date();
+      if (now.getDate() > 7) return; // first week of the month only
+      const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+      const ym = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
+      const cur = JSON.parse(localStorage.getItem('coach:monthly-report') || 'null');
+      if (cur?.month === ym) return; // already generated
+      if (!getApiKey()) return;
+      const healthLog = await getAllHealth().catch(() => []);
+      const sum = monthSummary(hist, healthLog, ym);
+      if (!sum) return; // no sessions that month — nothing to report
+      const text = await generateMonthlyReport(sum);
+      const report = { month: ym, at: Date.now(), text, sum };
+      localStorage.setItem('coach:monthly-report', JSON.stringify(report));
+      setMonthlyReport(report);
+    } catch (e) {
+      console.warn('[COACH] monthly report failed', e);
     }
   }
 
@@ -560,6 +592,7 @@ export default function App() {
             history={history}
             syncInfo={syncInfo}
             weeklyReview={weeklyReview}
+            monthlyReport={monthlyReport}
             onProgress={() => setScreen('progress')}
             onStart={async () => {
               setCi(await buildDefaultCheckin());

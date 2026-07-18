@@ -4,12 +4,13 @@ import { weekStats, deloadSignal } from '../utils/stats';
 
 const WEEK_MS = 7 * 86400000;
 
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onCoach }) {
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onCoach }) {
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
   const { thisWeek, streak } = weekStats(history);
   const showReview = weeklyReview?.text && Date.now() - (weeklyReview.at || 0) < WEEK_MS;
+  const showMonthly = monthlyReport?.text && Date.now() - (monthlyReport.at || 0) < 10 * 86400000;
   const deload = deloadSignal(history);
 
   return (
@@ -124,6 +125,24 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, onSta
               🗨 {last.debrief}
             </p>
           )}
+        </div>
+      )}
+
+      {showMonthly && (
+        <div className="card card--animate">
+          <div className="card__label" style={{ color: 'var(--amber)' }}>
+            📆 Monthly report —{' '}
+            {new Date(monthlyReport.month + '-15').toLocaleDateString(undefined, {
+              month: 'long',
+            })}
+          </div>
+          <div className="mono card__detail" style={{ marginTop: 0 }}>
+            {monthlyReport.sum?.count} sessions · {monthlyReport.sum?.volume?.toLocaleString()}kg lifted
+            {monthlyReport.sum?.progressions && monthlyReport.sum.progressions !== 'none'
+              ? ` · up: ${monthlyReport.sum.progressions}`
+              : ''}
+          </div>
+          <p className="body" style={{ marginTop: 8 }}>{monthlyReport.text}</p>
         </div>
       )}
 
