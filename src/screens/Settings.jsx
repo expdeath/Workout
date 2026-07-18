@@ -49,7 +49,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
 
   const [ai, setAi] = useState(() => {
     const s = getAISettings();
-    return { profile: s.profile || '', routine: s.routine || '', goals: s.goals || '' };
+    return {
+      profile: s.profile || '',
+      routine: s.routine || '',
+      goals: s.goals || '',
+      equipment: s.equipment || '',
+    };
   });
   const handleCoachSave = () => {
     setApiKey(key.trim());
@@ -57,6 +62,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
       profile: ai.profile.trim(),
       routine: ai.routine.trim(),
       goals: ai.goals.trim(),
+      equipment: ai.equipment.trim(),
     });
     setSaved(true);
     logEvent('api_key_saved');
@@ -273,6 +279,14 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           The coach plans toward these; lift and frequency goals get progress
           bars in Stats.
         </p>
+        <div className="q-label">Gym equipment & limits</div>
+        <textarea
+          className="input textarea"
+          style={{ marginTop: 6, minHeight: 60 }}
+          placeholder={'What your gym has (or lacks) — the coach never prescribes what you can\'t do.\ne.g. no cable tower · dumbbells up to 40kg · no squat rack · has stairmaster'}
+          value={ai.equipment}
+          onChange={(e) => setAi({ ...ai, equipment: e.target.value.slice(0, 600) })}
+        />
         <div className="q-label">Your base routine</div>
         <textarea
           className="input textarea"

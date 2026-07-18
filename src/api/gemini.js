@@ -262,6 +262,10 @@ ${(() => {
   return g ? `\nATHLETE'S STATED GOALS (steer selection and progression toward these):\n${g}` : '';
 })()}
 ${(() => {
+  const eq = (getAISettings().equipment || '').trim();
+  return eq ? `\nGYM EQUIPMENT & LIMITS (HARD CONSTRAINT — never prescribe anything unavailable; respect load limits):\n${eq}` : '';
+})()}
+${(() => {
   const cues = getAISettings().cueNotes || {};
   const lines = Object.entries(cues).slice(0, 15).map(([n, t]) => `- ${n}: ${t}`);
   return lines.length
@@ -694,6 +698,10 @@ ${recovery.join('\n') || 'No watch data available — rely on check-in and train
 PROGRESSION TARGETS (from logged history):
 ${progressionTargets(history) || 'No logged sets yet.'}
 RECENT SESSIONS: ${recent || 'none logged'}
+${(() => {
+  const eq = (getAISettings().equipment || '').trim();
+  return eq ? `GYM EQUIPMENT & LIMITS (never suggest anything unavailable):\n${eq}` : '';
+})()}
 
 Offer 2-3 concrete ways to make today harder — AT MOST ONE of each kind:
 - "add": ONE new exercise that fits the ${p.sessionType || 'current'} split and the remaining time ("exercise" required, sets 2-3).
