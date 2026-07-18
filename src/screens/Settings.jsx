@@ -528,22 +528,25 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           </p>
         )}
 
-        <div className="q-label">Fallback: URL handoff (v8 shortcut)</div>
-        <p className="body" style={{ color: 'var(--muted)' }}>
-          The older method — the shortcut opens the app with the data in the
-          URL. Simpler to install, but iOS drops the handoff if the phone is
-          locked or the app is already open.
-          <br />
-          1. Delete any older "gym-checkin" copies from the Shortcuts app
-          <br />
-          2. On your iPhone, tap:{' '}
-          <a className="link" href="gym-checkin-v8.shortcut" download>
-            Install the Gym Check-in v8 shortcut
-          </a>{' '}
-          → <b>Add Shortcut</b>
-          <br />
-          3. Run it once and allow the Health access prompts (first run only)
-        </p>
+        <details style={{ marginTop: 14 }}>
+          <summary
+            className="mono"
+            style={{ fontSize: 12.5, color: 'var(--dim)', cursor: 'pointer' }}
+          >
+            Old method (v8, unreliable) — only if v10 won't install
+          </summary>
+          <p className="body" style={{ color: 'var(--muted)', marginTop: 8 }}>
+            ⚠ Don't use this if v10 works — it hands data over by opening
+            the app, and iOS silently drops that when the phone is locked
+            or the app is already open.
+            <br />
+            <a className="link" href="gym-checkin-v8.shortcut" download>
+              Install the Gym Check-in v8 shortcut
+            </a>{' '}
+            → <b>Add Shortcut</b>, then run it once and allow the Health
+            prompts.
+          </p>
+        </details>
         <p className="mono" style={{ marginTop: 10, fontSize: 12.5, color: watchReceived ? 'var(--teal)' : 'var(--dim)' }}>
           {watchReceived
             ? `⌚ Received today: ${watchReceived}`
