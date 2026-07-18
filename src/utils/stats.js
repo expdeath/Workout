@@ -281,7 +281,9 @@ export function parseHealthNumbers(text) {
     sleepH = sleepH > 0 && sleepH < 20 ? Math.round(sleepH * 10) / 10 : null;
   }
   // free-form fallbacks: "Sleep 7h 20m" · "slept 6.5 hours" · "sleep: 7:20"
-  if (sleepH === null) {
+  // — but never when the shortcut's label is present with an empty value
+  // (the fallback would misread digits from the next metric, e.g. VO2Max)
+  if (sleepH === null && !/sleep\s*hrs?:/i.test(t)) {
     const sl =
       /sle(?:ep|pt)[^\d]{0,14}(\d{1,2})(?::(\d{2})|\s*h(?:ours?|rs?)?(?:\s*(\d{1,2})\s*m)?|(\.\d+))?/i.exec(t);
     if (sl) {
