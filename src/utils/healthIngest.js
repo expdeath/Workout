@@ -88,7 +88,13 @@ export async function reparseHealthRows() {
       if (!r?.raw) continue;
       const nums = parseHealthNumbers(r.raw);
       const fill = Object.fromEntries(
-        Object.entries(nums).filter(([k, v]) => v && r[k] == null)
+        Object.entries(nums).filter(
+          ([k, v]) =>
+            v &&
+            // fill missing fields; also repair sleep rows stored before
+            // the double-source dedupe existed
+            (r[k] == null || (k === 'sleepH' && r[k] > 11))
+        )
       );
       if (Object.keys(fill).length) await mergeHealth({ date: r.date, ...fill });
     }
