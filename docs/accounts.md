@@ -38,8 +38,10 @@ yours does.
    prints it (`…/Workout/#invite=<code>`). Tapping it signs them in
    automatically; the bare code pasted into the login box also works.
    On iPhone: Share → Add to Home Screen makes it a real app.
-   A magic link tapped on an already-set-up device is ignored, so it
-   can't clobber an existing account.
+   A magic link tapped on a device already set up under a different
+   account asks "Switch to <name>?" before wiping the device and
+   signing in (Cancel leaves everything untouched); on a device
+   already on that same account it does nothing.
 
 ## Day-to-day
 

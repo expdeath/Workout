@@ -30,9 +30,9 @@ import {
   mergeHealth,
   getAllHealth,
 } from './db/db';
-import { syncNow } from './db/sync';
+import { syncNow, getSyncConfig } from './db/sync';
 
-import { needsLogin, parseInviteCode, applyAccount } from './utils/account';
+import { needsLogin, parseInviteCode, applyAccount, getAccount, wipeLocal } from './utils/account';
 
 import Login from './screens/Login';
 import Home from './screens/Home';
@@ -100,19 +100,32 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
-      // magic invite link (#invite=<code>) — auto-redeems on a fresh
-      // install so friends just tap the link. Ignored (and stripped)
-      // on a device that's already set up, so a stray tap can't
-      // overwrite an existing account.
+      // magic invite link (#invite=<code>). Fresh install → sign
+      // straight in. A device set up under a different repo asks
+      // before switching (wipes local state; anything cloud-synced is
+      // safe). Same account → just strip the hash. No reload in any
+      // path, so a browser that re-presents the original URL after
+      // navigation can't bounce us into a loop.
       try {
         const m = /[#&]invite=([A-Za-z0-9_-]+)/.exec(window.location.hash);
         if (m) {
           window.history.replaceState(null, '', window.location.pathname);
+          const acct = parseInviteCode(m[1]);
           if (needsLogin()) {
-            applyAccount(parseInviteCode(m[1]));
+            applyAccount(acct);
             logEvent('invite_redeemed', { via: 'link' });
-            window.location.reload();
-            return;
+          } else if (acct.repo !== getSyncConfig().repo) {
+            const cur = getAccount();
+            const ok = window.confirm(
+              `This device is set up as ${cur?.name || 'someone else'}. ` +
+                `Switch to ${acct.name}'s account? Anything not backed up ` +
+                'from the old setup will be cleared off this device.'
+            );
+            if (ok) {
+              await wipeLocal();
+              applyAccount(acct);
+              logEvent('invite_redeemed', { via: 'link', switched: true });
+            }
           }
         }
       } catch (e) {

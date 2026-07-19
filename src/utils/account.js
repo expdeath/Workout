@@ -58,8 +58,8 @@ export function applyAccount(acct) {
   );
 }
 
-/** Wipe this device back to the login screen (data stays in the cloud). */
-export async function signOut() {
+/** Clear every coach:* key and the local DB (cloud copies untouched). */
+export async function wipeLocal() {
   for (const k of Object.keys(localStorage)) {
     if (k.startsWith('coach:')) localStorage.removeItem(k);
   }
@@ -67,5 +67,10 @@ export async function signOut() {
     const req = indexedDB.deleteDatabase('coach-db');
     req.onsuccess = req.onerror = req.onblocked = () => resolve();
   });
+}
+
+/** Wipe this device back to the login screen (data stays in the cloud). */
+export async function signOut() {
+  await wipeLocal();
   window.location.reload();
 }
