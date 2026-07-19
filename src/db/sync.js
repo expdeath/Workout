@@ -191,6 +191,30 @@ async function pushReadme(cfg, sessions, sha) {
   }
 }
 
+// ── Beta feedback ────────────────────────────────────────────────
+// One markdown file per submission in feedback/ of the user's data
+// repo. The owner reads feedback by checking the repos he provisioned.
+// Timestamped filenames are always unique, so no sha juggling.
+
+export async function sendFeedback(text, name = '') {
+  const cfg = getSyncConfig();
+  if (!cfg.token || !cfg.repo) throw new Error('Sync is not set up.');
+  const body = String(text || '').trim();
+  if (!body) throw new Error('Write something first.');
+  const stamp = new Date().toISOString().slice(0, 16).replace(':', '');
+  const path = `feedback/${stamp}.md`;
+  const md = `# Feedback — ${name || 'user'} — ${new Date().toISOString().slice(0, 10)}\n\n${body}\n`;
+  const res = await gh(cfg, `/repos/${cfg.repo}/contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      message: `feedback: ${stamp}`,
+      content: b64encode(md),
+      branch: BRANCH,
+    }),
+  });
+  if (!res.ok) throw new Error(`Couldn't send (GitHub ${res.status}) — try again later.`);
+}
+
 // ── Health inbox ─────────────────────────────────────────────────
 // The Watch shortcut PUTs one small file per run into health-inbox/
 // (background HTTP — no browser hop, works with the phone locked).

@@ -32,6 +32,9 @@ import {
 } from './db/db';
 import { syncNow } from './db/sync';
 
+import { needsLogin } from './utils/account';
+
+import Login from './screens/Login';
 import Home from './screens/Home';
 import Progress from './screens/Progress';
 import Coach from './screens/Coach';
@@ -97,6 +100,12 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
+      // fresh install with no invite redeemed → login gate. Redeeming
+      // reloads the page, so this boot path simply stops here.
+      if (needsLogin()) {
+        setScreen('login');
+        return;
+      }
       checkHealthHash();
       try {
         pruneOldHealth();
@@ -579,6 +588,16 @@ export default function App() {
       <div className="app">
         <div className="center-fill">
           <div className="brand pulse">COACH</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === 'login') {
+    return (
+      <div className="app">
+        <div className="frame">
+          <Login />
         </div>
       </div>
     );

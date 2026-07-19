@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
-import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox } from '../db/sync';
+import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
+import { getAccount, signOut } from '../utils/account';
 import { todaysHealth } from '../utils/healthIngest';
 import { parseHealthNumbers, fmtHealthLine } from '../utils/stats';
 import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
@@ -37,8 +38,11 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
   const [dataMsg, setDataMsg] = useState('');
   const fileRef = useRef(null);
 
+  const account = getAccount();
+
   // first run (no key yet) lands here — open the coach section for them
   const [open, setOpen] = useState(() => ({
+    account: false,
     coach: !getApiKey(),
     sync: false,
     gym: false,
@@ -192,6 +196,35 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
     }
   };
 
+  // ── Beta account: feedback + sign out ──
+  const [feedback, setFeedback] = useState('');
+  const [feedbackMsg, setFeedbackMsg] = useState('');
+  const [sendingFb, setSendingFb] = useState(false);
+  const [confirmOut, setConfirmOut] = useState(false);
+
+  const handleSendFeedback = async () => {
+    setSendingFb(true);
+    setFeedbackMsg('');
+    try {
+      await sendFeedback(feedback, account?.name);
+      logEvent('feedback_sent', { chars: feedback.length });
+      setFeedback('');
+      setFeedbackMsg('✓ Sent — thank you!');
+    } catch (e) {
+      setFeedbackMsg(e.message);
+    }
+    setSendingFb(false);
+  };
+
+  const handleSignOut = () => {
+    if (!confirmOut) {
+      setConfirmOut(true);
+      return;
+    }
+    logEvent('signed_out', { name: account?.name });
+    signOut();
+  };
+
   const handleClear = () => {
     if (!confirmClear) {
       setConfirmClear(true);
@@ -221,6 +254,52 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         <div className="brand-sm">SETTINGS</div>
         <div />
       </header>
+
+      {account && (
+        <Section
+          title="Account"
+          status={`Signed in as ${account.name}`}
+          statusColor="var(--teal)"
+          open={open.account}
+          onToggle={() => toggle('account')}
+        >
+          <p className="body" style={{ marginTop: 0, color: 'var(--muted)' }}>
+            Hey {account.name} — you're on the COACH private beta. Found a bug,
+            or something felt off mid-workout? Tell Abhi here:
+          </p>
+          <textarea
+            className="input textarea"
+            style={{ marginTop: 8, minHeight: 80 }}
+            placeholder="What worked, what didn't, what you'd change…"
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value.slice(0, 2000))}
+          />
+          <button
+            className="big-btn"
+            onClick={handleSendFeedback}
+            disabled={sendingFb || !feedback.trim()}
+            style={{ marginTop: 10, padding: 12, fontSize: 14 }}
+          >
+            {sendingFb ? 'Sending…' : 'Send feedback'}
+          </button>
+          {feedbackMsg && (
+            <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
+              {feedbackMsg}
+            </p>
+          )}
+          <button
+            className="big-btn big-btn--danger"
+            style={{ marginTop: 14, padding: 12, fontSize: 14 }}
+            onClick={handleSignOut}
+          >
+            {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
+          </button>
+          <p className="body" style={{ marginTop: 6, fontSize: 12.5, color: 'var(--dim)' }}>
+            Signing out clears this device. Your training log is safe in the
+            cloud and comes back when you sign in again.
+          </p>
+        </Section>
+      )}
 
       <Section
         title="AI Coach"
