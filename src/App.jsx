@@ -32,7 +32,7 @@ import {
 } from './db/db';
 import { syncNow } from './db/sync';
 
-import { needsLogin } from './utils/account';
+import { needsLogin, parseInviteCode, applyAccount } from './utils/account';
 
 import Login from './screens/Login';
 import Home from './screens/Home';
@@ -100,6 +100,25 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
+      // magic invite link (#invite=<code>) — auto-redeems on a fresh
+      // install so friends just tap the link. Ignored (and stripped)
+      // on a device that's already set up, so a stray tap can't
+      // overwrite an existing account.
+      try {
+        const m = /[#&]invite=([A-Za-z0-9_-]+)/.exec(window.location.hash);
+        if (m) {
+          window.history.replaceState(null, '', window.location.pathname);
+          if (needsLogin()) {
+            applyAccount(parseInviteCode(m[1]));
+            logEvent('invite_redeemed', { via: 'link' });
+            window.location.reload();
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('[COACH] invite link failed', e); // → manual login box
+      }
+
       // fresh install with no invite redeemed → login gate. Redeeming
       // reloads the page, so this boot path simply stops here.
       if (needsLogin()) {

@@ -34,9 +34,12 @@ yours does.
 
    The script verifies the token against the repo before printing.
 
-4. **Send the code privately** (WhatsApp/Signal). They open
-   https://expdeath.github.io/Workout/, paste it, done. On iPhone:
-   Share → Add to Home Screen makes it a real app.
+4. **Send the magic link privately** (WhatsApp/Signal) — the script
+   prints it (`…/Workout/#invite=<code>`). Tapping it signs them in
+   automatically; the bare code pasted into the login box also works.
+   On iPhone: Share → Add to Home Screen makes it a real app.
+   A magic link tapped on an already-set-up device is ignored, so it
+   can't clobber an existing account.
 
 ## Day-to-day
 

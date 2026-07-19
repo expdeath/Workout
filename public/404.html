@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- GitHub Pages serves this for any missing path under /Workout/.
+     If the path's last segment looks like an invite code (someone
+     pasted it onto the URL instead of into the app), forward it to
+     the app as a proper #invite= magic link; otherwise just go home. -->
+<html>
+<head>
+<meta charset="utf-8">
+<title>COACH</title>
+<script>
+  var seg = location.pathname.replace(/\/+$/, '').split('/').pop() || '';
+  var app = '/Workout/';
+  location.replace(
+    /^[A-Za-z0-9_-]{40,}$/.test(seg) ? app + '#invite=' + seg : app
+  );
+</script>
+</head>
+<body style="background:#0b0b0d;color:#888;font-family:sans-serif;text-align:center;padding-top:30vh">
+  Opening COACH…
+</body>
+</html>

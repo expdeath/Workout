@@ -53,6 +53,8 @@ const code = Buffer.from(
   JSON.stringify({ v: 1, name, repo, ghToken: token, ...(gemini ? { geminiKey: gemini } : {}) })
 ).toString('base64url');
 
-console.error(`\nInvite code for ${name}${gemini ? ' (Gemini key included)' : ' (no Gemini key — they add their own in Settings)'}:\n`);
+console.error(`\nMagic link for ${name}${gemini ? ' (Gemini key included)' : ' (no Gemini key — they add their own in Settings)'} — they tap it and they're in:\n`);
+console.log(`https://expdeath.github.io/Workout/#invite=${code}`);
+console.error('\nOr the bare code (pasted into the app\'s login box):\n');
 console.log(code);
-console.error('\nSend it privately (WhatsApp/Signal) — the code IS the credential.');
+console.error('\nSend either privately (WhatsApp/Signal) — the link IS the credential.');
