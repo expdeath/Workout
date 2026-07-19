@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { parseInviteCode, applyAccount } from '../utils/account';
+import { parseInviteCode, applyAccount, wipeLocal } from '../utils/account';
 import { logEvent } from '../db/db';
 
 // First-run gate for invited users. There is deliberately no signup:
@@ -9,7 +9,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const redeem = () => {
+  const redeem = async () => {
     setError('');
     let acct;
     try {
@@ -19,6 +19,7 @@ export default function Login() {
       return;
     }
     setBusy(true);
+    await wipeLocal(); // stale local data must not ride into this account
     applyAccount(acct);
     logEvent('invite_redeemed', { name: acct.name, repo: acct.repo });
     // clean boot: pulls any existing cloud data with the new config

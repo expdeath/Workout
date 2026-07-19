@@ -112,6 +112,10 @@ export default function App() {
           window.history.replaceState(null, '', window.location.pathname);
           const acct = parseInviteCode(m[1]);
           if (needsLogin()) {
+            // even without a config, stale IndexedDB from an old
+            // install could ride into the new account on first sync —
+            // start truly clean (no-op on a genuinely fresh device)
+            await wipeLocal();
             applyAccount(acct);
             logEvent('invite_redeemed', { via: 'link' });
           } else if (acct.repo !== getSyncConfig().repo) {
