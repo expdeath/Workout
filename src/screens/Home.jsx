@@ -1,10 +1,13 @@
 import React from 'react';
 import { fmtDate } from '../utils/helpers';
 import { weekStats, deloadSignal } from '../utils/stats';
+import { getAccount } from '../utils/account';
 
 const WEEK_MS = 7 * 86400000;
 
 export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach }) {
+  // first name from the redeemed invite — absent on pre-account installs
+  const name = getAccount()?.name?.split(' ')[0];
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
@@ -40,9 +43,13 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
         </div>
         <h1 className="h1">
           {doneToday
-            ? 'Session done.'
+            ? name
+              ? `Nice work, ${name}.`
+              : 'Session done.'
             : inProgress
             ? 'Session in progress'
+            : name
+            ? `Ready when you are, ${name}.`
             : 'Ready when you are.'}
         </h1>
         <p className="subtitle">
