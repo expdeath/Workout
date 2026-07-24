@@ -21,7 +21,7 @@ import { logEvent, getAllHealth } from '../db/db.js';
 // The AI picks 4-6, keeps staples most weeks, and rotates pool picks
 // so sessions stay fresh without losing progression continuity.
 const WORKOUT_DB = `
-Exercise menu — staples anchor progression (keep them most weeks); ROTATE pool picks freely for variety. Respect equipment limits. 1-2 core finishers may be appended to any lifting day.
+Exercise menu — staples exist ONLY to anchor long-term progression tracking on a couple of numbers per split, not to be run unchanged every time. Per session, keep AT MOST 1-2 staples (whichever the athlete is actively progressing) and fill the remaining slots from that day's pool — favor picks not seen in the last 2-3 sessions of the same split. Respect equipment limits. 1-2 core finishers may be appended to any lifting day.
 
 PUSH DAY — Warm-up: 15min Stairmaster OR light warm-up sets of the first press.
 Staples:
@@ -80,7 +80,7 @@ function coachRules() {
 Don't prohibit exercises; prefer supported/machine variations when appropriate, add technique cues. Adapt to today's check-in (soreness, tightness, energy).
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
 Logged sets may carry the athlete's own effort tag — (easy) = clear room to progress, (good) = about right, (grind) = near-failure. Never add load to a lift whose last sets were grinds; treat all-easy sets as a green light for a bigger jump.
-Rotate exercises sensibly, avoid repeating identical sessions, keep the split balanced based on the history provided. Do not invent history that isn't in the log. The workout database separates STAPLES (keep most weeks — they anchor progression tracking) from a rotation POOL: swap in 1-2 pool exercises per session for freshness, and bring back ones not seen in the log lately. Occasionally append a core finisher to a lifting day when time allows.
+Rotate exercises HARD — before picking, find the most recent session of the SAME split in the TRAINING LOG and compare exercise-by-exercise: if 3+ names match, that's a repeat, not a plan. The workout database separates STAPLES (keep AT MOST 1-2 per session — only the ones you're actively tracking numeric progress on) from a rotation POOL: fill every other slot from the pool, preferring picks not used in that split's last 2-3 sessions. Never send out the exact same exercise list two sessions running for the same split. Do not invent history that isn't in the log. Occasionally append a core finisher to a lifting day when time allows.
 VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after 3+ consecutive lifting days, or when no cardio or mobility day appears in the last 7-10 days, schedule a Cardio or Stretch & Mobility day (recovery quality decides which). A Full Body mix day is a good occasional change of pace. If the check-in states a session preference, honor it — it overrides the rotation. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 }
@@ -366,8 +366,10 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
           ],
           generationConfig: {
             maxOutputTokens: 4000,
-            // steadier progression decisions — but let "surprise me" be creative
-            temperature: checkin.wish === 'surprise' ? 0.9 : 0.5,
+            // steadier progression decisions — but let "surprise me" be creative.
+            // Numeric weight suggestions stay safe regardless (capSuggestedWeight
+            // clamps them post-hoc), so this only affects exercise-selection variety.
+            temperature: checkin.wish === 'surprise' ? 0.9 : 0.65,
             responseMimeType: 'application/json',
             responseSchema: PLAN_SCHEMA,
             // "low" buys planning quality without the medium-default
