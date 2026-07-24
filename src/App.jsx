@@ -574,6 +574,7 @@ export default function App() {
     run: { sessionType: 'Run', name: 'Running' },
     cycle: { sessionType: 'Cycle', name: 'Cycling' },
     walk: { sessionType: 'Walk', name: 'Brisk walk' },
+    hike: { sessionType: 'Hike', name: 'Hike' },
   };
 
   async function logQuickCardio(kind, { time, dist, rpe }) {

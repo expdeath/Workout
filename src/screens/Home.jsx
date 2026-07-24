@@ -117,6 +117,10 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
         <button className="link-btn" onClick={() => setQuickCardio('walk')}>
           🚶 Walk
         </button>
+        <span className="links-row__dot">·</span>
+        <button className="link-btn" onClick={() => setQuickCardio('hike')}>
+          🥾 Hike
+        </button>
       </div>
 
       {quickCardio && (

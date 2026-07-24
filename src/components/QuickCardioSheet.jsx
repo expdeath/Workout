@@ -9,6 +9,7 @@ const META = {
   run: { label: 'Log a run', verb: 'run', icon: '🏃' },
   cycle: { label: 'Log a ride', verb: 'ride', icon: '🚴' },
   walk: { label: 'Log a walk', verb: 'walk', icon: '🚶' },
+  hike: { label: 'Log a hike', verb: 'hike', icon: '🥾' },
 };
 
 export default function QuickCardioSheet({ kind, onClose, onSave }) {
