@@ -1,13 +1,17 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { fmtDate } from '../utils/helpers';
 import { weekStats, deloadSignal } from '../utils/stats';
 import { getAccount } from '../utils/account';
+import QuickCardioSheet from '../components/QuickCardioSheet';
 
 const WEEK_MS = 7 * 86400000;
 
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach }) {
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach, onQuickCardio }) {
   // first name from the redeemed invite — absent on pre-account installs
   const name = getAccount()?.name?.split(' ')[0];
+  // Run / ride / walk, logged straight to history — apart from
+  // whatever the AI-generated plan is doing today
+  const [quickCardio, setQuickCardio] = useState(null); // null | 'run' | 'cycle' | 'walk'
   const last = history[history.length - 1];
   const doneToday = todayPlan && todayPlan.finished;
   const inProgress = todayPlan && !todayPlan.finished;
@@ -100,6 +104,28 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
           🗨 Ask coach
         </button>
       </div>
+
+      <div className="links-row" style={{ marginTop: 4 }}>
+        <button className="link-btn" onClick={() => setQuickCardio('run')}>
+          🏃 Run
+        </button>
+        <span className="links-row__dot">·</span>
+        <button className="link-btn" onClick={() => setQuickCardio('cycle')}>
+          🚴 Ride
+        </button>
+        <span className="links-row__dot">·</span>
+        <button className="link-btn" onClick={() => setQuickCardio('walk')}>
+          🚶 Walk
+        </button>
+      </div>
+
+      {quickCardio && (
+        <QuickCardioSheet
+          kind={quickCardio}
+          onClose={() => setQuickCardio(null)}
+          onSave={onQuickCardio}
+        />
+      )}
 
       {deload && (
         <div className="card card--animate deload-card">

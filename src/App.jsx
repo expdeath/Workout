@@ -567,6 +567,46 @@ export default function App() {
       .catch((e) => console.warn('[COACH] debrief failed', e));
   }
 
+  // ── Quick cardio log: run / ride / walk, saved straight to history ──
+  // Bypasses check-in and the AI entirely — doesn't touch today's plan
+  // (a lift session can still be started/finished the same day).
+  const QUICK_CARDIO = {
+    run: { sessionType: 'Run', name: 'Running' },
+    cycle: { sessionType: 'Cycle', name: 'Cycling' },
+    walk: { sessionType: 'Walk', name: 'Brisk walk' },
+  };
+
+  async function logQuickCardio(kind, { time, dist, rpe }) {
+    const meta = QUICK_CARDIO[kind];
+    if (!meta) return;
+    const durationMin = Math.round(Number(time)) || undefined;
+    const t = {
+      id: `${todayStr()}#${Date.now()}`,
+      date: todayStr(),
+      startedAt: Date.now(),
+      checkin: null,
+      plan: {
+        sessionType: meta.sessionType,
+        title: dist ? `${dist}km ${meta.sessionType.toLowerCase()}` : meta.sessionType,
+        reasoning: 'Logged directly from Home — not part of an AI-generated plan.',
+        recoveryScore: null,
+        estTimeMin: durationMin || 0,
+        exercises: [{ name: meta.name, sets: 1, reps: '', rest: '', rpe: rpe || '' }],
+        warmup: [],
+        cooldown: [],
+        cardio: null,
+      },
+      log: [[{ time: time || '', dist: dist || '', done: true }]],
+      finished: true,
+      fin: { rpe: Number(rpe) || 6, pain: '', feedback: '' },
+      ...(durationMin ? { durationMin } : {}),
+    };
+    setHistory((h) => [...h, t]);
+    await putSession(t);
+    logEvent('quick_cardio_logged', { kind, time, dist, rpe });
+    runSync(); // background — push it to the cloud
+  }
+
   // ── Cancel the in-progress session entirely ──
   // Today's plan lives only in the 'today' slot until Finish, so
   // discarding it never touches history or the cloud.
@@ -666,6 +706,7 @@ export default function App() {
             onHistory={() => setScreen('history')}
             onSettings={() => setScreen('settings')}
             onCoach={() => setChatOpen(true)}
+            onQuickCardio={logQuickCardio}
           />
         )}
 
