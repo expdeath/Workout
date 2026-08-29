@@ -5,7 +5,7 @@ import ReadinessBar from '../components/ReadinessBar';
 import { quickReadiness } from '../utils/helpers';
 import { storeTodaysHealth } from '../utils/healthIngest';
 
-export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
+export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onCancel, onSubmit }) {
   // Auto-open the extras when the Watch Shortcut pre-filled health data
   const [autoFilled, setAutoFilled] = useState(!!ci.health);
   const [showMore, setShowMore] = useState(!!ci.health);
@@ -109,12 +109,25 @@ export default function CheckIn({ ci, setCi, error, onCancel, onSubmit }) {
               : 'Lower back tight today?'}
           </Pill>
 
+          {muscleGap && (
+            <Pill
+              on={!!ci.prioritizeMuscle}
+              style={{ marginBottom: 0, marginTop: 10 }}
+              onClick={() => set({ prioritizeMuscle: ci.prioritizeMuscle ? '' : muscleGap.group })}
+            >
+              {ci.prioritizeMuscle
+                ? `✓ Prioritizing ${muscleGap.group} today`
+                : `${muscleGap.group} hasn't been trained in ${muscleGap.lastDaysAgo} days — add ${muscleFixTip} today?`}
+            </Pill>
+          )}
+
           <div className="q-label" style={{ marginTop: 18 }}>Today's vibe</div>
           <div className="seg-group seg-group--wrap">
             {[
               ['', "Coach's call"],
               ['lift', 'Lift'],
               ['cardio', 'Cardio'],
+              ['core', 'Core'],
               ['stretch', 'Stretch'],
               ['surprise', '🎲 Surprise me'],
             ].map(([v, l]) => (

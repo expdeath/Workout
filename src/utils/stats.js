@@ -564,6 +564,24 @@ export function muscleGapNote(history) {
   );
 }
 
+/** A couple of concrete exercises to suggest for each neglected muscle group. */
+export const MUSCLE_FIX_TIPS = {
+  Legs: 'Leg Press, Romanian Deadlift, Walking Lunges',
+  Back: 'Lat Pulldown, Chest Supported Row, Face Pull',
+  Shoulders: 'Machine Shoulder Press, Cable Lateral Raise',
+  Chest: 'Flat Dumbbell Press, Incline Machine Press',
+  Arms: 'Cable Curl, Rope Tricep Pushdown',
+  Core: 'Plank, Cable Crunch, Hanging Knee Raise',
+};
+
+/** The single most-overdue muscle group (10+ days untrained), or null. */
+export function biggestMuscleGap(history) {
+  const bal = muscleBalance(history).filter((g) => g.lastDaysAgo != null && g.lastDaysAgo >= 10);
+  if (!bal.length) return null;
+  const worst = bal.reduce((a, b) => (b.lastDaysAgo > a.lastDaysAgo ? b : a));
+  return { group: worst.group, lastDaysAgo: worst.lastDaysAgo };
+}
+
 // ── Goals ────────────────────────────────────────────────────────
 /**
  * Parse free-text goals (one per line) and measure progress.

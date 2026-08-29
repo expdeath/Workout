@@ -53,6 +53,14 @@ Cooldown: quad stretch, hamstring stretch.
 
 CORE FINISHERS (append 1-2 to any day): Plank 3x45s · Side Plank 2x30s/side · Cable Crunch 3x12-15 · Hanging Knee Raise 3x10-12 · Pallof Press 3x10/side · Dead Bug 3x10/side · Russian Twist 3x20 · Ab Wheel Rollout 3x8-10
 
+CORE DAY (standalone session) — Warm-up: 5min easy bike + cat-cow x10.
+Staples:
+- Hanging Leg Raise 3x10-12 (alt: Hanging Knee Raise, Captain's Chair Knee Raise)
+- Cable Crunch 3x12-15 (alt: Weighted Sit-Up)
+- Pallof Press 3x10/side (alt: Standing Cable Woodchop)
+Pool: Weighted Plank 3x45-60s · Side Plank 2x30-45s/side · Ab Wheel Rollout 3x8-10 · Dead Bug 3x10/side · Russian Twist 3x20 · Hollow Hold 3x20-30s · Back Extension 3x12 (anti-extension balance) · Farmer's Carry 3x40m (anti-lateral flexion)
+Cooldown: cobra stretch, seated spinal twist.
+
 ACTIVE RECOVERY — Option 1: 30min stationary bike or incline walk, zone 2.
 Option 2: 3 rounds — dead bugs x10/side, bird dog x10/side, plank 45s, side plank 30s/side, hollow hold 20-30s.
 Option 3: 20min easy swim or rowing machine + 10min stretching.
@@ -81,7 +89,7 @@ Don't prohibit exercises; prefer supported/machine variations when appropriate, 
 Progression: recommend small weight increases, extra reps, or holding, based on logged history. NEVER increase load if recovery looks poor. If returning from 1+ week break: reduce volume, avoid failure, reduce weights, expect DOMS.
 Logged sets may carry the athlete's own effort tag — (easy) = clear room to progress, (good) = about right, (grind) = near-failure. Never add load to a lift whose last sets were grinds; treat all-easy sets as a green light for a bigger jump.
 Rotate exercises HARD — before picking, find the most recent session of the SAME split in the TRAINING LOG and compare exercise-by-exercise: if 3+ names match, that's a repeat, not a plan. The workout database separates STAPLES (keep AT MOST 1-2 per session — only the ones you're actively tracking numeric progress on) from a rotation POOL: fill every other slot from the pool, preferring picks not used in that split's last 2-3 sessions. Never send out the exact same exercise list two sessions running for the same split. Do not invent history that isn't in the log. Occasionally append a core finisher to a lifting day when time allows.
-VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after 3+ consecutive lifting days, or when no cardio or mobility day appears in the last 7-10 days, schedule a Cardio or Stretch & Mobility day (recovery quality decides which). A Full Body mix day is a good occasional change of pace. If the check-in states a session preference, honor it — it overrides the rotation. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
+VARIETY: training is NOT a rigid Push/Pull/Legs loop. Read the history — after 3+ consecutive lifting days, or when no cardio or mobility day appears in the last 7-10 days, schedule a Cardio or Stretch & Mobility day (recovery quality decides which). If the MUSCLE BALANCE note flags Core as untrained 10+ days, schedule a standalone Core day from the CORE DAY block instead of just appending a finisher — it needs to compete for a rotation slot like Cardio/Stretch do, not stay an afterthought. A Full Body mix day is a good occasional change of pace. If the check-in states a session preference, honor it — it overrides the rotation. Use the LONG-TERM TRAINING SUMMARY for progression decisions and split balance; the recent TRAINING LOG shows exact numbers for the last sessions.
 Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 }
 
@@ -89,7 +97,7 @@ Be direct and analytical. No hype. State uncertainty when the data is thin.`;
 // Structure is enforced by responseSchema; this carries only what the
 // schema can't express: length limits, content rules, superset logic.
 const JSON_SPEC = `BE EXTREMELY CONCISE in every string; total response must stay under 900 tokens. Field rules:
-{"sessionType":"Push|Pull|Legs|Full Body|Cardio|Stretch & Mobility|Active Recovery|Rest Day",
+{"sessionType":"Push|Pull|Legs|Full Body|Core|Cardio|Stretch & Mobility|Active Recovery|Rest Day",
 "title":"max 6 words",
 "recoveryScore":0-100,
 "reasoning":"max 2 short sentences",
@@ -99,7 +107,7 @@ const JSON_SPEC = `BE EXTREMELY CONCISE in every string; total response must sta
 "cooldown":["max 3 items, max 6 words each"],
 "estTimeMin":number including 24min walking,
 "concerns":"max 12 words or empty"}
-Max 6 exercises. If Rest Day, exercises=[]. For Cardio, Stretch & Mobility, or Active Recovery put the circuit/intervals/stretches in exercises (sets=rounds, reps=duration or count, weight empty).
+Max 6 exercises. If Rest Day, exercises=[]. For Cardio, Stretch & Mobility, Active Recovery, or Core put the circuit/intervals/stretches/core-moves in exercises (sets=rounds, reps=duration or count, weight empty).
 Supersets: when time is tight or two accessories pair well (non-competing muscles), give BOTH exercises the same "superset" letter and place them adjacently — the athlete alternates sets and shares the rest. Never superset heavy compounds.`;
 
 // Enforced at the API level — malformed/truncated JSON can't happen
@@ -108,7 +116,7 @@ const PLAN_SCHEMA = {
   properties: {
     sessionType: {
       type: 'STRING',
-      enum: ['Push', 'Pull', 'Legs', 'Full Body', 'Cardio', 'Stretch & Mobility', 'Active Recovery', 'Rest Day'],
+      enum: ['Push', 'Pull', 'Legs', 'Full Body', 'Core', 'Cardio', 'Stretch & Mobility', 'Active Recovery', 'Rest Day'],
     },
     title: { type: 'STRING' },
     recoveryScore: { type: 'INTEGER' },
@@ -194,6 +202,7 @@ const WISH = {
   lift: 'The athlete wants to LIFT today — pick the right strength session for the split balance.',
   cardio: 'The athlete asked for a CARDIO day — build it around conditioning (bike/stairs/incline walk/intervals), no lifting session.',
   stretch: 'The athlete asked for a STRETCH & MOBILITY day — a full mobility/flexibility session, no heavy lifting.',
+  core: 'The athlete asked for a CORE day — build a standalone core session from the CORE DAY block, no other lifting.',
   surprise: 'The athlete asked you to SURPRISE them — build something genuinely different from the recent sessions (mixed circuit, superset full-body, conditioning + core, new variations). Keep it safe and equipment-realistic, but make it fun.',
 };
 
@@ -281,6 +290,7 @@ CHECK-IN:
 - Lower back tight today: ${checkin.backTight ? 'YES — adapt exercise selection' : 'no'}
 - Time available today (gym time, walking excluded): ${checkin.timeAvail} min
 ${WISH[checkin.wish] ? '- SESSION PREFERENCE (honor this): ' + WISH[checkin.wish] : ''}
+${checkin.prioritizeMuscle ? `- Athlete asked to prioritize ${checkin.prioritizeMuscle} today (untrained 10+ days) — bias exercise selection and/or session type toward this group if recovery allows.` : ''}
 ${parseFloat(checkin.bodyKg) ? `- Body weight today: ${checkin.bodyKg}kg` : ''}
 ${checkin.notes ? '- Other notes: ' + checkin.notes : ''}
 

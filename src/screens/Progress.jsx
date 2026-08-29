@@ -12,6 +12,7 @@ import {
 import { getAllHealth } from '../db/db';
 import { fmtDate } from '../utils/helpers';
 import { getAISettings } from '../utils/storage';
+import { calorieStats, latestBodyWeightKg } from '../utils/calories';
 
 const shortDate = (iso) =>
   new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {
@@ -47,6 +48,8 @@ export default function Progress({ history, onBack }) {
     () => goalProgress(history, getAISettings().goals),
     [history]
   );
+  const bodyKg = useMemo(() => latestBodyWeightKg(healthLog), [healthLog]);
+  const calories = useMemo(() => calorieStats(history, bodyKg), [history, bodyKg]);
 
   useEffect(() => {
     getAllHealth().then(setHealthLog).catch(() => {});
@@ -127,6 +130,10 @@ export default function Progress({ history, onBack }) {
             <div className="stat-tile">
               <div className="stat-tile__label">Week streak (≥3)</div>
               <div className="stat-tile__value">{streak} <span className="stat-tile__unit">wks</span></div>
+            </div>
+            <div className="stat-tile">
+              <div className="stat-tile__label">🔥 This week</div>
+              <div className="stat-tile__value">{calories.thisWeek.toLocaleString()} <span className="stat-tile__unit">kcal</span></div>
             </div>
           </div>
 

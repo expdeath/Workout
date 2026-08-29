@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fmtDate, fmtSet, setLogged } from '../utils/helpers';
 import { askCoach } from '../api/gemini';
 import { getAllHealth } from '../db/db';
+import { estimateSessionCalories, latestBodyWeightKg } from '../utils/calories';
 
 // Full view of one logged session, with a chat scoped to just it.
 // The chat is ephemeral — questions about an old session rarely
@@ -39,6 +40,8 @@ export default function HistoryDetail({ session, history, onBack }) {
     setBusy(false);
   };
 
+  const kcal = estimateSessionCalories(s, latestBodyWeightKg(healthLog));
+
   const exercises = (s.plan?.exercises || [])
     .map((ex, exI) => ({
       name: ex.name,
@@ -57,6 +60,7 @@ export default function HistoryDetail({ session, history, onBack }) {
       <div className="eyebrow">
         {fmtDate(s.date)}
         {s.durationMin ? ` · ${s.durationMin} min` : ''}
+        {kcal ? ` · ~${kcal.toLocaleString()} kcal` : ''}
       </div>
       {s.fin && (
         <div className="mono" style={{ fontSize: 13, color: 'var(--amber)', marginBottom: 14 }}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { loadKey, saveKey } from './utils/storage';
 import {
   todayStr,
@@ -10,7 +10,7 @@ import {
   setLogged,
 } from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview, generateMonthlyReport } from './api/gemini';
-import { lastWeekSummary, mondayOf, detectPRs, monthSummary } from './utils/stats';
+import { lastWeekSummary, mondayOf, detectPRs, monthSummary, biggestMuscleGap, MUSCLE_FIX_TIPS } from './utils/stats';
 import {
   ingestHealthFromUrl,
   todaysHealth,
@@ -92,7 +92,9 @@ export default function App() {
     health: '',
     bodyKg: '',
     notes: '',
+    prioritizeMuscle: '',
   });
+  const muscleGap = useMemo(() => biggestMuscleGap(history), [history]);
 
   // Finish state
   const [fin, setFin] = useState({ rpe: 7, pain: '', feedback: '' });
@@ -282,6 +284,7 @@ export default function App() {
       health,
       bodyKg: '',
       notes: '',
+      prioritizeMuscle: '',
     };
   }
 
@@ -716,6 +719,8 @@ export default function App() {
             ci={ci}
             setCi={setCi}
             error={error}
+            muscleGap={muscleGap}
+            muscleFixTip={muscleGap ? MUSCLE_FIX_TIPS[muscleGap.group] : ''}
             onCancel={() => setScreen('home')}
             onSubmit={() => generateWorkout(ci)}
           />
