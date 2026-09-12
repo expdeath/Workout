@@ -35,6 +35,20 @@
                ReferencedContainer = "container:CoachApp.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C3A81C2E1FB7670A03447636"
+               BuildableName = "CoachAppUITests.xctest"
+               BlueprintName = "CoachAppUITests"
+               ReferencedContainer = "container:CoachApp.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -61,6 +75,17 @@
                BlueprintIdentifier = "00C0FCB06CD6440C6EFAEA5F"
                BuildableName = "CoachAppTests.xctest"
                BlueprintName = "CoachAppTests"
+               ReferencedContainer = "container:CoachApp.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C3A81C2E1FB7670A03447636"
+               BuildableName = "CoachAppUITests.xctest"
+               BlueprintName = "CoachAppUITests"
                ReferencedContainer = "container:CoachApp.xcodeproj">
             </BuildableReference>
          </TestableReference>

@@ -32,7 +32,8 @@ next.
 | HealthKit | Deliberately deferred — see "Health data" below |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-57 automated tests, all passing (`CoachAppTests/`). Every "done" row
+57 unit tests (`CoachAppTests/`) and 2 UI tests (`CoachAppUITests/`),
+all passing. Every "done" row
 above was verified by building and running in the iOS Simulator here,
 not just compiling.
 
@@ -261,6 +262,10 @@ xcodebuild -scheme CoachApp \
   -destination 'platform=iOS Simulator,name=iPhone 17' build
 xcodebuild test -scheme CoachApp \
   -destination 'platform=iOS Simulator,name=iPhone 17'
+# UI tests only (CoachAppUITests — drives the real screens on a
+# DebugSeed'd install; Home → Check-in → AI error, backdated quick cardio):
+xcodebuild test -scheme CoachApp \
+  -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:CoachAppUITests
 
 # see a screen that needs a logged-in account, without typing a real
 # invite code:
