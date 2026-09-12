@@ -31,6 +31,8 @@ struct ReadinessBar: View {
             .animation(.easeOut(duration: 0.3), value: filled)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(label): \(value)")
+        .accessibilityLabel(label)
+        .accessibilityValue("\(value)")
+        .accessibilityIdentifier("readiness")
     }
 }

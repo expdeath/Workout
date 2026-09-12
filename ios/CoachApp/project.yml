@@ -51,16 +51,30 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: CoachApp
+  CoachAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CoachAppUITests
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: CoachApp
 schemes:
   CoachApp:
     build:
       targets:
         CoachApp: all
         CoachAppTests: [test]
+        CoachAppUITests: [test]
     run:
       config: Debug
     test:
       targets:
         - CoachAppTests
+        - CoachAppUITests
     archive:
       config: Release

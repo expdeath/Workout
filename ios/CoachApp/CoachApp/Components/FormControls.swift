@@ -94,6 +94,7 @@ struct ErrorBox: View {
         Text(text)
             .font(Theme.body(13.5))
             .foregroundStyle(Theme.red)
+            .accessibilityIdentifier("error")
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Theme.redBg)

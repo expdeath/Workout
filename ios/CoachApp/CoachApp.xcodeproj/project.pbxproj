@@ -21,6 +21,7 @@
 		6DD278FBA3F972D8AAB17ABA /* GitHubSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8E1F79407B95F9876CC298 /* GitHubSync.swift */; };
 		6EF49BF3A29F0F128AB99F6D /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED75075F64ADB343F03E577 /* Defaults.swift */; };
 		744CCC8BCB26D0EF64CE193C /* BarlowCondensed-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 573B7BA6D7679DC5E8B43E96 /* BarlowCondensed-Medium.ttf */; };
+		7AC782CCEF0AB65599E9CA67 /* DailyLoopUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193B1F0A99C49468BC9E65BB /* DailyLoopUITests.swift */; };
 		7ACB2ACD4CBF7562C47065DD /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B137D6123B796207E89A998D /* AppState.swift */; };
 		7B1E9BB18B8BCA0D9474B303 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E1915BFEFF962BBD6217A3C /* HomeView.swift */; };
 		7E6545C2D5E241E363CEB7C8 /* CheckInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC351811A65DE09111910C78 /* CheckInView.swift */; };
@@ -59,16 +60,25 @@
 			remoteGlobalIDString = 8AA7E75502F0CC7DD59275C9;
 			remoteInfo = CoachApp;
 		};
+		66C4E54FC8BDFB8377B17AC4 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 8AC68A0AFE522890AA04663C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 8AA7E75502F0CC7DD59275C9;
+			remoteInfo = CoachApp;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		0793944823B89E3EA693DF36 /* CoachAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CoachAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		0E1915BFEFF962BBD6217A3C /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		0ED75075F64ADB343F03E577 /* Defaults.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Defaults.swift; sourceTree = "<group>"; };
+		193B1F0A99C49468BC9E65BB /* DailyLoopUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DailyLoopUITests.swift; sourceTree = "<group>"; };
 		1B273D75988EF8DCE8FF29D1 /* CoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachApp.swift; sourceTree = "<group>"; };
 		1F1B19224C143F183F29545E /* Plan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plan.swift; sourceTree = "<group>"; };
 		27CDCA97873836F9F42756CF /* AIContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIContext.swift; sourceTree = "<group>"; };
 		37B5A5069CED84D6E719D757 /* StatsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsTests.swift; sourceTree = "<group>"; };
+		3950D5D73E62B66B54C2E8D1 /* CoachAppUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = CoachAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3D76F8B589808C9CE3ED0D39 /* Helpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Helpers.swift; sourceTree = "<group>"; };
 		3FD893E91D3C8EFCB6AE803E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		400E5A5CCB50C2E2BCB4B645 /* Checkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checkin.swift; sourceTree = "<group>"; };
@@ -144,6 +154,7 @@
 			children = (
 				404CBC204208A4A6D0C01CDF /* CoachApp.app */,
 				0793944823B89E3EA693DF36 /* CoachAppTests.xctest */,
+				3950D5D73E62B66B54C2E8D1 /* CoachAppUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -238,6 +249,7 @@
 			children = (
 				90EBB86A820F9EB01FCCBBE3 /* CoachApp */,
 				D4F0F5A79F8A5A26BEBB91D0 /* CoachAppTests */,
+				D52375A390EA11DEACB59178 /* CoachAppUITests */,
 				2F86F7C1657AE91552177D48 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -263,6 +275,14 @@
 				37B5A5069CED84D6E719D757 /* StatsTests.swift */,
 			);
 			path = CoachAppTests;
+			sourceTree = "<group>";
+		};
+		D52375A390EA11DEACB59178 /* CoachAppUITests */ = {
+			isa = PBXGroup;
+			children = (
+				193B1F0A99C49468BC9E65BB /* DailyLoopUITests.swift */,
+			);
+			path = CoachAppUITests;
 			sourceTree = "<group>";
 		};
 		EEB9D466644CB8DB3C55F465 /* Account */ = {
@@ -312,6 +332,24 @@
 			productReference = 404CBC204208A4A6D0C01CDF /* CoachApp.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C3A81C2E1FB7670A03447636 /* CoachAppUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = BB738FCC7DC9FDB9CA9050B8 /* Build configuration list for PBXNativeTarget "CoachAppUITests" */;
+			buildPhases = (
+				DF6AE1CDA5715C0A1AC3B4E8 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				4E7C5ACEBC7085FC8E4ADA77 /* PBXTargetDependency */,
+			);
+			name = CoachAppUITests;
+			packageProductDependencies = (
+			);
+			productName = CoachAppUITests;
+			productReference = 3950D5D73E62B66B54C2E8D1 /* CoachAppUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -323,6 +361,9 @@
 				TargetAttributes = {
 					8AA7E75502F0CC7DD59275C9 = {
 						ProvisioningStyle = Automatic;
+					};
+					C3A81C2E1FB7670A03447636 = {
+						TestTargetID = 8AA7E75502F0CC7DD59275C9;
 					};
 				};
 			};
@@ -342,6 +383,7 @@
 			targets = (
 				8AA7E75502F0CC7DD59275C9 /* CoachApp */,
 				00C0FCB06CD6440C6EFAEA5F /* CoachAppTests */,
+				C3A81C2E1FB7670A03447636 /* CoachAppUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -413,9 +455,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		DF6AE1CDA5715C0A1AC3B4E8 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7AC782CCEF0AB65599E9CA67 /* DailyLoopUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		4E7C5ACEBC7085FC8E4ADA77 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 8AA7E75502F0CC7DD59275C9 /* CoachApp */;
+			targetProxy = 66C4E54FC8BDFB8377B17AC4 /* PBXContainerItemProxy */;
+		};
 		DB3A61773D359E5D203D9BB4 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 8AA7E75502F0CC7DD59275C9 /* CoachApp */;
@@ -440,6 +495,25 @@
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CoachApp.app/CoachApp";
+			};
+			name = Release;
+		};
+		3A5728CDB58CB23DA9ADF8D9 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachAppUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = CoachApp;
 			};
 			name = Release;
 		};
@@ -482,6 +556,25 @@
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A3CA6C855C89EE19DA509D82 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachAppUITests;
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = CoachApp;
 			};
 			name = Debug;
 		};
@@ -649,6 +742,15 @@
 			buildConfigurations = (
 				E6D9406B9C4E5A4135D144E2 /* Debug */,
 				1908ADF88EBE7CB1445F9E46 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		BB738FCC7DC9FDB9CA9050B8 /* Build configuration list for PBXNativeTarget "CoachAppUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A3CA6C855C89EE19DA509D82 /* Debug */,
+				3A5728CDB58CB23DA9ADF8D9 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
