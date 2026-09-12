@@ -18,9 +18,10 @@ next.
 | Invite-code auth | ✅ Done, tested |
 | Visual theme (colors/fonts matching the website) | ✅ Done (Login, Home) |
 | Login screen | ✅ Done |
-| Home screen | ✅ Done |
-| CheckIn screen | ❌ Not started |
-| Generating screen | ❌ Not started |
+| Home screen | ✅ Done (quick cardio can be backdated, like the web) |
+| CheckIn screen | ✅ Done |
+| Generating screen | ✅ Done |
+| Past workout screen (`src/screens/AddPast.jsx`) | ❌ Not started |
 | Workout screen (rest timer, set logging) | ❌ Not started |
 | Finish screen | ❌ Not started |
 | History / HistoryDetail screens | ❌ Not started |
@@ -31,7 +32,7 @@ next.
 | HealthKit | Deliberately deferred — see "Health data" below |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-53 automated tests, all passing (`CoachAppTests/`). Every "done" row
+57 automated tests, all passing (`CoachAppTests/`). Every "done" row
 above was verified by building and running in the iOS Simulator here,
 not just compiling.
 
@@ -114,18 +115,16 @@ the same way `HomeView.swift` was built from `Home.jsx`.
 For each: the JS file to port, and what it needs from the app layer
 (mostly already built).
 
-### CheckIn (`src/screens/CheckIn.jsx`)
-The readiness form: energy slider, sleep/soreness segmented controls,
-back-tight toggle, time-available input, "today's vibe" (wish) picker,
-body-weight input, notes, muscle-gap nudge banner. Binds to
-`AppState.ci` (already exists). Submitting calls
-`AppState.generateWorkout(ci)` (already exists and fully wired to the
-real Gemini client) and moves to `.generating`.
+Shared form pieces for these screens already exist in
+`Components/FormControls.swift` — `QLabel`, `SegGroup`, `Pill`,
+`ErrorBox`, `.coachInput()` — each a port of the matching CSS class,
+plus `Components/ReadinessBar.swift`. Reuse them rather than restyling.
 
-### Generating (`src/screens/Generating.jsx`)
-Just a loading screen with a readiness-based message and
-`AppState.statusMsg` (already populated live by the model-fallback/
-rate-limit retry ladder in `GeminiClient.generateWorkoutPlan`). Small.
+### Past workout (`src/screens/AddPast.jsx`)
+Log a session after the fact: day picker, session type, exercises with
+per-mode set rows (`Stats.logMode`), copy-last-of-type, effort + notes.
+Needs an `AppState.addPastSession` porting `addPastSession()` in
+`src/App.jsx` (PRs vs sessions before that date, history re-sorted).
 
 ### Workout (`src/screens/Workout.jsx`) — the big one, 876 lines in JS
 Set logging (weight/reps/time/dist/effort-tap), warmup/cooldown
@@ -268,6 +267,10 @@ xcodebuild test -scheme CoachApp \
 xcrun simctl install <device-udid> <path-to>/CoachApp.app
 SIMCTL_CHILD_COACH_DEBUG_SEED=1 xcrun simctl launch <device-udid> com.expdeath.CoachApp
 xcrun simctl io <device-udid> screenshot out.png
+
+# boot straight onto a deeper screen (checkIn | generating):
+SIMCTL_CHILD_COACH_DEBUG_SEED=1 SIMCTL_CHILD_COACH_DEBUG_SCREEN=checkIn \
+  xcrun simctl launch <device-udid> com.expdeath.CoachApp
 ```
 
 Or just open `CoachApp.xcodeproj` in Xcode and hit Run — see the root
@@ -276,9 +279,8 @@ device with a free Apple ID.
 
 ## Immediate next step
 
-Build `CheckInView` next — it's the smallest missing piece that
-unblocks the full daily loop end to end (Home → CheckIn → Generating →
-Workout → Finish), since `AppState.generateWorkout` and everything
-downstream of it already works. Port `src/screens/CheckIn.jsx`
-directly, following the same pattern `HomeView.swift` used for
-`Home.jsx`.
+Build `WorkoutView` next, then `FinishView` — Home → CheckIn →
+Generating already works end to end against the real Gemini client, so
+those two close the daily loop (Workout → Finish). Port
+`src/screens/Workout.jsx` directly, following the same pattern
+`CheckInView.swift` used for `CheckIn.jsx`.

@@ -6,6 +6,16 @@ import Foundation
 /// set via `SIMCTL_CHILD_COACH_DEBUG_SEED=1 xcrun simctl launch …`.
 /// Compiled out of every non-Debug build.
 enum DebugSeed {
+    /// `COACH_DEBUG_SCREEN=checkIn|generating` boots straight onto that
+    /// screen, for screenshotting screens deeper than Home.
+    static var startScreen: Screen? {
+        switch ProcessInfo.processInfo.environment["COACH_DEBUG_SCREEN"] {
+        case "checkIn": return .checkIn
+        case "generating": return .generating
+        default: return nil
+        }
+    }
+
     static func applyIfRequested() {
         guard ProcessInfo.processInfo.environment["COACH_DEBUG_SEED"] == "1" else { return }
         Account.wipeLocal()
@@ -28,6 +38,8 @@ enum DebugSeed {
         )
         yesterday.debrief = "Good pressing volume today — chest and shoulders both moved well. Next time, add a set to incline press since reps were easy across the board."
         LocalStore.shared.upsert(session: yesterday)
+        // today's Watch row → check-in shows "Watch data loaded" with details open
+        LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), hrv: 52, rhr: 57, raw: "Sleep 7h10m · HRV 52 · RHR 57 · Steps 8400"))
     }
 }
 #endif

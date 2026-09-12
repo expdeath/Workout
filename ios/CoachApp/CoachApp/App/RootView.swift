@@ -14,6 +14,10 @@ struct RootView: View {
                 LoginView()
             case .home:
                 HomeView()
+            case .checkIn:
+                CheckInView()
+            case .generating:
+                GeneratingView()
             default:
                 ComingSoonView(screen: appState.screen)
             }

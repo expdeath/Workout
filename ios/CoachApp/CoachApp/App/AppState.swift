@@ -83,6 +83,12 @@ final class AppState {
         Task { await maybeWeeklyReview() }
         Task { await maybeMonthlyReport() }
         screen = Keychain.apiKey.isEmpty ? .settings : .home
+        #if DEBUG
+        if let s = DebugSeed.startScreen {
+            ci = buildDefaultCheckin() // what Home's "Start check-in" tap does
+            screen = s
+        }
+        #endif
     }
 
     /// Deleted sessions are already excluded — LocalStore.hardDelete
@@ -362,7 +368,9 @@ final class AppState {
 
     // MARK: - Quick cardio (bypasses check-in and the AI entirely)
 
-    func logQuickCardio(kind: String, time: String, dist: String, rpe: Int) async {
+    /// `date` backdates the log (forgot to log yesterday's run); nil = today.
+    func logQuickCardio(kind: String, time: String, dist: String, rpe: Int, date: String? = nil) async {
+        let day = date ?? Helpers.todayStr()
         let meta: (sessionType: String, name: String) = {
             switch kind {
             case "run": return ("Run", "Running")
@@ -383,15 +391,16 @@ final class AppState {
         )
         plan.recoveryScore = nil
         let t = Session(
-            id: "\(Helpers.todayStr())#\(Int(Date().timeIntervalSince1970 * 1000))",
-            date: Helpers.todayStr(), startedAt: Date().timeIntervalSince1970 * 1000,
+            id: "\(day)#\(Int(Date().timeIntervalSince1970 * 1000))",
+            date: day, startedAt: Date().timeIntervalSince1970 * 1000,
             checkin: nil, plan: plan, log: [[SetLog(done: true, time: time, dist: dist)]],
             finished: true, fin: FinishInfo(rpe: rpe > 0 ? rpe : 6),
             durationMin: durationMin
         )
-        history.append(t)
+        // may be backdated — keep history in date order
+        history = (history + [t]).sorted { ($0.date + $0.id) < ($1.date + $1.id) }
         LocalStore.shared.upsert(session: t)
-        LocalStore.shared.logEvent(type: "quick_cardio_logged", data: ["kind": .string(kind)])
+        LocalStore.shared.logEvent(type: "quick_cardio_logged", data: ["kind": .string(kind), "date": .string(day)])
         Task { await runSync() }
     }
 
