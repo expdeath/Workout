@@ -5,12 +5,13 @@ import SwiftUI
 /// entirely.
 struct QuickCardioSheet: View {
     let kind: String
-    var onSave: (_ kind: String, _ time: String, _ dist: String, _ rpe: Int) -> Void
+    var onSave: (_ kind: String, _ time: String, _ dist: String, _ rpe: Int, _ date: String) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var time = ""
     @State private var dist = ""
     @State private var rpe = 6
+    @State private var daysAgo = "0" // forgot to log it yesterday → backdate
 
     private var meta: (label: String, verb: String, icon: String) {
         switch kind {
@@ -39,6 +40,8 @@ struct QuickCardioSheet: View {
                 .font(Theme.body(13.5))
                 .foregroundStyle(Theme.muted)
 
+            SegGroup(options: [("0", "Today"), ("1", "Yesterday"), ("2", "2 days ago")], value: $daysAgo)
+
             HStack(spacing: 8) {
                 TextField("min", text: $time)
                     .keyboardType(.decimalPad)
@@ -62,7 +65,7 @@ struct QuickCardioSheet: View {
 
             Button {
                 guard canSave else { return }
-                onSave(kind, time, dist, rpe)
+                onSave(kind, time, dist, rpe, Helpers.daysAgoStr(Int(daysAgo) ?? 0))
                 dismiss()
             } label: {
                 Text("\(meta.icon) Save \(meta.verb)")
@@ -76,7 +79,7 @@ struct QuickCardioSheet: View {
         }
         .padding(16)
         .background(Theme.bgCard)
-        .presentationDetents([.height(340)])
+        .presentationDetents([.height(400)])
         .presentationDragIndicator(.hidden)
         .coachScreen()
     }

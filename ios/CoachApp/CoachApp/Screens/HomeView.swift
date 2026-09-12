@@ -41,8 +41,8 @@ struct HomeView: View {
         }
         .coachScreen()
         .sheet(item: $quickCardioKind) { kind in
-            QuickCardioSheet(kind: kind) { kind, time, dist, rpe in
-                Task { await appState.logQuickCardio(kind: kind, time: time, dist: dist, rpe: rpe) }
+            QuickCardioSheet(kind: kind) { kind, time, dist, rpe, date in
+                Task { await appState.logQuickCardio(kind: kind, time: time, dist: dist, rpe: rpe, date: date) }
             }
         }
         .onAppear { appState.maybeSyncOnForeground() }

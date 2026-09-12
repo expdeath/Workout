@@ -53,4 +53,35 @@ enum Helpers {
         guard !s.isEmpty, let n = Int(s) else { return "" }
         return String(min(n, maxReps))
     }
+
+    /// The date `n` days before todayStr(), same yyyy-MM-dd form —
+    /// ports daysAgoStr() (used to backdate quick logs).
+    static func daysAgoStr(_ n: Int) -> String {
+        let d = Calendar.current.date(byAdding: .day, value: -n, to: Date()) ?? Date()
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd"
+        f.timeZone = .current
+        return f.string(from: d)
+    }
+
+    /// Client-side readiness estimate shown before the AI answers —
+    /// ports quickReadiness() in helpers.js.
+    static func quickReadiness(_ c: Checkin) -> Int {
+        var s = 50
+        s += (c.energy - 5) * 5
+        switch c.sleep {
+        case "Great": s += 15
+        case "OK": s += 5
+        case "Poor": s -= 15
+        default: break
+        }
+        switch c.soreness {
+        case "None": s += 10
+        case "Light": s -= 5
+        case "Very sore": s -= 20
+        default: break
+        }
+        if c.backTight { s -= 8 }
+        return max(5, min(98, s))
+    }
 }
