@@ -79,12 +79,14 @@ function withStore(storeName, mode, fn) {
 
 // ── Sessions ─────────────────────────────────────────────────────
 
-export async function getAllSessions() {
-  const rows = await withStore('sessions', 'readonly', (s) => s.getAll());
-  // chronological: by date, then by id (ids embed creation time)
-  return (rows || []).sort((a, b) =>
+// chronological: by date, then by id (ids embed creation time)
+export const sortSessions = (rows) =>
+  [...(rows || [])].sort((a, b) =>
     (a.date + sessionId(a)).localeCompare(b.date + sessionId(b))
   );
+
+export async function getAllSessions() {
+  return sortSessions(await withStore('sessions', 'readonly', (s) => s.getAll()));
 }
 
 export function putSession(session) {

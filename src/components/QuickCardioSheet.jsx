@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ActionSheet from './ActionSheet';
-import { cleanTime, cleanDist } from '../utils/helpers';
+import Seg from './Seg';
+import { cleanTime, cleanDist, daysAgoStr } from '../utils/helpers';
 
 // Bypasses check-in + AI entirely: a run/ride/walk logged straight to
 // history in a few taps, from Home. Kept separate from the generated
@@ -17,11 +18,12 @@ export default function QuickCardioSheet({ kind, onClose, onSave }) {
   const [time, setTime] = useState('');
   const [dist, setDist] = useState('');
   const [rpe, setRpe] = useState(6);
+  const [daysAgo, setDaysAgo] = useState('0'); // forgot to log it yesterday → backdate
   const canSave = !!(time || dist);
 
   const save = () => {
     if (!canSave) return;
-    onSave(kind, { time, dist, rpe });
+    onSave(kind, { time, dist, rpe, date: daysAgoStr(Number(daysAgo)) });
     onClose();
   };
 
@@ -30,6 +32,17 @@ export default function QuickCardioSheet({ kind, onClose, onSave }) {
       <p className="action-sheet__note">
         Saved straight to your log — no check-in, no AI plan.
       </p>
+      <div style={{ marginTop: 14 }}>
+        <Seg
+          options={[
+            ['0', 'Today'],
+            ['1', 'Yesterday'],
+            ['2', '2 days ago'],
+          ]}
+          value={daysAgo}
+          onChange={setDaysAgo}
+        />
+      </div>
       <div className="set-row" style={{ marginTop: 14 }}>
         <input
           className="set-input"

@@ -6,7 +6,7 @@ import QuickCardioSheet from '../components/QuickCardioSheet';
 
 const WEEK_MS = 7 * 86400000;
 
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach, onQuickCardio }) {
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach, onQuickCardio, onAddPast }) {
   // first name from the redeemed invite — absent on pre-account installs
   const name = getAccount()?.name?.split(' ')[0];
   // Run / ride / walk, logged straight to history — apart from
@@ -120,6 +120,12 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
         <span className="links-row__dot">·</span>
         <button className="link-btn" onClick={() => setQuickCardio('hike')}>
           🥾 Hike
+        </button>
+      </div>
+
+      <div className="links-row" style={{ marginTop: 4 }}>
+        <button className="link-btn" onClick={onAddPast}>
+          ＋ Log a past workout
         </button>
       </div>
 

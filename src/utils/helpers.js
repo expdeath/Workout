@@ -87,6 +87,13 @@ export function plateBreakdown(target, barKg = DEFAULT_BAR_KG, plates = DEFAULT_
 
 export const todayStr = () => new Date().toISOString().slice(0, 10);
 
+/** The date `n` days before todayStr(), same YYYY-MM-DD form. */
+export function daysAgoStr(n) {
+  const d = new Date(todayStr() + 'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 export const fmtDate = (iso) =>
   new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {
     weekday: 'short',

@@ -22,6 +22,7 @@ import {
 import { getApiKey } from './utils/storage';
 import {
   getAllSessions,
+  sortSessions,
   putSession,
   clearSessions,
   hardDeleteSession,
@@ -44,6 +45,7 @@ import Workout from './screens/Workout';
 import Finish from './screens/Finish';
 import History from './screens/History';
 import HistoryDetail from './screens/HistoryDetail';
+import AddPast from './screens/AddPast';
 import Records from './screens/Records';
 import Settings from './screens/Settings';
 
@@ -580,13 +582,14 @@ export default function App() {
     hike: { sessionType: 'Hike', name: 'Hike' },
   };
 
-  async function logQuickCardio(kind, { time, dist, rpe }) {
+  async function logQuickCardio(kind, { time, dist, rpe, date }) {
     const meta = QUICK_CARDIO[kind];
     if (!meta) return;
+    const day = date || todayStr();
     const durationMin = Math.round(Number(time)) || undefined;
     const t = {
-      id: `${todayStr()}#${Date.now()}`,
-      date: todayStr(),
+      id: `${day}#${Date.now()}`,
+      date: day,
       startedAt: Date.now(),
       checkin: null,
       plan: {
@@ -605,9 +608,50 @@ export default function App() {
       fin: { rpe: Number(rpe) || 6, pain: '', feedback: '' },
       ...(durationMin ? { durationMin } : {}),
     };
-    setHistory((h) => [...h, t]);
+    setHistory((h) => sortSessions([...h, t])); // may be backdated
     await putSession(t);
-    logEvent('quick_cardio_logged', { kind, time, dist, rpe });
+    logEvent('quick_cardio_logged', { kind, time, dist, rpe, date: day });
+    runSync(); // background — push it to the cloud
+  }
+
+  // ── Past workout: typed in after the fact for an earlier day ──
+  // Like quick cardio, no check-in or AI — a finished session dated
+  // the day it happened, slotted into history in date order.
+  async function addPastSession({ date, sessionType, exercises, log, durationMin, rpe, feedback }) {
+    const t = {
+      id: `${date}#${Date.now()}`,
+      date,
+      checkin: null,
+      plan: {
+        sessionType,
+        title: sessionType,
+        reasoning: 'Added afterwards from the Log — not part of an AI-generated plan.',
+        recoveryScore: null,
+        estTimeMin: durationMin || 0,
+        exercises,
+        warmup: [],
+        cooldown: [],
+        cardio: null,
+      },
+      log,
+      finished: true,
+      backfilled: true,
+      fin: { rpe, pain: '', feedback },
+      ...(durationMin ? { durationMin } : {}),
+    };
+    // records vs what was logged before that day
+    const prs = detectPRs(t, history.filter((h) => h.date < date));
+    if (prs.length) t.prs = prs;
+    setHistory((h) => sortSessions([...h, t]));
+    await putSession(t);
+    logEvent('past_session_added', {
+      date,
+      sessionType,
+      exercises: exercises.length,
+      setsDone: log.flat().length,
+      prs: prs.length,
+    });
+    setScreen('history');
     runSync(); // background — push it to the cloud
   }
 
@@ -711,6 +755,15 @@ export default function App() {
             onSettings={() => setScreen('settings')}
             onCoach={() => setChatOpen(true)}
             onQuickCardio={logQuickCardio}
+            onAddPast={() => setScreen('addPast')}
+          />
+        )}
+
+        {screen === 'addPast' && (
+          <AddPast
+            history={history}
+            onCancel={() => setScreen('history')}
+            onSave={addPastSession}
           />
         )}
 
@@ -774,6 +827,7 @@ export default function App() {
             onBack={() => setScreen('home')}
             onDelete={deleteSession}
             onUpdate={updateSession}
+            onAddPast={() => setScreen('addPast')}
             onOpen={(s) => {
               setDetailId(sid(s));
               setScreen('historyDetail');

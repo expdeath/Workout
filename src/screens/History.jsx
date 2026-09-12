@@ -5,7 +5,7 @@ import { logMode } from '../utils/stats';
 
 const sid = (s) => s.id || s.date;
 
-export default function History({ history, onBack, onDelete, onUpdate, onOpen }) {
+export default function History({ history, onBack, onDelete, onUpdate, onOpen, onAddPast }) {
   // every session in the DB, newest first
   const rev = [...history].reverse();
   // per-session ⋯ menu as a bottom sheet: null | { id, mode: 'menu' | 'delete' }
@@ -44,7 +44,7 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen })
       <header className="header">
         <button className="ghost-btn" onClick={onBack}>Home</button>
         <div className="brand-sm">LOG</div>
-        <div />
+        <button className="ghost-btn" onClick={onAddPast}>+ Past</button>
       </header>
 
       {rev.length === 0 && (
