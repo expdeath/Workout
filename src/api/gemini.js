@@ -330,13 +330,17 @@ ${(getAISettings().routine || '').trim() || WORKOUT_DB}`;
 }
 
 // Models to try in order — if one is overloaded, try the next.
-// 3.5 Flash is the strongest free-tier model (mid-2026); the lite
-// and 2.5 fallbacks have higher rate limits if it's busy.
+// 3.5 Flash is the primary; the lite fallback has higher rate limits if
+// it's busy. 2.5 Flash was dropped — Google now 404s it for new API keys.
 const MODELS = [
   'gemini-3.5-flash',
   'gemini-3.1-flash-lite',
-  'gemini-2.5-flash',
+  'gemini-3.6-flash',
 ];
+
+// 3.5+ Flash models take thinkingLevel; the default (medium) burns tokens
+// and used to truncate responses.
+const supportsThinkingLevel = (model) => /^gemini-3\.[5-9]-flash$/.test(model);
 
 /**
  * Call Google Gemini API to generate a workout plan.
@@ -384,7 +388,7 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
             responseSchema: PLAN_SCHEMA,
             // "low" buys planning quality without the medium-default
             // token burn that used to truncate responses
-            ...(model.startsWith('gemini-3.5')
+            ...(supportsThinkingLevel(model)
               ? { thinkingConfig: { thinkingLevel: 'low' } }
               : {}),
           },
@@ -522,7 +526,7 @@ async function callGeminiText(userMsg, maxTokens, eventType) {
             generationConfig: {
               maxOutputTokens: maxTokens + 1000, // headroom for thinking models
               temperature: 0.6,
-              ...(model.startsWith('gemini-3.5')
+              ...(supportsThinkingLevel(model)
                 ? { thinkingConfig: { thinkingLevel: 'minimal' } }
                 : {}),
             },
@@ -608,7 +612,7 @@ CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.
             generationConfig: {
               maxOutputTokens: 1500,
               temperature: 0.6,
-              ...(model.startsWith('gemini-3.5')
+              ...(supportsThinkingLevel(model)
                 ? { thinkingConfig: { thinkingLevel: 'minimal' } }
                 : {}),
             },
@@ -756,7 +760,7 @@ Keep "why" under 10 words. Anchor any suggestedWeight on the logged history — 
               temperature: 0.5,
               responseMimeType: 'application/json',
               responseSchema: INTENSIFY_SCHEMA,
-              ...(model.startsWith('gemini-3.5')
+              ...(supportsThinkingLevel(model)
                 ? { thinkingConfig: { thinkingLevel: 'low' } }
                 : {}),
             },
@@ -878,6 +882,9 @@ ${s.weightStart && s.weightEnd ? `Bodyweight: ${s.weightStart} → ${s.weightEnd
  */
 export async function generateWorkoutPlan(checkin, history, onStatus) {
   const healthLog = await getAllHealth().catch(() => []);
+  // Errors from models we fell back past — surfaced with the final error so
+  // a failing fallback (e.g. a retired model's 404) can't hide the real cause.
+  const failures = [];
   // Try each model in order — fallback on overload/503
   for (let mi = 0; mi < MODELS.length; mi++) {
     const model = MODELS[mi];
@@ -887,6 +894,7 @@ export async function generateWorkoutPlan(checkin, history, onStatus) {
     } catch (err) {
       // Model overloaded — try next model
       if (err.overloaded && mi < MODELS.length - 1) {
+        failures.push(`${model}: overloaded`);
         console.warn(`[COACH] ${model} overloaded, trying next model`);
         if (onStatus) onStatus(`${model} is busy — switching model…`);
         await sleep(1000);
@@ -915,10 +923,14 @@ export async function generateWorkoutPlan(checkin, history, onStatus) {
 
       // Other errors — try next model on first failure
       if (mi < MODELS.length - 1) {
+        failures.push(`${model}: ${err.message}`);
         console.warn(`[COACH] ${model} failed, trying next`, err);
         continue;
       }
 
+      if (failures.length) {
+        throw new Error(`${model}: ${err.message}\n\nEarlier attempts — ${failures.join(' · ')}`);
+      }
       throw err;
     }
   }

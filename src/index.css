@@ -1495,6 +1495,7 @@ a:hover {
   background: var(--red-bg);
   border: 1px solid var(--red);
   color: var(--red);
+  white-space: pre-line;
 }
 
 /* ── Generating screen ──────────────────────────────────────────── */
