@@ -32,7 +32,13 @@ enum Gemini {
     }
 
     // Models to try in order — if one is overloaded, try the next.
-    private static let models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"]
+    // 2.5 Flash was dropped — Google now 404s it for new API keys.
+    private static let models = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-3.6-flash"]
+
+    // 3.5+ Flash models take thinkingLevel; the default burns tokens and truncates.
+    private static func supportsThinkingLevel(_ model: String) -> Bool {
+        model.range(of: #"^gemini-3\.[5-9]-flash$"#, options: .regularExpression) != nil
+    }
 
     // MARK: - Workout database (menu, not a script)
 
@@ -448,7 +454,7 @@ enum Gemini {
             "responseMimeType": "application/json",
             "responseSchema": planSchema,
         ]
-        if model.hasPrefix("gemini-3.5") { config["thinkingConfig"] = ["thinkingLevel": "low"] }
+        if supportsThinkingLevel(model) { config["thinkingConfig"] = ["thinkingLevel": "low"] }
 
         do {
             let (text, _, _) = try await post(
@@ -470,7 +476,7 @@ enum Gemini {
         var lastErr: Error = GeminiError.message("no models tried")
         for model in models.prefix(2) {
             var config: [String: Any] = ["maxOutputTokens": maxTokens + 1000, "temperature": 0.6]
-            if model.hasPrefix("gemini-3.5") { config["thinkingConfig"] = ["thinkingLevel": "minimal"] }
+            if supportsThinkingLevel(model) { config["thinkingConfig"] = ["thinkingLevel": "minimal"] }
             do {
                 let (text, _, _) = try await post(
                     model: model, systemInstruction: coachRules(),
@@ -531,7 +537,7 @@ enum Gemini {
         var lastErr: Error = GeminiError.message("no models tried")
         for model in models.prefix(2) {
             var config: [String: Any] = ["maxOutputTokens": 1500, "temperature": 0.6]
-            if model.hasPrefix("gemini-3.5") { config["thinkingConfig"] = ["thinkingLevel": "minimal"] }
+            if supportsThinkingLevel(model) { config["thinkingConfig"] = ["thinkingLevel": "minimal"] }
             do {
                 let (text, _, _) = try await post(model: model, systemInstruction: system, contents: contents, generationConfig: config, timeout: 25)
                 LocalStore.shared.logEvent(type: "coach_chat", data: ["model": .string(model), "chars": .number(Double(text.count))])
@@ -622,7 +628,7 @@ enum Gemini {
         var lastErr: Error = GeminiError.message("no models tried")
         for model in models.prefix(2) {
             var config: [String: Any] = ["maxOutputTokens": 2000, "temperature": 0.5, "responseMimeType": "application/json", "responseSchema": intensifySchema]
-            if model.hasPrefix("gemini-3.5") { config["thinkingConfig"] = ["thinkingLevel": "low"] }
+            if supportsThinkingLevel(model) { config["thinkingConfig"] = ["thinkingLevel": "low"] }
             do {
                 let (text, _, _) = try await post(model: model, systemInstruction: coachRules(), contents: [["role": "user", "parts": [["text": userMsg]]]], generationConfig: config, timeout: 25)
                 guard let data = text.data(using: .utf8), let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -718,12 +724,16 @@ enum Gemini {
 
     static func generateWorkoutPlan(checkin: Checkin, history: [Session], onStatus: ((String) -> Void)? = nil) async throws -> Plan {
         let healthLog = LocalStore.shared.backup.health
+        // Errors from models we fell back past — surfaced with the final error so
+        // a failing fallback (e.g. a retired model's 404) can't hide the real cause.
+        var failures: [String] = []
         for (mi, model) in models.enumerated() {
             do {
                 if mi > 0 { onStatus?("Trying \(model)…") }
                 return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog)
             } catch let error as GeminiError {
                 if case .overloaded = error, mi < models.count - 1 {
+                    failures.append("\(model): overloaded")
                     onStatus?("\(model) is busy — switching model…")
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                     continue
@@ -741,7 +751,14 @@ enum Gemini {
                         throw retryErr
                     }
                 }
-                if mi < models.count - 1 { continue }
+                let message = error.errorDescription ?? "\(error)"
+                if mi < models.count - 1 {
+                    failures.append("\(model): \(message)")
+                    continue
+                }
+                if !failures.isEmpty {
+                    throw GeminiError.message("\(model): \(message)\n\nEarlier attempts — \(failures.joined(separator: " · "))")
+                }
                 throw error
             }
         }
