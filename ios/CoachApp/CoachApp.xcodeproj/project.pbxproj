@@ -40,6 +40,7 @@
 		A989565DFDAB9AD66CF14E81 /* Backup.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6169C0C54EB8C9F04136D0 /* Backup.swift */; };
 		B151982805CDED44361EFF3F /* Event.swift in Sources */ = {isa = PBXBuildFile; fileRef = E539CAF9F9200CB0231AFB6D /* Event.swift */; };
 		B51FE8EE2605AA822E51254D /* GeneratingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C62D9115D416D86EAE653A8 /* GeneratingView.swift */; };
+		BA9BB5DD39275A0CB1CE917A /* FirestoreCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */; };
 		BAEC965C87D02BF5564316EA /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D3D991679FD15919611154 /* JSONValue.swift */; };
 		BCA2BD30CF905A27369CD5A7 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6257AD445F2A36F3F4C5A4D /* FormControls.swift */; };
 		BDC1C8D6FD478430CCC37975 /* QuickCardioSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E436E447EEC7792B59BB42DC /* QuickCardioSheet.swift */; };
@@ -105,6 +106,7 @@
 		969A3682A2C9753F57C08238 /* GeminiClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiClientTests.swift; sourceTree = "<group>"; };
 		98E442381BD61F67FD1B99C3 /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
 		99D3D991679FD15919611154 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreCodecTests.swift; sourceTree = "<group>"; };
 		A4857B65C34E9E4650D2DA9A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AC351811A65DE09111910C78 /* CheckInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInView.swift; sourceTree = "<group>"; };
 		AD06ADFE4533607E7A21B6A3 /* RawPreserving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawPreserving.swift; sourceTree = "<group>"; };
@@ -293,6 +295,7 @@
 		D4F0F5A79F8A5A26BEBB91D0 /* CoachAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */,
 				969A3682A2C9753F57C08238 /* GeminiClientTests.swift */,
 				C0F2D03D9C91E568C8F16E21 /* GitHubSyncTests.swift */,
 				CB9C1D4F979D40652BBF1211 /* HelpersTests.swift */,
@@ -443,6 +446,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BA9BB5DD39275A0CB1CE917A /* FirestoreCodecTests.swift in Sources */,
 				08A6085FD3B53DC52BFA2F4D /* GeminiClientTests.swift in Sources */,
 				4FB215E244426BB20D24276A /* GitHubSyncTests.swift in Sources */,
 				D793EEAFC8A8AE5BAB0E4EC4 /* HelpersTests.swift in Sources */,
