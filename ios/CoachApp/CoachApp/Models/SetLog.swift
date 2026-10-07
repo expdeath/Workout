@@ -25,12 +25,12 @@ struct SetLog: Codable, Equatable {
     /// properties get that for free); it throws instead.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        weight = try c.decodeIfPresent(String.self, forKey: .weight) ?? ""
-        reps = try c.decodeIfPresent(String.self, forKey: .reps) ?? ""
-        done = try c.decodeIfPresent(Bool.self, forKey: .done) ?? false
-        time = try c.decodeIfPresent(String.self, forKey: .time) ?? ""
-        dist = try c.decodeIfPresent(String.self, forKey: .dist) ?? ""
-        effort = try c.decodeIfPresent(String.self, forKey: .effort) ?? ""
+        weight = c.lenientString(.weight) ?? ""
+        reps = c.lenientString(.reps) ?? ""
+        done = c.lenientBool(.done) ?? false
+        time = c.lenientString(.time) ?? ""
+        dist = c.lenientString(.dist) ?? ""
+        effort = c.lenientString(.effort) ?? ""
     }
 
     /// Mirrors setLogged() in src/utils/helpers.js: a set counts once

@@ -80,14 +80,7 @@ final class LocalStore {
     func mergeHealth(_ patch: HealthRow) {
         if let i = backup.health.firstIndex(where: { $0.date == patch.date }) {
             var existing = backup.health[i]
-            if let v = patch.hrv { existing.hrv = v }
-            if let v = patch.rhr { existing.rhr = v }
-            if let v = patch.steps { existing.steps = v }
-            if let v = patch.sleepH { existing.sleepH = v }
-            if let v = patch.weightKg { existing.weightKg = v }
-            if let v = patch.respRate { existing.respRate = v }
-            if let v = patch.wristC { existing.wristC = v }
-            if let v = patch.vo2max { existing.vo2max = v }
+            for k in HealthRow.metricKeys { if let v = patch[keyPath: k] { existing[keyPath: k] = v } }
             if let v = patch.raw { existing.raw = v }
             existing.receivedAt = patch.receivedAt ?? Date().timeIntervalSince1970 * 1000
             backup.health[i] = existing

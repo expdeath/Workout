@@ -13,8 +13,11 @@ struct DeletedId: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        id = try c.decode(String.self, forKey: .id)
-        at = try c.decodeIfPresent(Double.self, forKey: .at) ?? 0
+        guard let id = c.lenientString(.id) else {
+            throw DecodingError.dataCorruptedError(forKey: .id, in: c, debugDescription: "deletion marker without an id")
+        }
+        self.id = id
+        at = c.lenientDouble(.at) ?? 0
     }
 }
 
@@ -31,6 +34,21 @@ struct Backup: Codable, Equatable {
     var health: [HealthRow] = []
     var sessions: [Session] = []
     var events: [Event] = []
+    /// Rows that didn't fit the models above, kept verbatim (and written
+    /// back out) so a malformed row is never silently dropped — see
+    /// LossyArray in RawPreserving.swift.
+    var unparsed: Unparsed = Unparsed()
+
+    struct Unparsed: Equatable {
+        var health: [JSONValue] = []
+        var sessions: [JSONValue] = []
+        var events: [JSONValue] = []
+        var isEmpty: Bool { health.isEmpty && sessions.isEmpty && events.isEmpty }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case app, version, aiSettings, deletedIds, health, sessions, events
+    }
 
     init(app: String = "coach", version: Int = 4, aiSettings: AISettings = AISettings(), deletedIds: [DeletedId] = [], health: [HealthRow] = [], sessions: [Session] = [], events: [Event] = []) {
         self.app = app; self.version = version; self.aiSettings = aiSettings
@@ -38,16 +56,31 @@ struct Backup: Codable, Equatable {
     }
 
     /// A very old repo's backup file can predate a field entirely (the
-    /// `health` store, `deletedIds`, ...) — decodeIfPresent everywhere
-    /// so an old backup still loads instead of failing sync outright.
+    /// `health` store, `deletedIds`, ...) — every field is optional, and
+    /// a row that doesn't decode is kept aside instead of failing sync.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        app = try c.decodeIfPresent(String.self, forKey: .app) ?? "coach"
-        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
-        aiSettings = try c.decodeIfPresent(AISettings.self, forKey: .aiSettings) ?? AISettings()
-        deletedIds = try c.decodeIfPresent([DeletedId].self, forKey: .deletedIds) ?? []
-        health = try c.decodeIfPresent([HealthRow].self, forKey: .health) ?? []
-        sessions = try c.decodeIfPresent([Session].self, forKey: .sessions) ?? []
-        events = try c.decodeIfPresent([Event].self, forKey: .events) ?? []
+        app = c.lenientString(.app) ?? "coach"
+        version = c.lenientInt(.version) ?? 1
+        aiSettings = c.lenient(AISettings.self, .aiSettings) ?? AISettings()
+        deletedIds = (c.lenient(LossyArray<DeletedId>.self, .deletedIds)?.items) ?? []
+        let h = c.lenient(LossyArray<HealthRow>.self, .health)
+        let s = c.lenient(LossyArray<Session>.self, .sessions)
+        let e = c.lenient(LossyArray<Event>.self, .events)
+        health = h?.items ?? []
+        sessions = s?.items ?? []
+        events = e?.items ?? []
+        unparsed = Unparsed(health: h?.unparsed ?? [], sessions: s?.unparsed ?? [], events: e?.unparsed ?? [])
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(app, forKey: .app)
+        try c.encode(version, forKey: .version)
+        try c.encode(aiSettings, forKey: .aiSettings)
+        try c.encode(deletedIds, forKey: .deletedIds)
+        try c.encode(health.map { try JSONValue.encoding($0) } + unparsed.health, forKey: .health)
+        try c.encode(sessions.map { try JSONValue.encoding($0) } + unparsed.sessions, forKey: .sessions)
+        try c.encode(events.map { try JSONValue.encoding($0) } + unparsed.events, forKey: .events)
     }
 }

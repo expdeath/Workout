@@ -28,17 +28,17 @@ struct Checkin: Codable, Equatable {
     /// non-Optional field here needs a decodeIfPresent fallback.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        energy = try c.decodeIfPresent(Int.self, forKey: .energy) ?? 7
-        sleep = try c.decodeIfPresent(String.self, forKey: .sleep) ?? "OK"
-        soreness = try c.decodeIfPresent(String.self, forKey: .soreness) ?? "None"
-        soreAreas = try c.decodeIfPresent(String.self, forKey: .soreAreas) ?? ""
-        backTight = try c.decodeIfPresent(Bool.self, forKey: .backTight) ?? false
-        timeAvail = try c.decodeIfPresent(String.self, forKey: .timeAvail) ?? "60"
-        wish = try c.decodeIfPresent(String.self, forKey: .wish) ?? ""
-        health = try c.decodeIfPresent(String.self, forKey: .health)
-        bodyKg = try c.decodeIfPresent(String.self, forKey: .bodyKg) ?? ""
-        notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
-        prioritizeMuscle = try c.decodeIfPresent(String.self, forKey: .prioritizeMuscle) ?? ""
+        energy = c.lenientInt(.energy) ?? 7
+        sleep = c.lenientString(.sleep) ?? "OK"
+        soreness = c.lenientString(.soreness) ?? "None"
+        soreAreas = c.lenientString(.soreAreas) ?? ""
+        backTight = c.lenientBool(.backTight) ?? false
+        timeAvail = c.lenientString(.timeAvail) ?? "60"
+        wish = c.lenientString(.wish) ?? ""
+        health = c.lenientString(.health)
+        bodyKg = c.lenientString(.bodyKg) ?? ""
+        notes = c.lenientString(.notes) ?? ""
+        prioritizeMuscle = c.lenientString(.prioritizeMuscle) ?? ""
     }
 }
 
@@ -54,9 +54,9 @@ struct FinishInfo: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        rpe = try c.decodeIfPresent(Int.self, forKey: .rpe) ?? 7
-        pain = try c.decodeIfPresent(String.self, forKey: .pain) ?? ""
-        feedback = try c.decodeIfPresent(String.self, forKey: .feedback) ?? ""
+        rpe = c.lenientInt(.rpe) ?? 7
+        pain = c.lenientString(.pain) ?? ""
+        feedback = c.lenientString(.feedback) ?? ""
     }
 }
 
@@ -76,9 +76,9 @@ struct PRRecord: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
-        kind = try c.decodeIfPresent(String.self, forKey: .kind) ?? ""
-        from = try c.decodeIfPresent(Double.self, forKey: .from) ?? 0
-        to = try c.decodeIfPresent(Double.self, forKey: .to) ?? 0
+        name = c.lenientString(.name) ?? ""
+        kind = c.lenientString(.kind) ?? ""
+        from = c.lenientDouble(.from) ?? 0
+        to = c.lenientDouble(.to) ?? 0
     }
 }

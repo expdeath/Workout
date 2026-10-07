@@ -413,7 +413,7 @@ enum Gemini {
 
         if let end = s.lastIndex(of: "}") {
             let clean = String(s[...end])
-            if let data = clean.data(using: .utf8), let plan = try? JSONDecoder().decode(Plan.self, from: data) {
+            if let data = clean.data(using: .utf8), let plan = try? Plan.fromAI(data) {
                 return plan
             }
         }
@@ -440,7 +440,7 @@ enum Gemini {
         while out.hasSuffix(",") || out.hasSuffix(", ") { out = String(out.dropLast()) }
         while let last = stack.popLast() { out.append(last) }
         guard let data = out.data(using: .utf8) else { throw GeminiError.message("could not repair JSON") }
-        return try JSONDecoder().decode(Plan.self, from: data)
+        return try Plan.fromAI(data)
     }
 
     private static func callGemini(checkin: Checkin, history: [Session], model: String, healthLog: [HealthRow]) async throws -> Plan {

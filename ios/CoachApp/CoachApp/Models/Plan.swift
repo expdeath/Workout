@@ -38,15 +38,15 @@ struct Plan: Codable, Equatable {
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
-            sets = try c.decodeIfPresent(Int.self, forKey: .sets) ?? 3
-            reps = try c.decodeIfPresent(String.self, forKey: .reps) ?? ""
-            rpe = try c.decodeIfPresent(String.self, forKey: .rpe) ?? ""
-            rest = try c.decodeIfPresent(String.self, forKey: .rest) ?? ""
-            notes = try c.decodeIfPresent(String.self, forKey: .notes) ?? ""
-            alt = try c.decodeIfPresent(String.self, forKey: .alt) ?? ""
-            suggestedWeight = try c.decodeIfPresent(String.self, forKey: .suggestedWeight) ?? ""
-            superset = try c.decodeIfPresent(String.self, forKey: .superset) ?? ""
+            name = c.lenientString(.name) ?? ""
+            sets = c.lenientInt(.sets) ?? 3
+            reps = c.lenientString(.reps) ?? ""
+            rpe = c.lenientString(.rpe) ?? ""
+            rest = c.lenientString(.rest) ?? ""
+            notes = c.lenientString(.notes) ?? ""
+            alt = c.lenientString(.alt) ?? ""
+            suggestedWeight = c.lenientString(.suggestedWeight) ?? ""
+            superset = c.lenientString(.superset) ?? ""
         }
     }
 
@@ -60,8 +60,8 @@ struct Plan: Codable, Equatable {
 
         init(from decoder: Decoder) throws {
             let c = try decoder.container(keyedBy: CodingKeys.self)
-            desc = try c.decodeIfPresent(String.self, forKey: .desc) ?? ""
-            duration = try c.decodeIfPresent(String.self, forKey: .duration) ?? ""
+            desc = c.lenientString(.desc) ?? ""
+            duration = c.lenientString(.duration) ?? ""
         }
     }
 
@@ -71,31 +71,40 @@ struct Plan: Codable, Equatable {
         self.cardio = cardio; self.cooldown = cooldown; self.estTimeMin = estTimeMin; self.concerns = concerns
     }
 
-    /// Mirrors validatePlan() in src/utils/parser.js: fills sensible
-    /// defaults and clamps, so a technically-valid-but-sparse AI
-    /// response never reaches the UI half-empty.
+    /// Fills the same defaults validatePlan() in src/utils/parser.js
+    /// does, and never throws: a stored plan must always load, however
+    /// sparse. Validation of a fresh AI response lives in fromAI().
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        sessionType = try c.decodeIfPresent(String.self, forKey: .sessionType) ?? ""
-        guard !sessionType.isEmpty else {
-            throw DecodingError.dataCorruptedError(forKey: .sessionType, in: c, debugDescription: "plan missing sessionType")
+        sessionType = c.lenientString(.sessionType) ?? ""
+        title = c.lenientString(.title) ?? ""
+        recoveryScore = c.lenientInt(.recoveryScore).map { max(0, min(100, $0)) } ?? 50
+        reasoning = c.lenientString(.reasoning) ?? "Session chosen from your check-in and recent log."
+        warmup = c.lenientStrings(.warmup) ?? []
+        exercises = c.lenient([Exercise].self, .exercises) ?? []
+        cardio = c.lenient(Cardio.self, .cardio)
+        cooldown = c.lenientStrings(.cooldown) ?? []
+        estTimeMin = c.lenientInt(.estTimeMin) ?? 60
+        concerns = c.lenientString(.concerns) ?? ""
+    }
+
+    enum AIResponseError: Error, Equatable {
+        case missingSessionType
+        /// A training day with no exercises means the response was
+        /// truncated — the caller falls back to the next model instead
+        /// of showing an empty workout.
+        case noExercises
+    }
+
+    /// Decodes a plan Gemini just returned, rejecting the incomplete
+    /// responses validatePlan() in src/utils/parser.js rejects.
+    static func fromAI(_ data: Data) throws -> Plan {
+        let plan = try JSONDecoder().decode(Plan.self, from: data)
+        guard !plan.sessionType.isEmpty else { throw AIResponseError.missingSessionType }
+        if !plan.sessionType.localizedCaseInsensitiveContains("rest") && plan.exercises.isEmpty {
+            throw AIResponseError.noExercises
         }
-        title = try c.decodeIfPresent(String.self, forKey: .title) ?? ""
-        let rawScore = try c.decodeIfPresent(Int.self, forKey: .recoveryScore)
-        recoveryScore = rawScore.map { max(0, min(100, $0)) } ?? 50
-        reasoning = try c.decodeIfPresent(String.self, forKey: .reasoning) ?? "Session chosen from your check-in and recent log."
-        warmup = try c.decodeIfPresent([String].self, forKey: .warmup) ?? []
-        exercises = try c.decodeIfPresent([Exercise].self, forKey: .exercises) ?? []
-        cardio = try c.decodeIfPresent(Cardio.self, forKey: .cardio)
-        cooldown = try c.decodeIfPresent([String].self, forKey: .cooldown) ?? []
-        estTimeMin = try c.decodeIfPresent(Int.self, forKey: .estTimeMin) ?? 60
-        concerns = try c.decodeIfPresent(String.self, forKey: .concerns) ?? ""
-        // A training day with no exercises means the response was
-        // truncated — throw so the caller falls back to the next model
-        // instead of showing an empty workout.
-        if !sessionType.localizedCaseInsensitiveContains("rest") && exercises.isEmpty {
-            throw DecodingError.dataCorruptedError(forKey: .exercises, in: c, debugDescription: "plan has no exercises (truncated response)")
-        }
+        return plan
     }
 }
 
