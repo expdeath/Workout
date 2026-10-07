@@ -13,6 +13,7 @@ enum Screen: Equatable {
     case finish
     case history
     case historyDetail
+    case addPast
     case records
     case progress
     case settings
@@ -512,6 +513,37 @@ final class AppState {
         history = (history + [t]).sorted { ($0.date + $0.id) < ($1.date + $1.id) }
         LocalStore.shared.upsert(session: t)
         LocalStore.shared.logEvent(type: "quick_cardio_logged", data: ["kind": .string(kind), "date": .string(day)])
+        Task { await runSync() }
+    }
+
+    // MARK: - Past workout (typed in after the fact)
+
+    /// Mirrors addPastSession() in src/App.jsx: a finished session dated
+    /// the day it happened — no check-in, no AI — with PRs vs. what was
+    /// logged before that day.
+    func addPastSession(date: String, sessionType: String, exercises: [Plan.Exercise], log: [[SetLog]], durationMin: Int?, rpe: Int, feedback: String) {
+        var plan = Plan(
+            sessionType: sessionType, title: sessionType,
+            reasoning: "Added afterwards from the Log — not part of an AI-generated plan.",
+            exercises: exercises, estTimeMin: durationMin ?? 0
+        )
+        plan.recoveryScore = nil
+        var t = Session(
+            id: "\(date)#\(Int64(Date().timeIntervalSince1970 * 1000))", date: date, startedAt: 0,
+            checkin: nil, plan: plan, log: log, finished: true,
+            fin: FinishInfo(rpe: rpe, pain: "", feedback: feedback),
+            durationMin: durationMin, backfilled: true
+        )
+        let prs = Stats.detectPRs(t, history.filter { $0.date < date })
+        if !prs.isEmpty { t.prs = prs }
+        history = (history + [t]).sorted { ($0.date + $0.id) < ($1.date + $1.id) }
+        LocalStore.shared.upsert(session: t)
+        LocalStore.shared.logEvent(type: "past_session_added", data: [
+            "date": .string(date), "sessionType": .string(sessionType),
+            "exercises": .number(Double(exercises.count)),
+            "setsDone": .number(Double(log.flatMap { $0 }.count)), "prs": .number(Double(prs.count)),
+        ])
+        screen = .history
         Task { await runSync() }
     }
 

@@ -22,6 +22,12 @@ struct RootView: View {
                 WorkoutView()
             case .finish:
                 FinishView()
+            case .history:
+                HistoryView()
+            case .historyDetail:
+                HistoryDetailView()
+            case .addPast:
+                AddPastView()
             default:
                 ComingSoonView(screen: appState.screen)
             }

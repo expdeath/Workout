@@ -10,6 +10,14 @@ enum Helpers {
         return f.string(from: Date())
     }
 
+    /// "2026-08-29" → noon that day, local time (the web's `date + 'T12:00:00'`).
+    static func noonDate(_ iso: String) -> Date? {
+        let f = DateFormatter()
+        f.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        f.timeZone = .current
+        return f.date(from: iso + "T12:00")
+    }
+
     /// "2026-08-29" → "Sat, Aug 29" — mirrors fmtDate() in helpers.js.
     static func fmtDate(_ iso: String) -> String {
         let parser = DateFormatter()

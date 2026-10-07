@@ -132,6 +132,61 @@ final class DailyLoopUITests: XCTestCase {
         XCTAssertTrue(text("Push").exists, "today's Push is the new Last session")
     }
 
+    /// Log → detail → edit a set → add a past workout → delete a session.
+    func testHistoryDetailEditAddPastAndDelete() {
+        XCTAssertTrue(button("Log").waitForExistence(timeout: 10))
+        button("Log").tap()
+
+        // the seeded Push session (Flat Dumbbell Press 24kg×11)
+        XCTAssertTrue(text("LOG").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Flat Dumbbell Press: 24kg×11"].exists)
+
+        // detail: sets + the coach debrief
+        app.staticTexts["Flat Dumbbell Press: 24kg×11"].tap()
+        XCTAssertTrue(text("Set 1: 24kg×11").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("Coach debrief").exists)
+        button("Log").tap()
+
+        // edit in place: 11 reps → 12
+        XCTAssertTrue(app.buttons["Session options"].firstMatch.waitForExistence(timeout: 5))
+        app.buttons["Session options"].firstMatch.tap()
+        button("✎ Edit sets & notes").tap()
+        let reps = app.textFields.element(boundBy: 1)
+        XCTAssertTrue(reps.waitForExistence(timeout: 5))
+        reps.doubleTap() // select "11" so typing replaces it
+        reps.typeText("12")
+        button("Save changes").tap()
+        XCTAssertTrue(app.staticTexts["Flat Dumbbell Press: 24kg×12"].waitForExistence(timeout: 5),
+                      "card shows: \(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Flat'")).allElementsBoundByIndex.map(\.label))")
+
+        // add a past workout
+        button("+ Past").tap()
+        XCTAssertTrue(text("PAST WORKOUT").waitForExistence(timeout: 5))
+        let name = app.textFields["Exercise — e.g. Bench press, Running"]
+        name.tap()
+        name.typeText("Bench Press")
+        let kg = app.textFields.matching(NSPredicate(format: "placeholderValue == 'kg'")).firstMatch
+        kg.tap()
+        kg.typeText("60")
+        let r = app.textFields.matching(NSPredicate(format: "placeholderValue == 'reps'")).firstMatch
+        r.tap()
+        r.typeText("8")
+        text("PAST WORKOUT").tap()
+        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] 'Save to'")).firstMatch
+        for _ in 0..<6 where !save.isHittable { app.swipeUp() }
+        save.tap()
+        XCTAssertTrue(app.staticTexts["Bench Press: 60kg×8"].waitForExistence(timeout: 5))
+
+        // delete the edited Push session
+        let pushCard = app.staticTexts["Flat Dumbbell Press: 24kg×12"]
+        XCTAssertTrue(pushCard.exists)
+        app.buttons.matching(NSPredicate(format: "label == %@", "Session options")).element(boundBy: 1).tap() // newest first: [past, Push]
+        button("✕ Delete session").tap()
+        button("✕ Delete it").tap()
+        XCTAssertTrue(pushCard.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Bench Press: 60kg×8"].exists, "the other session stays")
+    }
+
     private func logCardio(open: String, title: String, save: String, minutes: String, day: String?) {
         button(open).tap()
         XCTAssertTrue(text(title).waitForExistence(timeout: 5))
