@@ -1,63 +1,45 @@
-# Beta accounts (invite-only)
+# Accounts (invite-only, Google sign-in)
 
-There is no signup. You (the owner) provision each account by hand and
-send the person one invite code. The code carries their whole setup: a
-private GitHub data repo, a token scoped to only that repo, and
-(optionally) a Gemini API key. Redeeming it on the login screen
-configures the app; their data then syncs to their repo exactly like
-yours does.
+There is no signup. People sign in with Google, and only emails on the
+Firestore **allowlist** get in. Each allowlist entry points at one
+**account**, which holds that person's data (schema: `firestore.md`).
+The same sign-in works in the web app and the iOS app.
 
-## Provision a new user (~3 minutes)
+Current accounts (2026-10-07): `abhi` (owner, `admin: true`) and
+`karan`.
 
-1. **Create their data repo** (private, under your account):
+## Add a person (~3 minutes, Firebase console)
 
-   ```sh
-   gh api user/repos -f name=coach-data-<name> -F private=true -F auto_init=true
-   ```
+Firebase console → project **heath** → Firestore Database → Data:
 
-   (or github.com → New repository → private, init with README)
+1. **Create their account**: collection `accounts` → Add document →
+   Document ID e.g. `jane` (lowercase, no spaces). Fields:
+   - `name` (string): `Jane`
+   - `github` (map): `repo` (string): `expdeath/coach-data-jane` — only
+     if they get a GitHub backup repo; see below. Otherwise leave
+     `github` as an empty map.
+2. **Let their Google email in**: collection `allowlist` → Add
+   document → Document ID = their Google email, **all lowercase**.
+   Fields: `accountId` (string): `jane`, `name` (string): `Jane`,
+   `admin` (boolean): `false`.
+3. Send them the link: https://expdeath.github.io/Workout/ — they tap
+   **Sign in with Google** with that email.
 
-2. **Create their token**: github.com → Settings → Developer settings →
-   Personal access tokens → **Fine-grained tokens** → Generate new token.
-   - Token name: `coach-<name>` · Expiration: 1 year
-   - Repository access: **Only select repositories** → their repo only
-   - Permissions: **Contents → Read and write** (nothing else)
+A second sign-in identity for the same person (e.g. Sign in with Apple
+later) = one more allowlist entry with the same `accountId`.
 
-3. **Generate the invite code**:
-
-   ```sh
-   node scripts/make-invite.js --name Karan \
-     --repo expdeath/coach-data-karan \
-     --token github_pat_… \
-     --gemini AIzaSy…        # optional: omit to have them use their own key
-   ```
-
-   The script verifies the token against the repo before printing.
-
-4. **Send the magic link privately** (WhatsApp/Signal) — the script
-   prints it (`…/Workout/#invite=<code>`). Tapping it signs them in
-   automatically; the bare code pasted into the login box also works.
-   On iPhone: Share → Add to Home Screen makes it a real app.
-   A magic link tapped on a device already set up under a different
-   account asks "Switch to <name>?" before wiping the device and
-   signing in (Cancel leaves everything untouched); on a device
-   already on that same account it does nothing.
+### Optional: GitHub backup for them
+Create a private repo (`expdeath/coach-data-jane`), a fine-grained token
+(Contents read/write, that repo only), set the repo in step 1, and paste
+the token into **Settings → Sync & Backup** while signed in as them —
+or add `token` to their account's `github` map in the console.
 
 ## Day-to-day
 
-- **Reading their feedback**: Settings → Send feedback commits a file
-  into `feedback/` of their data repo. Their training log is the repo's
-  README, auto-updated on every sync.
-- **Revoking someone**: revoke their PAT (Developer settings → the
-  token → Delete). The app shows "token rejected" on their next sync.
-  Their local data stays on their phone until they sign out.
-- **Token expiry** (max 1 year): make a new PAT for the same repo, run
-  the script again, send the fresh code. Redeeming it keeps their data —
-  it only overwrites config.
-
-## Notes
-
-- The invite code **is** the credential — treat it like a password.
-- One Gemini key across users shares one quota; if someone gets heavy
-  usage, move them to their own free key (aistudio.google.com/apikey →
-  they paste it in Settings → AI Coach).
+- **Feedback**: Settings → Send feedback writes to
+  `accounts/<id>/feedback` — read it in the console.
+- **Revoking someone**: delete their `allowlist` document. Their data
+  stays in `accounts/<id>`.
+- **The Gemini key** is one shared key in `config/shared` (`geminiKey`),
+  readable by every allow-listed user. Change it in the web app's
+  Settings → AI Coach while signed in as the owner.
