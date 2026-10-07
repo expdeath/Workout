@@ -1,9 +1,10 @@
 #if DEBUG
 import Foundation
 
-/// Simulator-only seeding for screenshot/UI verification without typing
-/// a real invite code through UI automation. Triggered by an env var
-/// set via `SIMCTL_CHILD_COACH_DEBUG_SEED=1 xcrun simctl launch …`.
+/// Simulator-only seeding for screenshot/UI verification without a real
+/// Google sign-in. Runs fully offline (Cloud.offline — nothing reaches
+/// Firestore) with a fake account. Triggered by an env var set via
+/// `SIMCTL_CHILD_COACH_DEBUG_SEED=1 xcrun simctl launch …`.
 /// Compiled out of every non-Debug build.
 enum DebugSeed {
     /// `COACH_DEBUG_SCREEN=checkIn|generating` boots straight onto that
@@ -19,7 +20,10 @@ enum DebugSeed {
     static func applyIfRequested() {
         guard ProcessInfo.processInfo.environment["COACH_DEBUG_SEED"] == "1" else { return }
         Account.wipeLocal()
-        Account.apply(InviteCode(name: "Preview", repo: "example/coach-data-preview", ghToken: "debug-not-a-real-token", geminiKey: "debug-not-a-real-key"))
+        Cloud.shared.debugActivate(
+            account: Cloud.AccountInfo(accountId: "preview", name: "Preview", admin: false, email: "preview@example.invalid"),
+            geminiKey: "debug-not-a-real-key"
+        )
 
         let plan = Plan(
             sessionType: "Push", title: "Push Day", recoveryScore: 78,
@@ -37,7 +41,7 @@ enum DebugSeed {
             finished: true, fin: FinishInfo(rpe: 7, pain: "", feedback: "Felt strong")
         )
         yesterday.debrief = "Good pressing volume today — chest and shoulders both moved well. Next time, add a set to incline press since reps were easy across the board."
-        LocalStore.shared.upsert(session: yesterday)
+        LocalStore.shared.seed(session: yesterday)
         // today's Watch row → check-in shows "Watch data loaded" with details open
         LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), hrv: 52, rhr: 57, raw: "Sleep 7h10m · HRV 52 · RHR 57 · Steps 8400"))
     }

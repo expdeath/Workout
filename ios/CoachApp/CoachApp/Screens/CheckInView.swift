@@ -211,7 +211,9 @@ struct CheckInView: View {
         guard let text = UIPasteboard.general.string?.trimmingCharacters(in: .whitespacesAndNewlines),
               !text.isEmpty else { return }
         let t = String(text.prefix(2000))
-        LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), raw: t, receivedAt: Date().timeIntervalSince1970 * 1000))
+        // same as storeTodaysHealth() on the web: today's text + the day's row
+        Cloud.shared.setState("healthText-\(Helpers.todayStr())", .string(t))
+        LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), raw: String(t.prefix(300)), receivedAt: Date().timeIntervalSince1970 * 1000))
         LocalStore.shared.logEvent(type: "health_pasted", data: ["chars": .number(Double(t.count))])
         appState.ci.health = t
         autoFilled = true

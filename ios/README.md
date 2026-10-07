@@ -1,8 +1,8 @@
 # COACH — native iOS app
 
 A native SwiftUI rewrite of the COACH web app (`../src`), living in
-`ios/CoachApp/`. Same data, same GitHub-backed sync, same Gemini AI
-coach — a from-scratch port, not a wrapper around the website. This
+`ios/CoachApp/`. Same data (Cloud Firestore, shared live with the web
+app), same Google sign-in, same Gemini AI coach — a from-scratch port, not a wrapper around the website. This
 file tracks what's actually done, what's left, and exactly what to do
 next.
 
@@ -11,11 +11,11 @@ next.
 | Area | Status |
 |---|---|
 | Data models (Session/Plan/Backup/etc.) | ✅ Done, tested |
-| Local persistence | ✅ Done |
-| GitHub sync engine | ✅ Done, tested |
+| Cloud Firestore (live data, shared with the web app) | ✅ Done — codec tested; byte-identical documents to the web app on all real data |
+| GitHub backup + Watch inbox drain | ✅ Done, tested |
 | Training stats / progression math | ✅ Done, tested |
 | Gemini AI client | ✅ Done, tested |
-| Invite-code auth | ✅ Done, tested |
+| Google sign-in + allowlist | ✅ Built — needs a simulator/device run (see "Immediate next step") |
 | Visual theme (colors/fonts matching the website) | ✅ Done (Login, Home) |
 | Login screen | ✅ Done |
 | Home screen | ✅ Done (quick cardio can be backdated, like the web) |
@@ -29,22 +29,24 @@ next.
 | Progress screen (charts) | ❌ Not started |
 | Settings screen | ❌ Not started |
 | Coach chat sheet | ❌ Not started |
-| HealthKit | Deliberately deferred — see "Health data" below |
+| HealthKit | Planned next — replaces the Watch Shortcut (decided 2026-10-07) |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-57 unit tests (`CoachAppTests/`) and 2 UI tests (`CoachAppUITests/`),
-all passing. Every "done" row
-above was verified by building and running in the iOS Simulator here,
-not just compiling.
+64 unit tests (`CoachAppTests/`) and 2 UI tests (`CoachAppUITests/`).
+The unit tests pass (run on macOS on 2026-10-07 — see "Dev workflow"
+for why). The UI tests and the Firestore/Google sign-in flow haven't
+run since the move to Firestore: the simulator was unavailable (Xcode 27
+was missing its CoreSimulator update).
 
 ## How this app relates to the website
 
-Same backend, two frontends. Both read/write the exact same
-`coach-backup.json` in the user's private GitHub data repo, both
-decode the exact same invite-code format from `scripts/make-invite.js`,
-both call Gemini directly with the same prompts. **No migration is
-needed and none is planned** — an invite code works in either app, and
-a session logged in one shows up in the other after a sync. When in
+Same backend, two frontends. Both sign in with Google against the same
+Firestore allowlist, read and write the same Firestore documents
+(schema, rules and decisions: `../docs/firestore.md`), and call Gemini
+directly with the same prompts and the same shared key. A workout
+logged in one app shows up in the other within seconds. Both apps
+encode documents identically (`Sync/FirestoreCodec.swift` is a port of
+`src/db/firestoreCodec.js`, verified against all real data). When in
 doubt about "what should this do," the answer is "whatever the
 matching JS file in `../src` does" — that's the actual spec.
 
@@ -64,27 +66,32 @@ ios/CoachApp/
                                finish flow, weekly/monthly reports)
       RootView.swift          switches on AppState.screen
       Theme.swift              colors/fonts ported from src/index.css
-      DebugSeed.swift          #if DEBUG-only: seeds a fake account +
-                               session via COACH_DEBUG_SEED=1 env var,
-                               for screenshotting screens that need a
-                               logged-in state without typing a real
-                               invite code through UI automation
+      DebugSeed.swift          #if DEBUG-only: COACH_DEBUG_SEED=1 runs the
+                               app fully offline (Cloud.offline) with a
+                               fake account + seeded session, for UI
+                               tests/screenshots without a Google sign-in
     Models/                   Codable structs mirroring the exact JSON
-                               shapes in src/db/db.js, src/db/sync.js,
-                               src/api/gemini.js (PLAN_SCHEMA). Several
-                               have hand-written lenient decoders — see
-                               "Gotcha: lenient decoding" below.
+                               shapes the web app writes. Lenient and
+                               lossless — see "Gotcha: lenient decoding".
+                               RawPreserving.swift: documents keep the
+                               JSON they came from and write back only
+                               changed fields.
     Persistence/
-      LocalStore.swift        the full app state as one JSON file on
-                               disk (Application Support) — ports
-                               src/db/db.js's IndexedDB stores
-      Keychain.swift           Gemini key + GitHub token (upgrade over
-                               the web app's localStorage)
-      Defaults.swift            small non-secret settings (UserDefaults)
+      LocalStore.swift        the signed-in account's data in memory
+                               (the `Backup` shape screens read), kept
+                               live by Cloud's listeners; mutations
+                               write through to Firestore
+      Keychain.swift           only to carry invite-era secrets over once
+      Defaults.swift            small per-device settings (UserDefaults)
     Sync/
-      GitHubSync.swift        full port of src/db/sync.js: fetch/push,
-                               mergeBackups/normalizeBackup, health-inbox
-                               drain, feedback, conflict retry
+      Cloud.swift              Firestore + Google sign-in — port of
+                               src/db/cloud.js: allowlist → account,
+                               snapshot listeners, background writes,
+                               shared state (today, reports, chat)
+      FirestoreCodec.swift     port of src/db/firestoreCodec.js
+      GitHubSync.swift        port of src/db/sync.js: GitHub backup
+                               (coach-backup.json + README) + Watch
+                               health-inbox drain
     Stats/
       Stats.swift              full port of src/utils/stats.js
       Helpers.swift            date formatting + set-input clamping,
@@ -93,15 +100,13 @@ ios/CoachApp/
       GeminiClient.swift       full port of src/api/gemini.js
       AIContext.swift          ports src/utils/aiContext.js
     Account/
-      Account.swift            invite-code parsing/redeem, ports
-                               src/utils/account.js — ALSO accepts a
-                               full magic link, not just the bare code
-                               (see "Gotcha: invite links" below)
+      Account.swift            Google sign-in / sign-out, ports
+                               src/utils/account.js
     Screens/                  one SwiftUI view per src/screens/*.jsx
     Components/                one SwiftUI view per src/components/*.jsx
     Resources/Fonts/           bundled Barlow Condensed + IBM Plex Mono
                                .ttf files (see "Gotcha: fonts" below)
-  CoachAppTests/               XCTest target, 53 tests
+  CoachAppTests/               XCTest target, 64 tests
 ```
 
 **Design principle**: port the existing JS logic faithfully rather than
@@ -203,14 +208,15 @@ key, which is most of the time. `CoachAppTests/LenientDecodingTests.swift`
 has the regression tests that caught this the first time; add to it
 when you add fields.
 
-### Invite links, not just bare codes
-The website has two separate entry paths: `Login.jsx`'s paste box
-(expects the bare code) and `App.jsx`'s boot-time URL-hash parsing
-(auto-extracts the code from a tapped `#invite=...` magic link). This
-app has no URL-scheme entry point, so `Account.parseInviteCode` was
-changed to accept *either* form directly — extracting the code out of
-a full link if one is pasted. Keep that in mind if the login UI ever
-changes.
+### Every write goes to the shared database — never drop fields
+Models decode leniently *and* losslessly: a document remembers the JSON
+it was decoded from and, on encode, writes back only the fields whose
+typed value changed (`Models/RawPreserving.swift`). Before this
+(2026-10-07) two of four real accounts failed to decode at all and
+re-encoding dropped every undeclared field. New fields go in the model,
+its `init(from:)` (lenient helpers), its `encodeKnown`, and its
+`CodingKeys`; `LenientDecodingTests` / `FirestoreCodecTests` show the
+pattern.
 
 ### Fonts: only 2 of 3 are bundled
 The website uses Barlow Condensed (headers), IBM Plex Mono (numbers/
@@ -223,14 +229,11 @@ system font (San Francisco). Archivo only ships as a variable font
 fidelity on body text matters, but San Francisco reads close enough
 that it wasn't blocking.
 
-### Health data: Watch Shortcut pipeline, not HealthKit
-Deliberate scope call, not a gap to "fix": this app drains the same
-`health-inbox/` GitHub folder the existing Watch Shortcut already
-writes to (`GitHubSync.consumeHealthInbox`, already built and tested),
-rather than reading HealthKit directly. Native HealthKit integration
-is a real future upgrade, but was explicitly decided against for v1 to
-avoid blocking the whole rewrite on new permissions/entitlements work.
-Revisit once the core loop is fully shipped.
+### Health data: HealthKit next; the Watch Shortcut meanwhile
+Decided 2026-10-07: native HealthKit replaces the Shortcut → GitHub
+`health-inbox/` pipeline. Until it ships, both apps drain the inbox
+into Firestore (`GitHubSync.consumeHealthInbox`), producing identical
+health rows whichever app gets to a file first.
 
 ### Distribution: sideload via Xcode, not TestFlight
 Also deliberate: no Apple Developer Program enrollment yet, so builds
@@ -267,8 +270,8 @@ xcodebuild test -scheme CoachApp \
 xcodebuild test -scheme CoachApp \
   -destination 'platform=iOS Simulator,name=iPhone 17' -only-testing:CoachAppUITests
 
-# see a screen that needs a logged-in account, without typing a real
-# invite code:
+# see a screen that needs a logged-in account, without a real Google
+# sign-in (runs offline — nothing reaches Firestore):
 xcrun simctl install <device-udid> <path-to>/CoachApp.app
 SIMCTL_CHILD_COACH_DEBUG_SEED=1 xcrun simctl launch <device-udid> com.expdeath.CoachApp
 xcrun simctl io <device-udid> screenshot out.png
@@ -278,14 +281,24 @@ SIMCTL_CHILD_COACH_DEBUG_SEED=1 SIMCTL_CHILD_COACH_DEBUG_SCREEN=checkIn \
   xcrun simctl launch <device-udid> com.expdeath.CoachApp
 ```
 
+Unit tests without a simulator: the non-UI sources compile for macOS
+with a stand-in for `Sync/Cloud.swift` (which needs the iOS Firebase
+SDK) and run via XCTest directly — how the suite was run on 2026-10-07
+while Xcode 27's simulator component was missing (fix:
+`sudo xcodebuild -runFirstLaunch`).
+
 Or just open `CoachApp.xcodeproj` in Xcode and hit Run — see the root
 `README.md`'s "step-by-step" instructions for signing onto a real
 device with a free Apple ID.
 
 ## Immediate next step
 
-Build `WorkoutView` next, then `FinishView` — Home → CheckIn →
-Generating already works end to end against the real Gemini client, so
-those two close the daily loop (Workout → Finish). Port
-`src/screens/Workout.jsx` directly, following the same pattern
-`CheckInView.swift` used for `CheckIn.jsx`.
+1. Run the Firestore build on a simulator/device: sign in with Google,
+   confirm Home shows the account's real history, log something and
+   watch it appear on the web app (and the reverse). Run the 2 UI tests.
+2. Build `WorkoutView` next, then `FinishView` — Home → CheckIn →
+   Generating already works end to end against the real Gemini client,
+   so those two close the daily loop (Workout → Finish). Port
+   `src/screens/Workout.jsx` directly, following the same pattern
+   `CheckInView.swift` used for `CheckIn.jsx`.
+3. HealthKit (replaces the Watch Shortcut).

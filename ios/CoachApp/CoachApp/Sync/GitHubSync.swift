@@ -1,11 +1,17 @@
 import Foundation
 
-/// GitHub-backed cloud sync — ports src/db/sync.js function-for-function.
-/// The full backup (sessions + event log) lives as one JSON file in a
-/// private repo the user owns. Sync = pull remote, merge with local
-/// (union; newer session wins per id), write back whichever side is
-/// stale. Auth: the same fine-grained PAT the web app uses, kept in
-/// Keychain here instead of localStorage.
+/// GitHub backup + Watch inbox — port of src/db/sync.js.
+///
+/// Firestore (Cloud.swift) is the live database and syncs devices on its
+/// own. GitHub keeps two jobs:
+///   1. Backup: the full account as coach-backup.json (same shape as
+///      always) + a human-readable README log, in the account's private
+///      data repo. Pushed when data changed (≥10 min apart) or daily.
+///   2. Watch inbox: the Gym Check-in Shortcut PUTs files into
+///      health-inbox/; every sync drains them into Firestore.
+/// The repo + a fine-grained token (Contents read/write on that repo
+/// only) live in accounts/{id}.github, shared by every device of the
+/// account — and by the web app.
 enum GitHubSync {
     struct Config {
         var token: String
@@ -17,38 +23,51 @@ enum GitHubSync {
     private static let readmePath = "README.md"
     private static let branch = "main"
     private static let inbox = "health-inbox"
+    private static let minGap: TimeInterval = 10 * 60
+    private static let day: TimeInterval = 24 * 60 * 60
 
-    // ── Config ───────────────────────────────────────────────────
+    // ── Config (accounts/{id}.github) ────────────────────────────
 
     static func config() -> Config {
-        Config(token: Keychain.githubToken, repo: Defaults.string("gh-repo") ?? "")
+        let g = Cloud.shared.github
+        func str(_ k: String) -> String { if case .string(let s)? = g[k] { return s }; return "" }
+        return Config(token: str("token"), repo: str("repo"))
     }
 
     static func setConfig(token: String, repo: String) {
-        Keychain.githubToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let cleanRepo = repo
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "https://github.com/", with: "")
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        Defaults.set(cleanRepo, for: "gh-repo")
+        Cloud.shared.updateGithub([
+            "token": .string(token.trimmingCharacters(in: .whitespacesAndNewlines)),
+            "repo": .string(cleanRepo),
+        ])
     }
 
-    struct LastSyncInfo: Codable {
+    /// Last backup attempt — shared by every device of the account.
+    struct LastSyncInfo {
         var at: String
         var status: String
         var sessions: Int?
         var message: String?
+        var fingerprint: String?
     }
 
     static func lastSync() -> LastSyncInfo? {
-        Defaults.codable(LastSyncInfo.self, "last-sync")
+        guard case .object(let o)? = Cloud.shared.github["lastBackup"] else { return nil }
+        func str(_ k: String) -> String? { if case .string(let s)? = o[k] { return s }; return nil }
+        var sessions: Int? = nil
+        if case .number(let n)? = o["sessions"] { sessions = Int(n) }
+        return LastSyncInfo(at: str("at") ?? "", status: str("status") ?? "", sessions: sessions, message: str("message"), fingerprint: str("fingerprint"))
     }
 
-    private static func setLastSync(status: String, sessions: Int? = nil, message: String? = nil) {
-        Defaults.setCodable(
-            LastSyncInfo(at: ISO8601DateFormatter().string(from: Date()), status: status, sessions: sessions, message: message),
-            for: "last-sync"
-        )
+    private static func setLastSync(_ info: [String: JSONValue]) {
+        var cur: [String: JSONValue] = [:]
+        if case .object(let o)? = Cloud.shared.github["lastBackup"] { cur = o }
+        cur["at"] = .string(ISO8601DateFormatter.withMillis.string(from: Date()))
+        for (k, v) in info { cur[k] = v }
+        Cloud.shared.updateGithub(["lastBackup": .object(cur)])
     }
 
     struct LastInboxInfo: Codable {
@@ -56,6 +75,7 @@ enum GitHubSync {
         var files: Int
     }
 
+    /// Per-device diagnostic (like the web app's coach:last-inbox).
     static func lastInbox() -> LastInboxInfo? {
         Defaults.codable(LastInboxInfo.self, "last-inbox")
     }
@@ -122,20 +142,6 @@ enum GitHubSync {
         return (shaOf(file), shaOf(readmePath))
     }
 
-    /// Download + parse the remote backup. Raw media type dodges the 1MB JSON cap.
-    private static func fetchRemote(_ cfg: Config) async throws -> Backup? {
-        let req = request(cfg, path: "/repos/\(cfg.repo)/contents/\(file)?ref=\(branch)", extraHeaders: ["Accept": "application/vnd.github.raw+json"])
-        let (data, resp) = try await URLSession.shared.data(for: req)
-        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 404 { return nil }
-        if status == 401 || status == 403 { throw SyncError.tokenRejected }
-        guard status == 200 else { throw SyncError.http(status, String(data: data, encoding: .utf8) ?? "") }
-        guard let backup = try? JSONDecoder().decode(Backup.self, from: data) else {
-            throw SyncError.message("Remote backup file is not valid JSON.")
-        }
-        return backup
-    }
-
     private static func commitMessage(_ backup: Backup) -> String {
         let active = backup.sessions.filter { !$0.deleted }
         guard let last = active.last else { return "sync: no sessions yet" }
@@ -146,16 +152,23 @@ enum GitHubSync {
         Data(str.utf8).base64EncodedString()
     }
 
-    private static func pushRemote(_ cfg: Config, _ backup: Backup, sha: String?) async throws {
+    /// Overwrite coach-backup.json — Firestore is the truth, so no merge.
+    /// A sha race with another device of the account just retries.
+    private static func pushRemote(_ cfg: Config, _ backup: Backup) async throws {
         let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         let json = String(data: try encoder.encode(backup), encoding: .utf8) ?? "{}"
-        let body = try JSONEncoder().encode(PutBody(message: commitMessage(backup), content: b64encode(json), branch: branch, sha: sha))
-        let (data, resp) = try await URLSession.shared.data(for: request(cfg, path: "/repos/\(cfg.repo)/contents/\(file)", method: "PUT", body: body))
-        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        if status == 409 || status == 422 { throw SyncError.conflict }
-        if status == 401 || status == 403 { throw SyncError.tokenRejected }
-        guard status == 200 || status == 201 else { throw SyncError.http(status, String(data: data, encoding: .utf8) ?? "") }
+        for _ in 0..<3 {
+            let sha = try await remoteShas(cfg).backup
+            let body = try JSONEncoder().encode(PutBody(message: commitMessage(backup), content: b64encode(json), branch: branch, sha: sha))
+            let (data, resp) = try await URLSession.shared.data(for: request(cfg, path: "/repos/\(cfg.repo)/contents/\(file)", method: "PUT", body: body))
+            let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            if status == 200 || status == 201 { return }
+            if status == 401 || status == 403 { throw SyncError.tokenRejected }
+            guard status == 409 || status == 422 else { throw SyncError.http(status, String(data: data, encoding: .utf8) ?? "") }
+            try? await Task.sleep(nanoseconds: 800_000_000)
+        }
+        throw SyncError.message("Backup conflict — another device is backing up right now. It will retry later.")
     }
 
     // ── Repo README: human-readable training log for GitHub ────
@@ -193,8 +206,9 @@ enum GitHubSync {
         """
     }
 
-    private static func pushReadme(_ cfg: Config, _ sessions: [Session], sha: String?) async {
+    private static func pushReadme(_ cfg: Config, _ sessions: [Session]) async {
         do {
+            let sha = try await remoteShas(cfg).readme
             let body = try JSONEncoder().encode(PutBody(message: "docs: update training log", content: b64encode(buildReadme(sessions)), branch: branch, sha: sha))
             _ = try await URLSession.shared.data(for: request(cfg, path: "/repos/\(cfg.repo)/contents/\(readmePath)", method: "PUT", body: body))
         } catch {
@@ -202,32 +216,24 @@ enum GitHubSync {
         }
     }
 
-    // ── Beta feedback ────────────────────────────────────────────
+    // ── Beta feedback (accounts/{id}/feedback in Firestore) ──────
 
-    static func sendFeedback(_ text: String, name: String = "") async throws {
-        let cfg = config()
-        guard !cfg.token.isEmpty, !cfg.repo.isEmpty else { throw SyncError.message("Sync is not set up.") }
+    static func sendFeedback(_ text: String) async throws {
         let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !body.isEmpty else { throw SyncError.message("Write something first.") }
-        let stamp = ISO8601DateFormatter().string(from: Date()).prefix(16).replacingOccurrences(of: ":", with: "")
-        let path = "feedback/\(stamp).md"
-        let dateOnly = ISO8601DateFormatter().string(from: Date()).prefix(10)
-        let md = "# Feedback — \(name.isEmpty ? "user" : name) — \(dateOnly)\n\n\(body)\n"
-        let putBody = try JSONEncoder().encode(PutBody(message: "feedback: \(stamp)", content: b64encode(md), branch: branch, sha: nil))
-        guard let encodedPath = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) else {
-            throw SyncError.message("Invalid feedback path.")
-        }
-        let (data, resp) = try await URLSession.shared.data(for: request(cfg, path: "/repos/\(cfg.repo)/contents/\(encodedPath)", method: "PUT", body: putBody))
-        let status = (resp as? HTTPURLResponse)?.statusCode ?? 0
-        guard status == 200 || status == 201 else {
-            throw SyncError.message("Couldn't send (GitHub \(status)) — try again later.\n\(String(data: data, encoding: .utf8) ?? "")")
+        do {
+            try await Cloud.shared.sendFeedback(String(body.prefix(2000)))
+        } catch {
+            throw SyncError.message("Couldn't send — check your connection and try again.")
         }
     }
 
     // ── Health inbox ─────────────────────────────────────────────
     // The Watch shortcut PUTs one small file per run into health-inbox/.
-    // Every sync drains the inbox: parse → merge into the health store →
-    // delete the file.
+    // Every sync drains it: parse → merge into the health rows → delete
+    // the file. Produces the same rows as the web app's drain (which
+    // fills every field parseHealthNumbers finds), so it doesn't matter
+    // which app gets to a file first.
 
     private struct InboxNums { var hrv, rhr, steps, sleepH, weightKg: Double? }
 
@@ -256,9 +262,9 @@ enum GitHubSync {
         return (t, any ? nums : nil)
     }
 
-    /// Drains health-inbox/: merges every file into the local health
-    /// store, then deletes it from the repo. Per-file failures are
-    /// skipped (retried next sync). Returns the number of files ingested.
+    /// Drains health-inbox/ into Firestore, then deletes each file from
+    /// the repo. Per-file failures are skipped (retried next sync).
+    /// Returns the number of files ingested.
     @discardableResult
     static func consumeHealthInbox(_ cfg: Config = config()) async throws -> Int {
         guard !cfg.token.isEmpty, !cfg.repo.isEmpty else { return 0 }
@@ -275,31 +281,7 @@ enum GitHubSync {
                 let rawReq = request(cfg, path: "/repos/\(cfg.repo)/contents/\(inbox)/\(encodedName)?ref=\(branch)", extraHeaders: ["Accept": "application/vnd.github.raw+json"])
                 let (rawData, rawResp) = try await URLSession.shared.data(for: rawReq)
                 guard ((rawResp as? HTTPURLResponse)?.statusCode ?? 0) == 200 else { continue }
-                let bodyText = String(data: rawData, encoding: .utf8) ?? ""
-                let (text, nums) = parseInboxFile(bodyText)
-                let dateMatch = f.name.range(of: #"\d{4}-\d{2}-\d{2}"#, options: .regularExpression)
-                let date = dateMatch.map { String(f.name[$0]) } ?? Helpers.todayStr()
-                let asText: String
-                if let nums {
-                    asText = [
-                        nums.hrv.map { "HRV \(Int($0)) ms" },
-                        nums.rhr.map { "RHR \(Int($0))" },
-                        nums.sleepH.map { "Sleep \($0)h" },
-                        nums.weightKg.map { "Weight \($0)kg" },
-                        nums.steps.map { "Steps \(Int($0))" },
-                    ].compactMap { $0 }.joined(separator: " · ")
-                } else {
-                    asText = text
-                }
-                if !asText.isEmpty {
-                    var row = HealthRow(date: date)
-                    if let nums {
-                        row.hrv = nums.hrv; row.rhr = nums.rhr; row.steps = nums.steps
-                        row.sleepH = nums.sleepH; row.weightKg = nums.weightKg
-                    }
-                    row.raw = String(asText.prefix(300))
-                    LocalStore.shared.mergeHealth(row)
-                }
+                ingestInboxFile(name: f.name, body: String(data: rawData, encoding: .utf8) ?? "")
                 let delBody = try JSONEncoder().encode(DeleteBody(message: "chore: ingest \(f.name)", sha: f.sha, branch: branch))
                 _ = try? await URLSession.shared.data(for: request(cfg, path: "/repos/\(cfg.repo)/contents/\(inbox)/\(encodedName)", method: "DELETE", body: delBody))
                 ingested += 1
@@ -311,6 +293,43 @@ enum GitHubSync {
             Defaults.setCodable(LastInboxInfo(at: Date().timeIntervalSince1970 * 1000, files: ingested), for: "last-inbox")
         }
         return ingested
+    }
+
+    /// One inbox file → today's check-in text (if it's today's) + the
+    /// day's health row. Internal for tests.
+    static func ingestInboxFile(name: String, body: String) {
+        let (text, nums) = parseInboxFile(body)
+        let date = name.range(of: #"\d{4}-\d{2}-\d{2}"#, options: .regularExpression).map { String(name[$0]) } ?? Helpers.todayStr()
+        let asText: String
+        if let nums {
+            asText = [
+                nums.hrv.map { "HRV \(fmtNum($0)) ms" },
+                nums.rhr.map { "RHR \(fmtNum($0))" },
+                nums.sleepH.map { "Sleep \(fmtNum($0))h" },
+                nums.weightKg.map { "Weight \(fmtNum($0))kg" },
+                nums.steps.map { "Steps \(fmtNum($0))" },
+            ].compactMap { $0 }.joined(separator: " · ")
+        } else {
+            asText = text
+        }
+        guard !asText.isEmpty else { return }
+        // today's raw text pre-fills the check-in (healthText-<date>, as on the web)
+        if date == Helpers.todayStr() { Cloud.shared.setState("healthText-\(date)", .string(String(asText.prefix(2000)))) }
+        let n = Stats.parseHealthNumbers(asText)
+        var row = HealthRow(date: date, hrv: n.hrv, rhr: n.rhr, steps: n.steps, sleepH: n.sleepH,
+                            respRate: n.respRate, wristC: n.wristC, vo2max: n.vo2max, kcal: n.kcal,
+                            exerciseMin: n.exerciseMin, distKm: n.distKm, spo2: n.spo2, raw: String(asText.prefix(300)))
+        // structured payloads may carry fields the text parser doesn't (weightKg)
+        if let nums {
+            row.hrv = nums.hrv ?? row.hrv; row.rhr = nums.rhr ?? row.rhr; row.steps = nums.steps ?? row.steps
+            row.sleepH = nums.sleepH ?? row.sleepH; row.weightKg = nums.weightKg
+        }
+        LocalStore.shared.mergeHealth(row)
+    }
+
+    /// JS-style number text: 48 not 48.0, 7.5 stays 7.5.
+    private static func fmtNum(_ n: Double) -> String {
+        n.rounded() == n ? String(Int64(n)) : String(n)
     }
 
     // ── Merge ────────────────────────────────────────────────────
@@ -393,75 +412,54 @@ enum GitHubSync {
 
     // ── Sync ─────────────────────────────────────────────────────
 
-    enum Status { case unconfigured, ok, pushed }
+    enum Status { case unconfigured, ok }
     struct Result {
         var status: Status
         var changedLocal: Bool
         var sessions: Int
         var inboxFiles: Int = 0
+        var skipped = false
     }
 
-    /// Pull remote, merge with local, write back whichever side is stale.
-    /// With replaceRemote: overwrite the cloud with local state (used
-    /// after "Clear all history", where a merge would resurrect deleted
-    /// data).
-    static func syncNow(replaceRemote: Bool = false) async throws -> Result {
+    /// Cheap "did anything change since the last backup" check — the
+    /// same string the web app computes, so the apps agree on it.
+    static func fingerprint() -> String {
+        let b = LocalStore.shared.backup
+        let newest = b.sessions.map(\.updatedAt).max() ?? 0
+        return "\(b.sessions.count):\(Int64(max(0, newest))):\(b.deletedIds.count)"
+    }
+
+    /// Drain the Watch inbox into Firestore, then back the account up to
+    /// GitHub if it's due. `force` backs up now.
+    static func syncNow(force: Bool = false) async throws -> Result {
         let cfg = config()
-        guard !cfg.token.isEmpty, !cfg.repo.isEmpty else { return Result(status: .unconfigured, changedLocal: false, sessions: 0) }
-
-        var inboxFiles = 0
-        inboxFiles = (try? await consumeHealthInbox(cfg)) ?? 0
-
-        let local = normalizeBackup(LocalStore.shared.backup)
-
-        if replaceRemote {
-            let shas = try await remoteShas(cfg)
-            try await pushRemote(cfg, local, sha: shas.backup)
-            let shas2 = try await remoteShas(cfg)
-            await pushReadme(cfg, local.sessions, sha: shas2.readme)
-            setLastSync(status: "ok", sessions: local.sessions.count)
-            return Result(status: .pushed, changedLocal: false, sessions: local.sessions.count)
+        let sessions = LocalStore.shared.backup.sessions.count
+        guard Cloud.shared.account != nil, !cfg.token.isEmpty, !cfg.repo.isEmpty else {
+            return Result(status: .unconfigured, changedLocal: false, sessions: sessions)
         }
 
-        func doPass() async throws -> Result {
-            let remote = try await fetchRemote(cfg)
-            let remoteNorm = remote.map(normalizeBackup)
-            let merged = mergeBackups(local, remoteNorm)
-            let changedLocal = merged != local
-            if changedLocal { LocalStore.shared.replaceAll(merged) }
-            if remote == nil || merged != remoteNorm {
-                let shas = try await remoteShas(cfg)
-                try await pushRemote(cfg, merged, sha: shas.backup)
-                let sessionsChanged = remoteNorm == nil || merged.sessions != remoteNorm!.sessions
-                if sessionsChanged || shas.readme == nil {
-                    let shas2 = try await remoteShas(cfg)
-                    await pushReadme(cfg, merged.sessions, sha: shas2.readme)
-                }
-            }
-            return Result(status: .ok, changedLocal: changedLocal || inboxFiles > 0, sessions: merged.sessions.count, inboxFiles: inboxFiles)
+        // never fatal — a broken inbox must not block the backup
+        let inboxFiles = (try? await consumeHealthInbox(cfg)) ?? 0
+
+        let last = lastSync()
+        let lastAt = last.flatMap { ISO8601DateFormatter.withMillis.date(from: $0.at) ?? ISO8601DateFormatter().date(from: $0.at) } ?? .distantPast
+        let since = Date().timeIntervalSince(lastAt)
+        let fp = fingerprint()
+        let due = force || last?.status != "ok" || since > day || (fp != last?.fingerprint && since > minGap)
+        guard due else {
+            return Result(status: .ok, changedLocal: inboxFiles > 0, sessions: sessions, inboxFiles: inboxFiles, skipped: true)
         }
 
         do {
-            let result = try await doPass()
-            setLastSync(status: "ok", sessions: result.sessions)
-            return result
-        } catch SyncError.conflict {
-            // Someone else pushed between our fetch and put — brief pause, once more
-            try? await Task.sleep(nanoseconds: 800_000_000)
-            do {
-                let result = try await doPass()
-                setLastSync(status: "ok", sessions: result.sessions)
-                return result
-            } catch SyncError.conflict {
-                let msg = "Sync conflict — another device is syncing right now. It will resolve on the next sync."
-                setLastSync(status: "error", message: msg)
-                throw SyncError.message(msg)
-            } catch {
-                setLastSync(status: "error", message: error.localizedDescription)
-                throw error
-            }
+            var b = LocalStore.shared.backup
+            b.events = try await Cloud.shared.allEvents()
+            let backup = normalizeBackup(b)
+            try await pushRemote(cfg, backup)
+            await pushReadme(cfg, backup.sessions)
+            setLastSync(["status": .string("ok"), "sessions": .number(Double(backup.sessions.count)), "fingerprint": .string(fp), "message": .null])
+            return Result(status: .ok, changedLocal: inboxFiles > 0, sessions: backup.sessions.count, inboxFiles: inboxFiles)
         } catch {
-            setLastSync(status: "error", message: error.localizedDescription)
+            setLastSync(["status": .string("error"), "message": .string(error.localizedDescription)])
             throw error
         }
     }

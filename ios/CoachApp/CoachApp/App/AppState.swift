@@ -57,6 +57,7 @@ final class AppState {
     var syncInfo: SyncInfo? = nil
     var weeklyReview: WeeklyReviewCache? = nil
     var monthlyReport: MonthlyReportCache? = nil
+    var loginError = ""
 
     var ci = Checkin()
     var fin = FinishInfo()
@@ -67,22 +68,72 @@ final class AppState {
     private var syncTask: Task<Void, Never>?
 
     init() {
-        screen = Account.needsLogin() ? .login : .home
-        if screen == .home {
-            Task { await boot() }
+        Task { @MainActor in await start() }
+    }
+
+    // MARK: - Sign-in + boot
+
+    /// Restores the Google session and opens the account, or shows Login.
+    @MainActor
+    func start() async {
+        #if DEBUG
+        if Cloud.shared.offline { await boot(); return }
+        #endif
+        do {
+            if try await Account.resume() != nil {
+                await boot()
+            } else {
+                screen = .login
+            }
+        } catch {
+            if case Cloud.CloudError.notInvited = error { await Cloud.shared.signOut() }
+            loginError = Self.message(for: error)
+            screen = .login
         }
     }
 
-    // MARK: - Boot
+    /// Login screen → Google → allowlist → account.
+    @MainActor
+    func signIn() async {
+        loginError = ""
+        do {
+            _ = try await Account.signIn()
+            screen = .loading
+            await boot()
+        } catch {
+            // closing Google's sheet isn't an error worth showing
+            if (error as NSError).domain == "com.google.GIDSignIn", (error as NSError).code == -5 { return }
+            loginError = Self.message(for: error)
+        }
+    }
+
+    @MainActor
+    func signOut() async {
+        LocalStore.shared.logEvent(type: "signed_out", data: [:])
+        await Account.signOut()
+        history = []
+        todayPlan = nil
+        weeklyReview = nil
+        monthlyReport = nil
+        screen = .login
+    }
+
+    private static func message(for error: Error) -> String {
+        if let e = error as? Cloud.CloudError { return e.localizedDescription }
+        return "Couldn't open your account — check your connection and try again."
+    }
 
     func boot() async {
+        Cloud.shared.onChange = { [weak self] what in self?.cloudChanged(what) }
+        adoptLegacyDeviceSettings()
         loadActive()
-        todayPlan = Defaults.codable(Session.self, "today")
+        loadStateFromCloud()
+        pruneOldHealthText()
         LocalStore.shared.logEvent(type: "app_open", data: ["sessions": .number(Double(history.count))])
         Task { await runSync() }
         Task { await maybeWeeklyReview() }
         Task { await maybeMonthlyReport() }
-        screen = Keychain.apiKey.isEmpty ? .settings : .home
+        screen = Cloud.shared.geminiKey.isEmpty ? .settings : .home
         #if DEBUG
         if let s = DebugSeed.startScreen {
             ci = buildDefaultCheckin() // what Home's "Start check-in" tap does
@@ -99,7 +150,62 @@ final class AppState {
 
     private func persistToday(_ t: Session?) {
         todayPlan = t
-        Defaults.setCodable(t, for: "today")
+        Cloud.shared.setState("today", t.flatMap { try? JSONValue.encoding($0) })
+    }
+
+    // MARK: - Cloud state (shared with the web app, same keys)
+
+    private func decodeState<T: Decodable>(_ type: T.Type, _ key: String) -> T? {
+        guard let v = Cloud.shared.stateValue(key) else { return nil }
+        return try? JSONDecoder().decode(T.self, from: JSONEncoder().encode(v))
+    }
+
+    /// A field of a state object without decoding the whole thing — so a
+    /// report the web app wrote is recognised even if a field's type differs.
+    private func stateField(_ key: String, _ field: String) -> String? {
+        guard case .object(let o)? = Cloud.shared.stateValue(key), case .string(let s)? = o[field] else { return nil }
+        return s
+    }
+
+    private func loadStateFromCloud() {
+        let t = decodeState(Session.self, "today")
+        todayPlan = t?.date == Helpers.todayStr() ? t : nil
+        weeklyReview = decodeState(WeeklyReviewCache.self, "weeklyReview")
+        monthlyReport = decodeState(MonthlyReportCache.self, "monthlyReport")
+    }
+
+    /// Another device (or this one) changed the account.
+    private func cloudChanged(_ what: String) {
+        switch what {
+        case "sessions": loadActive()
+        case "state": loadStateFromCloud()
+        default: break
+        }
+    }
+
+    /// Drop single-use Watch text from earlier days (pruneOldHealth on the web).
+    private func pruneOldHealthText() {
+        let today = "healthText-\(Helpers.todayStr())"
+        for k in Cloud.shared.stateKeys() where k.hasPrefix("healthText-") && k != today {
+            Cloud.shared.setState(k, nil)
+        }
+    }
+
+    /// One-time handover from the invite-code era: a Gemini key or GitHub
+    /// token this device still holds fills the cloud copy if it's missing
+    /// (key: owner only; token: only for this account's repo). Never
+    /// overwrites; the old secrets are removed afterwards.
+    private func adoptLegacyDeviceSettings() {
+        guard let acct = Cloud.shared.account else { return }
+        if let key = Keychain.get("gemini-api-key"), !key.isEmpty, acct.admin, Cloud.shared.geminiKey.isEmpty {
+            Cloud.shared.setSharedGeminiKey(key)
+        }
+        let cfg = GitHubSync.config()
+        if let token = Keychain.get("gh-token"), !token.isEmpty, cfg.token.isEmpty,
+           !cfg.repo.isEmpty, Defaults.string("gh-repo")?.lowercased() == cfg.repo.lowercased() {
+            GitHubSync.setConfig(token: token, repo: cfg.repo)
+        }
+        Keychain.removeAll()
     }
 
     // MARK: - Sync
@@ -109,7 +215,7 @@ final class AppState {
         lastSyncAt = Date()
         syncInfo = SyncInfo(state: "syncing")
         do {
-            let r = try await GitHubSync.syncNow(replaceRemote: replaceRemote)
+            let r = try await GitHubSync.syncNow(force: replaceRemote)
             if r.status == .unconfigured {
                 syncInfo = nil
                 return r
@@ -149,8 +255,8 @@ final class AppState {
     /// src/utils/healthIngest.js's common case (the URL-hash /
     /// clipboard paths are web-only).
     private func todaysHealth() -> String? {
-        guard let row = LocalStore.shared.backup.health.first(where: { $0.date == Helpers.todayStr() }) else { return nil }
-        return row.raw
+        if case .string(let t)? = Cloud.shared.stateValue("healthText-\(Helpers.todayStr())"), !t.isEmpty { return t }
+        return LocalStore.shared.backup.health.first(where: { $0.date == Helpers.todayStr() })?.raw
     }
 
     // MARK: - AI plan generation
@@ -194,13 +300,12 @@ final class AppState {
 
     private func maybeWeeklyReview() async {
         guard Calendar.current.component(.weekday, from: Date()) == 1 else { return } // Sundays only (1 = Sunday)
-        let cur = Defaults.codable(WeeklyReviewCache.self, "weekly-review")
         let thisMonday = Stats.mondayOf(Helpers.todayStr())
-        guard cur?.week != thisMonday else { return }
-        guard let summary = Stats.lastWeekSummary(history), !Keychain.apiKey.isEmpty else { return }
+        guard stateField("weeklyReview", "week") != thisMonday else { return } // already done this week
+        guard let summary = Stats.lastWeekSummary(history), !Cloud.shared.geminiKey.isEmpty else { return }
         guard let text = try? await Gemini.generateWeeklyReview(summary) else { return }
         let review = WeeklyReviewCache(week: thisMonday, at: Date().timeIntervalSince1970 * 1000, text: text, count: summary.count, progressions: summary.progressions)
-        Defaults.setCodable(review, for: "weekly-review")
+        Cloud.shared.setState("weeklyReview", try? JSONValue.encoding(review))
         weeklyReview = review
     }
 
@@ -210,13 +315,12 @@ final class AppState {
         guard cal.component(.day, from: now) <= 7 else { return } // first week of the month only
         guard let prevMonthDate = cal.date(byAdding: .month, value: -1, to: now) else { return }
         let ym = "\(cal.component(.year, from: prevMonthDate))-\(String(format: "%02d", cal.component(.month, from: prevMonthDate)))"
-        let cur = Defaults.codable(MonthlyReportCache.self, "monthly-report")
-        guard cur?.month != ym else { return }
-        guard !Keychain.apiKey.isEmpty else { return }
+        guard stateField("monthlyReport", "month") != ym else { return } // already generated
+        guard !Cloud.shared.geminiKey.isEmpty else { return }
         guard let sum = Stats.monthSummary(history, LocalStore.shared.backup.health, ym: ym) else { return }
         guard let text = try? await Gemini.generateMonthlyReport(sum) else { return }
         let report = MonthlyReportCache(month: ym, at: Date().timeIntervalSince1970 * 1000, text: text, sum: sum)
-        Defaults.setCodable(report, for: "monthly-report")
+        Cloud.shared.setState("monthlyReport", try? JSONValue.encoding(report))
         monthlyReport = report
     }
 
@@ -411,7 +515,7 @@ final class AppState {
         persistToday(nil)
         LocalStore.shared.clearSessions()
         LocalStore.shared.logEvent(type: "history_cleared", data: [:])
-        // overwrite the cloud too — a merge would resurrect the deleted data
+        // back up now so the GitHub copy matches right away
         await runSync(replaceRemote: true)
     }
 

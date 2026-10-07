@@ -1,10 +1,10 @@
 import Foundation
 import Security
 
-/// Minimal Keychain wrapper for the two secrets the web app keeps in
-/// localStorage (Gemini API key, GitHub token) — Keychain is strictly
-/// better here for the same threat model, so this is the one deliberate
-/// upgrade over the web storage model (see the iOS rewrite plan).
+/// Keychain access for the secrets the invite-code era stored on device
+/// (Gemini key, GitHub token). Both now live in Firestore (config/shared,
+/// accounts/{id}.github); AppState reads these once to carry them over,
+/// then removes them.
 enum Keychain {
     private static let service = "com.expdeath.CoachApp"
 
@@ -50,18 +50,5 @@ enum Keychain {
         for key in ["gemini-api-key", "gh-token"] {
             remove(key)
         }
-    }
-
-    // ── Named accessors — mirror storage.js getApiKey/setApiKey and
-    //    sync.js getSyncConfig/setSyncConfig's token half. ──────────
-
-    static var apiKey: String {
-        get { get("gemini-api-key") ?? "" }
-        set { set(newValue, for: "gemini-api-key") }
-    }
-
-    static var githubToken: String {
-        get { get("gh-token") ?? "" }
-        set { set(newValue, for: "gh-token") }
     }
 }

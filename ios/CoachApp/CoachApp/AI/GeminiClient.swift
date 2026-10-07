@@ -355,12 +355,12 @@ enum Gemini {
     /// text/chat calls) react to them differently (retry ladder vs
     /// simple model fallback).
     private static func post(model: String, systemInstruction: String, contents: [[String: Any]], generationConfig: [String: Any], timeout: TimeInterval) async throws -> (text: String, response: HTTPURLResponse, data: Data) {
-        guard !Keychain.apiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
         var req = URLRequest(url: endpoint(model))
         req.httpMethod = "POST"
         req.timeoutInterval = timeout
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(Keychain.apiKey, forHTTPHeaderField: "X-goog-api-key")
+        req.setValue(Cloud.shared.geminiKey, forHTTPHeaderField: "X-goog-api-key")
         let body: [String: Any] = [
             "system_instruction": ["parts": [["text": systemInstruction]]],
             "contents": contents,
@@ -472,7 +472,7 @@ enum Gemini {
     }
 
     private static func callGeminiText(_ userMsg: String, maxTokens: Int, eventType: String) async throws -> String {
-        guard !Keychain.apiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
         var lastErr: Error = GeminiError.message("no models tried")
         for model in models.prefix(2) {
             var config: [String: Any] = ["maxOutputTokens": maxTokens + 1000, "temperature": 0.6]
@@ -514,7 +514,7 @@ enum Gemini {
     }
 
     static func askCoach(messages: [ChatMessage], history: [Session] = [], todayPlan: Session? = nil, healthLog: [HealthRow] = [], focusSession: Session? = nil) async throws -> String {
-        guard !Keychain.apiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
         let recent = history.suffix(3).map { h -> String in
             "\(h.date) \(h.plan.sessionType) RPE \(h.fin.map { String($0.rpe) } ?? "?")\(h.fin?.pain.isEmpty == false ? " pain: \(h.fin!.pain)" : "")"
         }.joined(separator: "; ")
@@ -582,7 +582,7 @@ enum Gemini {
     ]
 
     static func intensifyWorkout(today: Session, history: [Session], healthLog: [HealthRow] = []) async throws -> IntensifyResult {
-        guard !Keychain.apiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
         let p = today.plan
         let checkin = today.checkin
         let progress = p.exercises.enumerated().map { (i, ex) -> String in
