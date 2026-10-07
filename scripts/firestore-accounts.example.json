@@ -1,0 +1,8 @@
+{
+  "projectId": "your-firebase-project-id",
+  "geminiKey": "",
+  "accounts": [
+    { "id": "abhi",   "name": "Abhi",   "repo": "expdeath/workout-data",     "emails": ["you@gmail.com"], "admin": true },
+    { "id": "karan",  "name": "Karan",  "repo": "expdeath/coach-data-karan",  "emails": [] }
+  ]
+}

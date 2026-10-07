@@ -61,7 +61,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
     };
   });
   const handleCoachSave = () => {
-    setApiKey(key.trim());
+    if (account?.admin) setApiKey(key.trim());
     setAISettings({
       profile: ai.profile.trim(),
       routine: ai.routine.trim(),
@@ -111,12 +111,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
     setSyncing(true);
     setSyncMsg('Syncing…');
     try {
-      const r = await syncNow();
+      const r = await syncNow({ force: true });
       if (r.status === 'unconfigured') {
         setSyncMsg('Add your token and repo first, then Save.');
       } else {
         if (r.changedLocal) await onSynced?.();
-        setSyncMsg(`✓ Synced — ${r.sessions} sessions in cloud`);
+        setSyncMsg(`✓ Backed up — ${r.sessions} sessions on GitHub`);
       }
     } catch (e) {
       setSyncMsg(`Sync failed: ${e.message}`);
@@ -206,7 +206,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
     setSendingFb(true);
     setFeedbackMsg('');
     try {
-      await sendFeedback(feedback, account?.name);
+      await sendFeedback(feedback);
       logEvent('feedback_sent', { chars: feedback.length });
       setFeedback('');
       setFeedbackMsg('✓ Sent — thank you!');
@@ -236,15 +236,19 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
 
   // ── Collapsed status lines ──
   const coachStatus = getApiKey()
-    ? `API key saved${getAISettings().profile ? ' · custom profile set' : ''}`
-    : 'No API key yet — add one to start';
+    ? `Shared API key set${getAISettings().profile ? ' · custom profile set' : ''}`
+    : account?.admin
+    ? 'No API key yet — add one to start'
+    : 'No API key yet — ask Abhi to add one';
   const lastSync = getLastSync();
   const syncStatus =
     lastSync?.status === 'ok'
-      ? `☁ synced ${new Date(lastSync.at).toLocaleString()} · ${lastSync.sessions} sessions in cloud`
-      : sync.repo
-      ? '☁ configured — not synced yet'
-      : 'Back up your log to a private GitHub repo';
+      ? `☁ live in the cloud · GitHub backup ${new Date(lastSync.at).toLocaleString()}`
+      : lastSync?.status === 'error'
+      ? `☁ live in the cloud · GitHub backup failed: ${lastSync.message}`
+      : sync.repo && sync.token
+      ? '☁ live in the cloud · GitHub backup not run yet'
+      : '☁ live in the cloud · add a GitHub token for backups';
   const watchReceived = todaysHealth();
 
   return (
@@ -258,7 +262,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
       {account && (
         <Section
           title="Account"
-          status={`Signed in as ${account.name}`}
+          status={`Signed in as ${account.name || account.email}`}
           statusColor="var(--teal)"
           open={open.account}
           onToggle={() => toggle('account')}
@@ -295,8 +299,10 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
           </button>
           <p className="body" style={{ marginTop: 6, fontSize: 12.5, color: 'var(--dim)' }}>
-            Signing out clears this device. Your training log is safe in the
-            cloud and comes back when you sign in again.
+            Signed in with Google as {account.email}. Signing out clears this
+            device (exercise photos/clips included — they only live here).
+            Your training log is safe in the cloud and comes back when you
+            sign in again.
           </p>
         </Section>
       )}
@@ -307,36 +313,48 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         open={open.coach}
         onToggle={() => toggle('coach')}
       >
-        <div className="q-label" style={{ marginTop: 0 }}>Gemini API key</div>
-        <div className="settings-key-row">
-          <input
-            className="input"
-            type={showKey ? 'text' : 'password'}
-            placeholder="AIzaSy..."
-            value={key}
-            onChange={(e) => setKey(e.target.value)}
-            style={{ marginTop: 0, flex: 1 }}
-          />
-          <button
-            className="ghost-btn"
-            onClick={() => setShowKey(!showKey)}
-            style={{ flexShrink: 0 }}
-          >
-            {showKey ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
-          Get a free key →{' '}
-          <a
-            href="https://aistudio.google.com/apikey"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="link"
-          >
-            aistudio.google.com/apikey
-          </a>{' '}
-          → "Create API key". Stored locally, only sent to Google's Gemini API.
-        </p>
+        {account?.admin ? (
+          <>
+            <div className="q-label" style={{ marginTop: 0 }}>Gemini API key (shared)</div>
+            <div className="settings-key-row">
+              <input
+                className="input"
+                type={showKey ? 'text' : 'password'}
+                placeholder="AIzaSy..."
+                value={key}
+                onChange={(e) => setKey(e.target.value)}
+                style={{ marginTop: 0, flex: 1 }}
+              />
+              <button
+                className="ghost-btn"
+                onClick={() => setShowKey(!showKey)}
+                style={{ flexShrink: 0 }}
+              >
+                {showKey ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
+              Get a free key →{' '}
+              <a
+                href="https://aistudio.google.com/apikey"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link"
+              >
+                aistudio.google.com/apikey
+              </a>{' '}
+              → "Create API key". One key for everyone on COACH — saved in
+              the cloud, readable only by invited accounts, and only ever
+              sent to Google's Gemini API.
+            </p>
+          </>
+        ) : (
+          <p className="body" style={{ marginTop: 0, fontSize: 12.5, color: 'var(--muted)' }}>
+            {getApiKey()
+              ? 'The AI coach runs on the shared key Abhi set up — nothing to configure.'
+              : "The AI coach needs a key — Abhi hasn't added the shared one yet."}
+          </p>
+        )}
 
         <div className="q-label">About you</div>
         <textarea
@@ -386,9 +404,10 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         onToggle={() => toggle('sync')}
       >
         <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          Syncs your full training log to a private GitHub repo you own, so
-          it survives this browser and follows you across devices. The app
-          syncs automatically when it opens and after each workout.
+          Your training log lives in the cloud and syncs live to every device
+          you sign in on. A full backup copy also goes to your private GitHub
+          repo (coach-backup.json + a readable log) whenever it changes —
+          at most every 10 minutes, and at least daily.
         </p>
         <input
           className="input"
@@ -425,7 +444,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             disabled={syncing}
             style={{ marginTop: 0, padding: 12, fontSize: 14 }}
           >
-            {syncing ? 'Syncing…' : 'Sync now'}
+            {syncing ? 'Backing up…' : 'Back up now'}
           </button>
         </div>
         {syncMsg && (
@@ -437,10 +456,11 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           Token setup (once): github.com → Settings → Developer settings →
           Fine-grained tokens → Generate. Repository access: only your data
           repo. Permissions: Contents → Read and write. Paste the token here —
-          it stays in this browser and is only sent to api.github.com.
+          it's saved to your account (so all your devices can back up) and
+          only ever sent to api.github.com.
         </p>
 
-        <div className="q-label">Local data</div>
+        <div className="q-label">Your data</div>
         {sessionCount != null && (
           <p className="mono" style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
             {sessionCount} sessions · {eventCount ?? '…'} events logged
@@ -648,7 +668,8 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         <p className="body" style={{ color: 'var(--muted)' }}>
           COACH is a personal workout planner powered by Google Gemini AI. It
           builds daily sessions from your check-in, training history, and
-          recovery data. Everything runs in your browser — no server, no account.
+          recovery data. Your log is stored in Google Cloud Firestore under
+          your Google sign-in, with a backup copy in your private GitHub repo.
         </p>
       </Section>
 

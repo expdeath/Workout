@@ -27,13 +27,13 @@ import {
   clearSessions,
   hardDeleteSession,
   logEvent,
-  migrateFromLocalStorage,
   mergeHealth,
   getAllHealth,
 } from './db/db';
-import { syncNow, getSyncConfig } from './db/sync';
+import { syncNow } from './db/sync';
+import { onCloudChange, cloudState, cloudSetState, cloudSignOut, NotInvitedError } from './db/cloud';
 
-import { needsLogin, parseInviteCode, applyAccount, getAccount, wipeLocal } from './utils/account';
+import { resumeSession } from './utils/account';
 
 import Login from './screens/Login';
 import Home from './screens/Home';
@@ -66,21 +66,11 @@ export default function App() {
   const [error, setError] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [syncInfo, setSyncInfo] = useState(null);
+  const [loginError, setLoginError] = useState('');
   const lastSyncAt = useRef(0);
-  const [weeklyReview, setWeeklyReview] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('coach:weekly-review'));
-    } catch {
-      return null;
-    }
-  });
-  const [monthlyReport, setMonthlyReport] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem('coach:monthly-report'));
-    } catch {
-      return null;
-    }
-  });
+  // cached AI reports — account state in Firestore, shared by devices
+  const [weeklyReview, setWeeklyReview] = useState(null);
+  const [monthlyReport, setMonthlyReport] = useState(null);
 
   // Check-in state — pre-filled with a "normal day"
   const [ci, setCi] = useState({
@@ -104,45 +94,21 @@ export default function App() {
   // ── Load persisted data ──
   useEffect(() => {
     (async () => {
-      // magic invite link (#invite=<code>). Fresh install → sign
-      // straight in. A device set up under a different repo asks
-      // before switching (wipes local state; anything cloud-synced is
-      // safe). Same account → just strip the hash. No reload in any
-      // path, so a browser that re-presents the original URL after
-      // navigation can't bounce us into a loop.
+      // signed-in Google user → their account (live from Firestore);
+      // nobody signed in, or an email not on the allowlist → login gate
       try {
-        const m = /[#&]invite=([A-Za-z0-9_-]+)/.exec(window.location.hash);
-        if (m) {
-          window.history.replaceState(null, '', window.location.pathname);
-          const acct = parseInviteCode(m[1]);
-          if (needsLogin()) {
-            // even without a config, stale IndexedDB from an old
-            // install could ride into the new account on first sync —
-            // start truly clean (no-op on a genuinely fresh device)
-            await wipeLocal();
-            applyAccount(acct);
-            logEvent('invite_redeemed', { via: 'link' });
-          } else if (acct.repo !== getSyncConfig().repo) {
-            const cur = getAccount();
-            const ok = window.confirm(
-              `This device is set up as ${cur?.name || 'someone else'}. ` +
-                `Switch to ${acct.name}'s account? Anything not backed up ` +
-                'from the old setup will be cleared off this device.'
-            );
-            if (ok) {
-              await wipeLocal();
-              applyAccount(acct);
-              logEvent('invite_redeemed', { via: 'link', switched: true });
-            }
-          }
+        if (!(await resumeSession())) {
+          setScreen('login');
+          return;
         }
       } catch (e) {
-        console.warn('[COACH] invite link failed', e); // → manual login box
-      }
-
-      // fresh install with no invite redeemed → login gate. Redeeming
-      // reloads the page, so this boot path simply stops here.
-      if (needsLogin()) {
+        console.warn('[COACH] sign-in failed', e);
+        if (e instanceof NotInvitedError) await cloudSignOut();
+        setLoginError(
+          e instanceof NotInvitedError
+            ? e.message
+            : "Couldn't open your account — check your connection and try again."
+        );
         setScreen('login');
         return;
       }
@@ -151,11 +117,12 @@ export default function App() {
         pruneOldHealth();
       } catch { /* non-critical */ }
 
-      await migrateFromLocalStorage();
       const h = await loadActive();
       const t = await loadKey('today', null);
       setHistory(h);
       if (t && t.date === todayStr()) setTodayPlan(t);
+      setWeeklyReview(cloudState('weeklyReview'));
+      setMonthlyReport(cloudState('monthlyReport'));
       logEvent('app_open', { sessions: h.length });
       reparseHealthRows(); // background — parser upgrades backfill old rows
       runSync(); // background — pulls sessions logged on other devices
@@ -171,6 +138,23 @@ export default function App() {
     })();
   }, []);
 
+  // Another device (or this one) changed the account: refresh what's
+  // on screen. Writes from this device land in the mirror first, so
+  // these mostly re-set equal values.
+  useEffect(
+    () =>
+      onCloudChange(async (what) => {
+        if (what === 'sessions') setHistory(await loadActive());
+        if (what === 'state') {
+          setWeeklyReview(cloudState('weeklyReview'));
+          setMonthlyReport(cloudState('monthlyReport'));
+          const t = cloudState('today');
+          setTodayPlan(t && t.date === todayStr() ? t : null);
+        }
+      }),
+    []
+  );
+
   const persistToday = async (t) => {
     setTodayPlan(t);
     await saveKey('today', t);
@@ -181,7 +165,7 @@ export default function App() {
   // reach the UI, stats, or the AI
   const loadActive = async () => (await getAllSessions()).filter((s) => !s.deleted);
 
-  // ── Cloud sync (no-op until configured in Settings) ──
+  // ── GitHub backup + Watch inbox (live sync is Firestore's job) ──
   const syncRetry = useRef(null);
   async function runSync(opts) {
     lastSyncAt.current = Date.now();
@@ -343,7 +327,7 @@ export default function App() {
   async function maybeWeeklyReview(hist) {
     try {
       if (new Date().getDay() !== 0) return; // Sundays only
-      const cur = JSON.parse(localStorage.getItem('coach:weekly-review') || 'null');
+      const cur = cloudState('weeklyReview');
       if (cur?.week === mondayOf(todayStr())) return; // already done this week
       const summary = lastWeekSummary(hist);
       if (!summary || !getApiKey()) return;
@@ -355,7 +339,7 @@ export default function App() {
         count: summary.count,
         progressions: summary.progressions,
       };
-      localStorage.setItem('coach:weekly-review', JSON.stringify(review));
+      cloudSetState('weeklyReview', review);
       setWeeklyReview(review);
     } catch (e) {
       console.warn('[COACH] weekly review failed', e);
@@ -370,7 +354,7 @@ export default function App() {
       if (now.getDate() > 7) return; // first week of the month only
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
       const ym = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
-      const cur = JSON.parse(localStorage.getItem('coach:monthly-report') || 'null');
+      const cur = cloudState('monthlyReport');
       if (cur?.month === ym) return; // already generated
       if (!getApiKey()) return;
       const healthLog = await getAllHealth().catch(() => []);
@@ -378,7 +362,7 @@ export default function App() {
       if (!sum) return; // no sessions that month — nothing to report
       const text = await generateMonthlyReport(sum);
       const report = { month: ym, at: Date.now(), text, sum };
-      localStorage.setItem('coach:monthly-report', JSON.stringify(report));
+      cloudSetState('monthlyReport', report);
       setMonthlyReport(report);
     } catch (e) {
       console.warn('[COACH] monthly report failed', e);
@@ -721,7 +705,7 @@ export default function App() {
     return (
       <div className="app">
         <div className="frame">
-          <Login />
+          <Login error={loginError} onSignedIn={() => window.location.reload()} />
         </div>
       </div>
     );

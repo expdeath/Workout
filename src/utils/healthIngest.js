@@ -8,8 +8,15 @@
 import { todayStr } from './helpers.js';
 import { parseHealthNumbers } from './stats.js';
 import { mergeHealth, getAllHealth } from '../db/db.js';
+import { cloudState, cloudSetState, cloudStateKeys } from '../db/cloud.js';
 
-const KEY = 'coach:health-';
+// Today's raw Watch text lives in the account's state as
+// healthText-<date> (Firestore), so every device sees it.
+const KEY = 'healthText-';
+const cloudStore = {
+  getItem: (k) => cloudState(k, null),
+  setItem: (k, v) => cloudSetState(k, v),
+};
 
 /** Persist the day's parsed numbers into the health store (synced). */
 function recordHealth(text) {
@@ -33,7 +40,7 @@ function recordHealth(text) {
  */
 export function ingestHealthFromUrl(
   hash = window.location.hash,
-  store = localStorage,
+  store = cloudStore,
   search = typeof window !== 'undefined' ? window.location.search : ''
 ) {
   let raw = null;
@@ -58,12 +65,12 @@ export function ingestHealthFromUrl(
 }
 
 /** Health text received for today (from the Shortcut), or ''. */
-export function todaysHealth(store = localStorage) {
+export function todaysHealth(store = cloudStore) {
   return store.getItem(KEY + todayStr()) || '';
 }
 
 /** Persist health text for today (clipboard paste path). */
-export function storeTodaysHealth(text, store = localStorage) {
+export function storeTodaysHealth(text, store = cloudStore) {
   const t = (text || '').trim().slice(0, 2000);
   if (t) {
     store.setItem(KEY + todayStr(), t);
@@ -106,10 +113,9 @@ export async function reparseHealthRows() {
 }
 
 /** Drop stored payloads older than today (they're single-use). */
-export function pruneOldHealth(store = localStorage) {
+export function pruneOldHealth() {
   const today = KEY + todayStr();
-  for (let i = store.length - 1; i >= 0; i--) {
-    const k = store.key(i);
-    if (k && k.startsWith(KEY) && k !== today) store.removeItem(k);
+  for (const k of cloudStateKeys()) {
+    if (k.startsWith(KEY) && k !== today) cloudSetState(k, null);
   }
 }

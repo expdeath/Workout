@@ -3,14 +3,18 @@ import react from '@vitejs/plugin-react';
 
 // Content-Security-Policy for the deployed site (build only — it would
 // break Vite's dev-server HMR). The app may only load its own assets and
-// talk to the Gemini API; everything else is blocked.
+// talk to Gemini, GitHub (backup) and Firebase (Google sign-in +
+// Firestore); everything else is blocked.
 const CSP = [
   "default-src 'none'",
-  "script-src 'self'",
+  "script-src 'self' https://apis.google.com", // Firebase Auth's sign-in popup helper
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // inline style attrs + Google Fonts CSS
   "font-src https://fonts.gstatic.com",
   "img-src 'self' data:",
-  "connect-src 'self' https://generativelanguage.googleapis.com https://api.github.com", // Gemini + cloud sync
+  "connect-src 'self' https://generativelanguage.googleapis.com https://api.github.com " + // Gemini + GitHub backup
+    "https://firestore.googleapis.com https://identitytoolkit.googleapis.com " + // Firestore + sign-in
+    "https://securetoken.googleapis.com https://www.googleapis.com",
+  "frame-src https://heath-9a322.firebaseapp.com https://apis.google.com https://accounts.google.com", // sign-in iframe
   "worker-src 'self'",   // service worker (offline)
   "manifest-src 'self'", // PWA manifest
   "base-uri 'none'",

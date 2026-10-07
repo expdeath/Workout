@@ -1,0 +1,83 @@
+rules_version = '2';
+
+// COACH — who may read/write what. Schema: docs/firestore.md.
+//
+// Invite-only: signing in with Google proves an email; the allowlist
+// (managed by the owner via the console or scripts/migrate-to-firestore.js,
+// never by clients) maps that email to one account. The same guarantees
+// the old GitHub merge gave (src/db/sync.js mergeBackups) hold here:
+//   - a deleted session can never be recreated (deletion wins)
+//   - a session / aiSettings write can't overwrite a newer copy
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function email() { return request.auth.token.email.lower(); }
+    function entryPath() { return /databases/$(database)/documents/allowlist/$(email()); }
+    function allowed() { return signedIn() && exists(entryPath()); }
+    function entry() { return get(entryPath()).data; }
+    function owns(acct) { return allowed() && entry().accountId == acct; }
+    function isAdmin() { return allowed() && entry().get('admin', false) == true; }
+    // the owner can read every account, as they could read every data repo
+    function canRead(acct) { return owns(acct) || isAdmin(); }
+    function notNewer() {
+      return resource == null
+        || request.resource.data.get('updatedAt', 0) >= resource.data.get('updatedAt', 0);
+    }
+
+    match /allowlist/{mail} {
+      allow read: if signedIn() && mail == email();
+      allow write: if false;
+    }
+
+    // shared Gemini key (one key for every account, changed in one place)
+    match /config/shared {
+      allow read: if allowed();
+      allow write: if isAdmin();
+    }
+
+    match /accounts/{acct} {
+      allow read: if canRead(acct);
+      // name/backupMeta/migratedFrom are set by the migration; clients
+      // only maintain the GitHub backup settings
+      allow update: if owns(acct)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['github']);
+
+      match /sessions/{id} {
+        allow read: if canRead(acct);
+        allow create, update: if owns(acct) && notNewer()
+          && !exists(/databases/$(database)/documents/accounts/$(acct)/deletedIds/$(id));
+        allow delete: if owns(acct);
+      }
+
+      match /deletedIds/{id} {
+        allow read: if canRead(acct);
+        allow create, update: if owns(acct);
+      }
+
+      match /state/aiSettings {
+        allow read: if canRead(acct);
+        allow write: if owns(acct) && notNewer();
+      }
+
+      // health/{date}, events/{iso|type}, state/{today|weeklyReview|…}.
+      // Rules OR together, so writes exclude state/aiSettings — or this
+      // would bypass its newer-wins check above. Reads must NOT test the
+      // document id: a whole-collection listener is only allowed when
+      // the rule holds for every document without knowing which.
+      match /{col}/{id} {
+        allow read: if canRead(acct) && col in ['health', 'events', 'state'];
+        allow write: if owns(acct) && col in ['health', 'events', 'state']
+          && !(col == 'state' && id == 'aiSettings');
+      }
+
+      // beta feedback: written by the user, read by the owner
+      match /feedback/{id} {
+        allow create: if owns(acct);
+        allow read: if canRead(acct);
+      }
+    }
+  }
+}

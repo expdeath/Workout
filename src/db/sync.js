@@ -1,49 +1,53 @@
-// ── Cloud sync via a private GitHub repo ─────────────────────────
-// The full backup (sessions + event log) lives as one JSON file in
-// a private repo the user owns. Sync = pull remote, merge with
-// local (union; newer session wins per date), write both sides.
-// Auth: a fine-grained PAT scoped to that single repo, stored in
-// localStorage like the Gemini key. Only ever sent to api.github.com
-// (enforced by the CSP).
+// ── GitHub backup + Watch inbox ──────────────────────────────────
+// Firestore (cloud.js) is the live database and syncs devices on its
+// own. GitHub keeps two jobs:
+//   1. Backup: the full account, as coach-backup.json (same shape as
+//      always) + a human-readable README log, in the account's private
+//      data repo. Pushed when data changed (≥10 min apart) or daily.
+//   2. Watch inbox: the Gym Check-in Shortcut still PUTs files into
+//      health-inbox/; every sync drains them into Firestore.
+// The repo + a fine-grained token (Contents read/write on that repo
+// only) live in accounts/{id}.github, so any device of the account
+// can do both.
 
-import { exportAll, replaceAll, sessionId, mergeHealth } from './db.js';
+import { exportAll, mergeHealth } from './db.js';
+import { cloudAccountDoc, cloudUpdateGithub, cloudSendFeedback, cloudSessions, cloudDeletedIds, currentAccount } from './cloud.js';
+import { normalizeBackup, mergeBackups } from './backupShape.js';
 import { sessionVolume, weekStats, parseHealthNumbers } from '../utils/stats.js';
 import { setLogged, fmtDate, todayStr } from '../utils/helpers.js';
 import { storeTodaysHealth } from '../utils/healthIngest.js';
+
+export { normalizeBackup, mergeBackups };
 
 const API = 'https://api.github.com';
 const FILE = 'coach-backup.json';
 const README = 'README.md';
 const BRANCH = 'main';
 const INBOX = 'health-inbox';
+const MIN_GAP_MS = 10 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-// ── Config ───────────────────────────────────────────────────────
+// ── Config (accounts/{id}.github) ────────────────────────────────
 
 export function getSyncConfig() {
-  return {
-    token: localStorage.getItem('coach:gh-token') || '',
-    repo: localStorage.getItem('coach:gh-repo') || '',
-  };
+  const g = cloudAccountDoc().github || {};
+  return { token: g.token || '', repo: g.repo || '' };
 }
 
 export function setSyncConfig({ token, repo }) {
-  localStorage.setItem('coach:gh-token', token.trim());
-  localStorage.setItem('coach:gh-repo', repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, ''));
+  return cloudUpdateGithub({
+    token: token.trim(),
+    repo: repo.trim().replace(/^https:\/\/github\.com\//, '').replace(/\/$/, ''),
+  });
 }
 
+/** Last backup attempt, shared by every device of the account. */
 export function getLastSync() {
-  try {
-    return JSON.parse(localStorage.getItem('coach:last-sync')) || null;
-  } catch {
-    return null;
-  }
+  return cloudAccountDoc().github?.lastBackup || null;
 }
 
 function setLastSync(info) {
-  localStorage.setItem(
-    'coach:last-sync',
-    JSON.stringify({ at: new Date().toISOString(), ...info })
-  );
+  return cloudUpdateGithub({ lastBackup: { ...(getLastSync() || {}), at: new Date().toISOString(), ...info } });
 }
 
 // ── GitHub API helpers ───────────────────────────────────────────
@@ -84,23 +88,16 @@ async function remoteShas(cfg) {
   return { backup: shaOf(FILE), readme: shaOf(README) };
 }
 
-/** Download + parse the remote backup. Raw media type dodges the 1MB JSON cap. */
-async function fetchRemote(cfg) {
-  const res = await gh(
-    cfg,
-    `/repos/${cfg.repo}/contents/${FILE}?ref=${BRANCH}`,
-    { headers: { Accept: 'application/vnd.github.raw+json' } }
-  );
-  if (res.status === 404) return null;
-  if (res.status === 401 || res.status === 403) {
-    throw new Error('GitHub token rejected — check it in Settings (needs Contents read/write on your data repo).');
-  }
-  if (!res.ok) throw new Error(`GitHub error ${res.status} fetching backup`);
-  try {
-    return JSON.parse(await res.text());
-  } catch {
-    throw new Error('Remote backup file is not valid JSON.');
-  }
+async function pushFile(cfg, path, content, message, sha) {
+  return gh(cfg, `/repos/${cfg.repo}/contents/${path}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      message,
+      content: b64encode(content),
+      branch: BRANCH,
+      ...(sha ? { sha } : {}),
+    }),
+  });
 }
 
 function commitMessage(backup) {
@@ -111,26 +108,21 @@ function commitMessage(backup) {
     : 'sync: no sessions yet';
 }
 
-async function pushRemote(cfg, backup, sha) {
-  const res = await gh(cfg, `/repos/${cfg.repo}/contents/${FILE}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      message: commitMessage(backup),
-      // pretty-printed: GitHub renders it readably and diffs stay small
-      content: b64encode(JSON.stringify(backup, null, 2)),
-      branch: BRANCH,
-      ...(sha ? { sha } : {}),
-    }),
-  });
-  if (res.status === 409 || res.status === 422) {
-    const err = new Error('sync conflict');
-    err.conflict = true;
-    throw err;
+/** Overwrite coach-backup.json — Firestore is the truth, so no merge.
+ *  A sha race with another device of the account just retries. */
+async function pushRemote(cfg, backup) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { backup: sha } = await remoteShas(cfg);
+    // pretty-printed: GitHub renders it readably and diffs stay small
+    const res = await pushFile(cfg, FILE, JSON.stringify(backup, null, 2), commitMessage(backup), sha);
+    if (res.ok) return;
+    if (res.status === 401 || res.status === 403) {
+      throw new Error('GitHub token rejected — check it in Settings (needs Contents read/write on your data repo).');
+    }
+    if (res.status !== 409 && res.status !== 422) throw new Error(`GitHub error ${res.status} pushing backup`);
+    await new Promise((r) => setTimeout(r, 800));
   }
-  if (res.status === 401 || res.status === 403) {
-    throw new Error('GitHub token rejected — check it in Settings (needs Contents read/write on your data repo).');
-  }
-  if (!res.ok) throw new Error(`GitHub error ${res.status} pushing backup`);
+  throw new Error('Backup conflict — another device is backing up right now. It will retry later.');
 }
 
 // ── Repo README: human-readable training log for GitHub ─────────
@@ -174,17 +166,10 @@ ${rows || '| — | — | — | — | — |'}
 `;
 }
 
-async function pushReadme(cfg, sessions, sha) {
+async function pushReadme(cfg, sessions) {
   try {
-    const res = await gh(cfg, `/repos/${cfg.repo}/contents/${README}`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        message: 'docs: update training log',
-        content: b64encode(buildReadme(sessions)),
-        branch: BRANCH,
-        ...(sha ? { sha } : {}),
-      }),
-    });
+    const { readme } = await remoteShas(cfg);
+    const res = await pushFile(cfg, README, buildReadme(sessions), 'docs: update training log', readme);
     if (!res.ok) console.warn('[COACH] README update skipped', res.status);
   } catch (e) {
     console.warn('[COACH] README update failed', e); // cosmetic — never fatal
@@ -192,27 +177,17 @@ async function pushReadme(cfg, sessions, sha) {
 }
 
 // ── Beta feedback ────────────────────────────────────────────────
-// One markdown file per submission in feedback/ of the user's data
-// repo. The owner reads feedback by checking the repos he provisioned.
-// Timestamped filenames are always unique, so no sha juggling.
+// Stored under accounts/{id}/feedback — the owner reads it in the
+// Firebase console (Firestore → accounts → … → feedback).
 
-export async function sendFeedback(text, name = '') {
-  const cfg = getSyncConfig();
-  if (!cfg.token || !cfg.repo) throw new Error('Sync is not set up.');
+export async function sendFeedback(text) {
   const body = String(text || '').trim();
   if (!body) throw new Error('Write something first.');
-  const stamp = new Date().toISOString().slice(0, 16).replace(':', '');
-  const path = `feedback/${stamp}.md`;
-  const md = `# Feedback — ${name || 'user'} — ${new Date().toISOString().slice(0, 10)}\n\n${body}\n`;
-  const res = await gh(cfg, `/repos/${cfg.repo}/contents/${path}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      message: `feedback: ${stamp}`,
-      content: b64encode(md),
-      branch: BRANCH,
-    }),
-  });
-  if (!res.ok) throw new Error(`Couldn't send (GitHub ${res.status}) — try again later.`);
+  try {
+    await cloudSendFeedback(body.slice(0, 2000));
+  } catch {
+    throw new Error("Couldn't send — check your connection and try again.");
+  }
 }
 
 // ── Health inbox ─────────────────────────────────────────────────
@@ -323,117 +298,28 @@ export async function consumeHealthInbox(cfg = getSyncConfig()) {
   return ingested;
 }
 
-// ── Merge ────────────────────────────────────────────────────────
-
-function pickSession(local, remote) {
-  if (!remote) return local;
-  if (!local) return remote;
-  const lu = local.updatedAt || 0;
-  const ru = remote.updatedAt || 0;
-  if (lu !== ru) return lu > ru ? local : remote;
-  if (local.finished !== remote.finished) return local.finished ? local : remote;
-  return local;
-}
-
-const eventKey = (e) => `${e.iso}|${e.type}`;
-
-export function mergeBackups(local, remote) {
-  if (!remote) return normalizeBackup(local);
-  // union by session id (legacy rows: id = date) — same-day workouts
-  // from different check-ins are distinct sessions and both survive
-  const byId = new Map();
-  for (const s of remote.sessions || []) if (s?.date) byId.set(sessionId(s), s);
-  for (const s of local.sessions || []) {
-    if (s?.date) byId.set(sessionId(s), pickSession(s, byId.get(sessionId(s))));
-  }
-
-  // deletion log: union, newest timestamp per id (deletion always wins
-  // over a live copy still sitting on another device)
-  const delById = new Map();
-  for (const d of [...(local.deletedIds || []), ...(remote.deletedIds || [])]) {
-    if (d?.id && (d.at || 0) > (delById.get(d.id) || 0)) delById.set(d.id, d.at || 0);
-  }
-  const deletedIds = [...delById].map(([id, at]) => ({ id, at }));
-  const seen = new Set();
-  const events = [];
-  for (const e of [...(local.events || []), ...(remote.events || [])]) {
-    if (!e?.type || seen.has(eventKey(e))) continue;
-    seen.add(eventKey(e));
-    events.push(e);
-  }
-  // AI settings (profile/routine): newest edit wins
-  const lc = local.aiSettings || {};
-  const rc = remote.aiSettings || {};
-  const aiSettings = (rc.updatedAt || 0) > (lc.updatedAt || 0) ? rc : lc;
-
-  // health rows: union by date, freshest reading wins
-  const byDate = new Map();
-  for (const h of remote.health || []) if (h?.date) byDate.set(h.date, h);
-  for (const h of local.health || []) {
-    if (!h?.date) continue;
-    const r = byDate.get(h.date);
-    byDate.set(h.date, !r || (h.receivedAt || 0) >= (r.receivedAt || 0) ? h : r);
-  }
-
-  return normalizeBackup({
-    ...local,
-    sessions: [...byId.values()],
-    events,
-    health: [...byDate.values()],
-    aiSettings,
-    deletedIds,
-  });
-}
-
-/** Deterministic shape so backups can be compared as JSON strings. */
-export function normalizeBackup(b) {
-  // deletion log: legacy in-place tombstones (deleted:true rows) fold
-  // into it, sessions carry only real workouts. Markers are kept
-  // permanently — a few bytes each, and no device can ever resurrect
-  // a deleted workout, however long it was offline.
-  const dels = new Map((b.deletedIds || []).map((d) => [d.id, d.at || 0]));
-  const sessions = [];
-  for (const s of b.sessions || []) {
-    if (!s?.date) continue;
-    const id = sessionId(s);
-    if (s.deleted) {
-      if (!dels.has(id)) dels.set(id, s.updatedAt || Date.now());
-      continue;
-    }
-    if (!dels.has(id)) sessions.push({ ...s, id });
-  }
-  return {
-    app: 'coach',
-    version: b.version || 1,
-    aiSettings: b.aiSettings || {},
-    deletedIds: [...dels]
-      .map(([id, at]) => ({ id, at }))
-      .sort((a, x) => a.id.localeCompare(x.id)),
-    health: [...(b.health || [])].sort((a, x) => (a.date < x.date ? -1 : 1)),
-    sessions: sessions.sort((a, x) => (a.date + a.id).localeCompare(x.date + x.id)),
-    events: (b.events || [])
-      .map(({ id, ...e }) => e)
-      .sort((a, x) => (eventKey(a) < eventKey(x) ? -1 : 1)),
-  };
-}
-
-const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-
 // ── Sync ─────────────────────────────────────────────────────────
 
-/**
- * Pull remote, merge with local, write back whichever side is stale.
- * With replaceRemote: overwrite the cloud with local state (used after
- * "Clear all history", where a merge would resurrect deleted data).
- * Returns { status, changedLocal }.
- */
-export async function syncNow({ replaceRemote = false } = {}) {
-  const cfg = getSyncConfig();
-  if (!cfg.token || !cfg.repo) return { status: 'unconfigured', changedLocal: false };
+/** Cheap "did anything change since the last backup" check. */
+function fingerprint() {
+  const sessions = cloudSessions();
+  const newest = Math.max(0, ...sessions.map((s) => s.updatedAt || 0));
+  return `${sessions.length}:${newest}:${cloudDeletedIds().length}`;
+}
 
-  // drain the Watch shortcut's drop-box first, so anything it delivered
-  // is in the local store before we snapshot and push. Never fatal —
-  // a broken inbox must not block session sync.
+/**
+ * Drain the Watch inbox into Firestore, then back the account up to
+ * GitHub if it's due. `replaceRemote` (or `force`) backs up now.
+ * Returns { status, changedLocal, sessions, inboxFiles }.
+ */
+export async function syncNow({ replaceRemote = false, force = false } = {}) {
+  const cfg = getSyncConfig();
+  const sessions = cloudSessions().length;
+  if (!currentAccount() || !cfg.token || !cfg.repo) {
+    return { status: 'unconfigured', changedLocal: false, sessions };
+  }
+
+  // never fatal — a broken inbox must not block the backup
   let inboxFiles = 0;
   try {
     inboxFiles = await consumeHealthInbox(cfg);
@@ -441,55 +327,25 @@ export async function syncNow({ replaceRemote = false } = {}) {
     console.warn('[COACH] health inbox check failed', e);
   }
 
-  const local = normalizeBackup(await exportAll());
+  const last = getLastSync();
+  const lastAt = last?.at ? Date.parse(last.at) : 0;
+  const fp = fingerprint();
+  const due =
+    replaceRemote ||
+    force ||
+    last?.status !== 'ok' ||
+    Date.now() - lastAt > DAY_MS ||
+    (fp !== last?.fingerprint && Date.now() - lastAt > MIN_GAP_MS);
+  if (!due) return { status: 'ok', changedLocal: inboxFiles > 0, sessions, inboxFiles, skipped: true };
 
-  if (replaceRemote) {
-    const shas = await remoteShas(cfg);
-    await pushRemote(cfg, local, shas.backup);
-    await pushReadme(cfg, local.sessions, (await remoteShas(cfg)).readme);
-    setLastSync({ status: 'ok', sessions: local.sessions.length });
-    return { status: 'pushed', changedLocal: false, sessions: local.sessions.length };
-  }
-
-  const doPass = async () => {
-    const remote = await fetchRemote(cfg);
-    const remoteNorm = remote ? normalizeBackup(remote) : null;
-    const merged = mergeBackups(local, remoteNorm);
-    const changedLocal = !same(merged, local);
-    if (changedLocal) await replaceAll(merged);
-    if (!remote || !same(merged, remoteNorm)) {
-      const shas = await remoteShas(cfg);
-      await pushRemote(cfg, merged, shas.backup);
-      // refresh the human-readable log when sessions changed (or README missing)
-      const sessionsChanged =
-        !remoteNorm || !same(merged.sessions, remoteNorm.sessions);
-      if (sessionsChanged || !shas.readme) {
-        await pushReadme(cfg, merged.sessions, (await remoteShas(cfg)).readme);
-      }
-    }
-    return { status: 'ok', changedLocal: changedLocal || inboxFiles > 0, sessions: merged.sessions.length, inboxFiles };
-  };
-
-  let result;
   try {
-    result = await doPass();
+    const backup = normalizeBackup(await exportAll());
+    await pushRemote(cfg, backup);
+    await pushReadme(cfg, backup.sessions);
+    await setLastSync({ status: 'ok', sessions: backup.sessions.length, fingerprint: fp, message: null });
+    return { status: 'ok', changedLocal: inboxFiles > 0, sessions: backup.sessions.length, inboxFiles };
   } catch (e) {
-    if (!e.conflict) {
-      setLastSync({ status: 'error', message: e.message });
-      throw e;
-    }
-    // Someone else pushed between our fetch and put — brief pause, once more
-    await new Promise((r) => setTimeout(r, 800));
-    try {
-      result = await doPass();
-    } catch (e2) {
-      const msg = e2.conflict
-        ? 'Sync conflict — another device is syncing right now. It will resolve on the next sync.'
-        : e2.message;
-      setLastSync({ status: 'error', message: msg });
-      throw e2.conflict ? new Error(msg) : e2;
-    }
+    await setLastSync({ status: 'error', message: e.message });
+    throw e;
   }
-  setLastSync({ status: 'ok', sessions: result.sessions });
-  return result;
 }

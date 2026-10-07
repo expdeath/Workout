@@ -1,57 +1,43 @@
-// ── Storage helpers ──────────────────────────────────────────────
-// localStorage-based persistence. Mirrors the old window.storage
-// interface so the rest of the app doesn't change.
+// ── Settings & small state ───────────────────────────────────────
+// Backed by the signed-in account in Firestore (src/db/cloud.js), so
+// every device sees the same values. Synchronous getters read the
+// in-memory mirror; setters update it at once and save in the background.
 
-const PREFIX = 'coach:';
+import { cloudState, cloudSetState, cloudShared, cloudSetSharedKey, currentAccount } from '../db/cloud.js';
 
 export async function loadKey(key, fallback) {
-  try {
-    const raw = localStorage.getItem(PREFIX + key);
-    return raw !== null ? JSON.parse(raw) : fallback;
-  } catch {
-    return fallback;
-  }
+  return cloudState(key, fallback);
 }
 
 export async function saveKey(key, value) {
-  try {
-    localStorage.setItem(PREFIX + key, JSON.stringify(value));
-  } catch (e) {
-    console.error('storage save failed', e);
-  }
+  await cloudSetState(key, value);
 }
+
+// ── Gemini key: one shared key for every account (config/shared) ──
 
 export function getApiKey() {
-  return localStorage.getItem('coach:gemini-api-key') || '';
+  return cloudShared().geminiKey || '';
 }
 
+/** Owner only — firestore.rules reject anyone else's write. */
 export function setApiKey(key) {
-  localStorage.setItem('coach:gemini-api-key', key);
+  if (!currentAccount()?.admin) return;
+  if (key === getApiKey()) return;
+  cloudSetSharedKey(key);
 }
 
-// ── AI coach setup (personal profile + base routine) ─────────────
-// Kept out of the public app code for privacy; travels with the
-// cloud backup (newest edit wins across devices).
+// ── AI coach setup (personal profile + base routine + gym setup) ──
+// Newest edit wins across devices (updatedAt, enforced by the rules).
 
 export function getAISettings() {
-  try {
-    return JSON.parse(localStorage.getItem('coach:ai-settings')) || {};
-  } catch {
-    return {};
-  }
+  return cloudState('aiSettings', {}) || {};
 }
 
 export function setAISettings(patch) {
-  const cur = getAISettings();
-  localStorage.setItem(
-    'coach:ai-settings',
-    JSON.stringify({ ...cur, ...patch, updatedAt: Date.now() })
-  );
+  cloudSetState('aiSettings', { ...getAISettings(), ...patch, updatedAt: Date.now() });
 }
 
-/** Raw restore (backup import / sync) — preserves updatedAt. */
+/** Raw restore (backup import) — preserves updatedAt. */
 export function restoreAISettings(obj) {
-  if (obj && typeof obj === 'object') {
-    localStorage.setItem('coach:ai-settings', JSON.stringify(obj));
-  }
+  if (obj && typeof obj === 'object') cloudSetState('aiSettings', obj);
 }

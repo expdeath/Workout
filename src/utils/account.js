@@ -1,64 +1,90 @@
-// ── Accounts via invite codes ────────────────────────────────────
-// There is no signup. An account is provisioned by the owner (a
-// private data repo + a fine-grained PAT scoped to it, optionally a
-// Gemini key) and handed out as one base64url invite code made by
-// scripts/make-invite.js. Redeeming a code just fills the same
-// localStorage keys the app has always used — sync and the AI need
-// no changes. Revocation = revoking that PAT on GitHub.
+// ── Accounts: Google sign-in + an owner-managed allowlist ─────────
+// There is no signup. The owner adds a person's Google email to the
+// Firestore allowlist (allowlist/{email} → accountId); signing in with
+// that Google account opens their account on any device. Revoking =
+// deleting the allowlist entry.
 
-import { setApiKey, getApiKey } from './storage.js';
-import { setSyncConfig, getSyncConfig } from '../db/sync.js';
+import {
+  currentUser,
+  startSession,
+  currentAccount,
+  cloudSignOut,
+  cloudAccountDoc,
+  cloudUpdateGithub,
+  cloudShared,
+  cloudSetSharedKey,
+  cloudState,
+  cloudSetState,
+  finishRedirectSignIn,
+} from '../db/cloud.js';
 
-const ACCOUNT_KEY = 'coach:account';
-
+/** { name, accountId, admin, email } of the signed-in account, or null. */
 export function getAccount() {
-  try {
-    return JSON.parse(localStorage.getItem(ACCOUNT_KEY)) || null;
-  } catch {
-    return null;
-  }
+  return currentAccount();
 }
 
-/** True on a fresh install with no account and no hand-entered setup
- *  (pre-account installs keep working without ever seeing Login). */
-export function needsLogin() {
-  return !getAccount() && !getApiKey() && !getSyncConfig().token;
-}
-
-function b64urlDecode(str) {
-  const b64 = str.replace(/-/g, '+').replace(/_/g, '/');
-  const bin = atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4));
-  const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-/** Decode + validate an invite code. Throws a user-readable error. */
-export function parseInviteCode(code) {
-  const raw = String(code || '').replace(/\s+/g, '');
-  if (!raw) throw new Error('Paste the invite code you were sent.');
-  let acct;
-  try {
-    acct = JSON.parse(b64urlDecode(raw));
-  } catch {
-    throw new Error("That doesn't look like a COACH invite code — check you copied all of it.");
-  }
-  if (!acct?.name || !acct?.repo || !acct?.ghToken) {
-    throw new Error('Invite code is incomplete — ask for a new one.');
-  }
+/**
+ * Boot: resolve the signed-in Google user and open their account.
+ * Returns the account, or null when nobody is signed in. Throws
+ * NotInvitedError (from cloud.js) for an email not on the allowlist.
+ */
+export async function resumeSession() {
+  await finishRedirectSignIn();
+  const user = await currentUser();
+  if (!user) return null;
+  const acct = await startSession(user);
+  adoptLegacyBrowserData();
   return acct;
 }
 
-/** Redeem: write the config the rest of the app already reads. */
-export function applyAccount(acct) {
-  setSyncConfig({ token: acct.ghToken, repo: acct.repo });
-  if (acct.geminiKey) setApiKey(acct.geminiKey);
-  localStorage.setItem(
-    ACCOUNT_KEY,
-    JSON.stringify({ name: acct.name, since: new Date().toISOString() })
-  );
+/**
+ * One-time handover from the pre-Firestore app on this browser: its
+ * Gemini key (owner only → the shared key), its GitHub token (when it
+ * belongs to this account's repo), and the browser-only state that was
+ * never synced (in-progress workout, cached reports, today's chat).
+ * Only fills what the cloud doesn't already have; never overwrites.
+ */
+function adoptLegacyBrowserData() {
+  try {
+    const acct = currentAccount();
+    const ls = (k) => localStorage.getItem(k);
+    const json = (k) => {
+      try {
+        return JSON.parse(ls(k));
+      } catch {
+        return null;
+      }
+    };
+
+    const key = ls('coach:gemini-api-key');
+    if (acct.admin && key && !cloudShared().geminiKey) cloudSetSharedKey(key);
+
+    const gh = cloudAccountDoc().github || {};
+    const token = ls('coach:gh-token');
+    const repo = (ls('coach:gh-repo') || '').toLowerCase();
+    if (token && !gh.token && gh.repo && repo === gh.repo.toLowerCase()) {
+      cloudUpdateGithub({ token });
+    }
+
+    const carry = [
+      ['coach:today', 'today'],
+      ['coach:weekly-review', 'weeklyReview'],
+      ['coach:monthly-report', 'monthlyReport'],
+    ];
+    for (const k of Object.keys(localStorage)) {
+      const m = /^coach:chat-(\d{4}-\d{2}-\d{2})$/.exec(k);
+      if (m) carry.push([k, `chat-${m[1]}`]);
+    }
+    for (const [from, to] of carry) {
+      const v = json(from);
+      if (v && cloudState(to, null) === null) cloudSetState(to, v);
+    }
+  } catch (e) {
+    console.warn('[COACH] legacy handover skipped', e);
+  }
 }
 
-/** Clear every coach:* key and the local DB (cloud copies untouched). */
+/** Clear every coach:* key and the local media DB (cloud copies untouched). */
 export async function wipeLocal() {
   for (const k of Object.keys(localStorage)) {
     if (k.startsWith('coach:')) localStorage.removeItem(k);
@@ -69,8 +95,9 @@ export async function wipeLocal() {
   });
 }
 
-/** Wipe this device back to the login screen (data stays in the cloud). */
+/** Sign out: this device forgets the account (data stays in the cloud). */
 export async function signOut() {
+  await cloudSignOut();
   await wipeLocal();
   window.location.reload();
 }

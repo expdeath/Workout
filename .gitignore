@@ -4,3 +4,8 @@ dist/
 *.local
 .env
 .env.*
+
+# real migration config holds people's emails + keys
+scripts/firestore-accounts.json
+*.service-account.json
+gittoken*.docx

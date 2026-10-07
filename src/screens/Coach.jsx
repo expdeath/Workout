@@ -2,26 +2,22 @@ import React, { useState, useRef, useEffect } from 'react';
 import { askCoach } from '../api/gemini';
 import { getAllHealth } from '../db/db';
 import { todayStr } from '../utils/helpers';
+import { cloudState, cloudSetState, cloudStateKeys } from '../db/cloud';
 
-const CHAT_KEY = 'coach:chat-';
+// Today's chat is account state in Firestore (chat-<date>), so it
+// follows you between devices.
+const CHAT_KEY = 'chat-';
 
 function loadChat() {
-  try {
-    return JSON.parse(localStorage.getItem(CHAT_KEY + todayStr())) || [];
-  } catch {
-    return [];
-  }
+  return cloudState(CHAT_KEY + todayStr(), []) || [];
 }
 
 function saveChat(messages) {
-  try {
-    // today's chat only — yesterday's questions rarely matter tomorrow
-    for (let i = localStorage.length - 1; i >= 0; i--) {
-      const k = localStorage.key(i);
-      if (k?.startsWith(CHAT_KEY) && k !== CHAT_KEY + todayStr()) localStorage.removeItem(k);
-    }
-    localStorage.setItem(CHAT_KEY + todayStr(), JSON.stringify(messages.slice(-30)));
-  } catch { /* storage full — chat is ephemeral anyway */ }
+  // today's chat only — yesterday's questions rarely matter tomorrow
+  for (const k of cloudStateKeys()) {
+    if (k.startsWith(CHAT_KEY) && k !== CHAT_KEY + todayStr()) cloudSetState(k, null);
+  }
+  cloudSetState(CHAT_KEY + todayStr(), messages.slice(-30));
 }
 
 // Coach chat as a bottom sheet — reachable from any screen via the

@@ -1,29 +1,24 @@
 import React, { useState } from 'react';
-import { parseInviteCode, applyAccount, wipeLocal } from '../utils/account';
-import { logEvent } from '../db/db';
+import { signInWithGoogle } from '../db/cloud';
 
-// First-run gate for invited users. There is deliberately no signup:
-// the only way in is an invite code provisioned by the owner.
-export default function Login() {
-  const [code, setCode] = useState('');
-  const [error, setError] = useState('');
+// Sign-in gate. There is deliberately no signup: Google proves who you
+// are, and only emails the owner has added to the allowlist get in.
+export default function Login({ error: bootError, onSignedIn }) {
+  const [error, setError] = useState(bootError || '');
   const [busy, setBusy] = useState(false);
 
-  const redeem = async () => {
+  const signIn = async () => {
     setError('');
-    let acct;
-    try {
-      acct = parseInviteCode(code);
-    } catch (e) {
-      setError(e.message);
-      return;
-    }
     setBusy(true);
-    await wipeLocal(); // stale local data must not ride into this account
-    applyAccount(acct);
-    logEvent('invite_redeemed', { name: acct.name, repo: acct.repo });
-    // clean boot: pulls any existing cloud data with the new config
-    window.location.reload();
+    try {
+      const user = await signInWithGoogle();
+      if (user) await onSignedIn(); // null → redirecting away
+    } catch (e) {
+      if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+        setError(e.message || "Couldn't sign in — try again.");
+      }
+      setBusy(false);
+    }
   };
 
   return (
@@ -31,34 +26,24 @@ export default function Login() {
       <div className="center-fill" style={{ padding: 24, textAlign: 'center' }}>
         <div className="brand">COACH</div>
         <p className="body" style={{ marginTop: 10, color: 'var(--muted)' }}>
-          Your AI training coach. This is a private beta — you'll need the
-          invite code you were sent.
+          Your AI training coach. This is a private beta — sign in with the
+          Google account Abhi added for you.
         </p>
-        <textarea
-          className="input textarea"
-          style={{ marginTop: 18, minHeight: 90, textAlign: 'left' }}
-          placeholder="Paste your invite code…"
-          autoCapitalize="none"
-          autoCorrect="off"
-          spellCheck={false}
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-        />
         {error && (
-          <p className="body" style={{ marginTop: 10, color: 'var(--amber)' }}>
+          <p className="body" style={{ marginTop: 14, color: 'var(--amber)' }}>
             {error}
           </p>
         )}
         <button
           className="big-btn"
-          style={{ marginTop: 14, width: '100%' }}
-          disabled={busy || !code.trim()}
-          onClick={redeem}
+          style={{ marginTop: 18, width: '100%' }}
+          disabled={busy}
+          onClick={signIn}
         >
-          {busy ? 'Setting up…' : "Let's train"}
+          {busy ? 'Signing in…' : 'Sign in with Google'}
         </button>
         <p className="body" style={{ marginTop: 16, fontSize: 12.5, color: 'var(--dim)' }}>
-          No code? Ask Abhi for one — accounts are invite-only for now.
+          Not on the list yet? Ask Abhi to add your Google email.
         </p>
       </div>
     </div>
