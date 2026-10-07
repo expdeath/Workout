@@ -58,8 +58,13 @@ final class Cloud {
 
     // ── Setup ────────────────────────────────────────────────────
 
+    private static var configured = false
+
     static func configure() {
-        guard FirebaseApp.app() == nil else { return }
+        // a flag, not `FirebaseApp.app() == nil`: asking Firebase before
+        // it's configured logs a misleading "not yet configured" warning
+        guard !configured else { return }
+        configured = true
         FirebaseApp.configure()
         if let clientID = FirebaseApp.app()?.options.clientID {
             GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
