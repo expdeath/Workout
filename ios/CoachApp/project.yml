@@ -51,6 +51,9 @@ targets:
         ASSETSCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
+        # Abhishek Aggarwal (Personal Team) — free Apple ID signing. Kept
+        # here so `xcodegen generate` doesn't wipe the team picked in Xcode.
+        DEVELOPMENT_TEAM: WFR2GPT97L
     dependencies:
       - package: Firebase
         product: FirebaseAuth

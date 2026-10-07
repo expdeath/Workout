@@ -401,6 +401,7 @@
 				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					8AA7E75502F0CC7DD59275C9 = {
+						DevelopmentTeam = WFR2GPT97L;
 						ProvisioningStyle = Automatic;
 					};
 					C3A81C2E1FB7670A03447636 = {
@@ -577,6 +578,7 @@
 				ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = WFR2GPT97L;
 				INFOPLIST_FILE = CoachApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -598,6 +600,7 @@
 				ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = WFR2GPT97L;
 				INFOPLIST_FILE = CoachApp/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
