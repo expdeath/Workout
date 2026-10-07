@@ -50,9 +50,14 @@ final class HealthKitSync {
 
     /// Today plus any of the last `days` days with no row yet. Returns how
     /// many days were written.
+    /// Bump when how a day is read changes: the next sync re-reads every
+    /// day in range once (not only missing ones), fixing stored rows.
+    private static let readVersion = "2" // 2: wrist temperature by night
+
     @discardableResult
     func sync(days: Int = 7) async -> Int {
         guard Self.isAvailable, Self.requested, Cloud.shared.account != nil || Cloud.shared.offline else { return 0 }
+        let reread = Defaults.string("healthkit-read-version") != Self.readVersion
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
         let have = Set(LocalStore.shared.backup.health.map(\.date))
@@ -62,7 +67,7 @@ final class HealthKitSync {
             let iso = Self.iso(day)
             // past days: only fill gaps (a finished day doesn't change);
             // today: always refresh — steps/kcal keep climbing
-            if back > 0 && have.contains(iso) { continue }
+            if back > 0 && have.contains(iso) && !reread { continue }
             let m = await readDay(day)
             guard !m.isEmpty else { continue }
             let text = m.shortcutText
@@ -74,6 +79,7 @@ final class HealthKitSync {
             if back == 0 { Cloud.shared.setState("healthText-\(iso)", .string(text)) }
             written += 1
         }
+        if reread && days >= 7 { Defaults.set(Self.readVersion, for: "healthkit-read-version") }
         if written > 0 { LocalStore.shared.logEvent(type: "healthkit_synced", data: ["days": .number(Double(written))]) }
         return written
     }
@@ -112,7 +118,11 @@ final class HealthKitSync {
         async let exMin = stat(.appleExerciseTime, .cumulativeSum, dayStart, end, .minute())
         async let dist = stat(.distanceWalkingRunning, .cumulativeSum, dayStart, end, .meterUnit(with: .kilo))
         async let resp = stat(.respiratoryRate, .discreteAverage, dayStart, end, HKUnit.count().unitDivided(by: .minute()))
-        async let wrist = stat(.appleSleepingWristTemperature, .discreteAverage, dayStart, end, .degreeCelsius())
+        // a per-night reading: the night that ends on this day (18:00 the
+        // evening before → 14:00), like sleep — not the day it started
+        async let wrist = stat(.appleSleepingWristTemperature, .discreteAverage,
+                               Calendar.current.date(byAdding: .hour, value: -6, to: dayStart)!,
+                               Calendar.current.date(byAdding: .hour, value: 14, to: dayStart)!, .degreeCelsius())
         async let spo2 = stat(.oxygenSaturation, .discreteAverage, dayStart, end, .percent())
         // VO₂max is measured every few days — the latest value up to this day
         async let vo2 = latest(.vo2Max, before: end, within: 30, HKUnit(from: "ml/kg*min"))

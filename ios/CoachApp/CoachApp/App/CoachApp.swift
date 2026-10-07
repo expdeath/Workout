@@ -6,6 +6,11 @@ struct CoachApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var appState: AppState = {
         Cloud.configure()
+        // unit tests run inside this app: they must never reach the real
+        // database, whatever account this simulator last signed in with
+        if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
+            Cloud.shared.offline = true
+        }
         #if DEBUG
         DebugSeed.applyIfRequested()
         #endif
