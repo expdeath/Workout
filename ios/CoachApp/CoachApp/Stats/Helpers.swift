@@ -84,4 +84,49 @@ enum Helpers {
         if c.backTight { s -= 8 }
         return max(5, min(98, s))
     }
+
+    // ── Plate math (ports DEFAULT_BAR_KG / parsePlates / plateBreakdown
+    //    in src/utils/helpers.js) ─────────────────────────────────
+
+    static let defaultBarKg: Double = 20
+    static let defaultPlates: [Double] = [25, 20, 15, 10, 5, 2.5, 1.25]
+
+    /// "25, 20, 2.5" → [25, 20, 2.5] (deduped, largest first), or nil.
+    static func parsePlates(_ text: String?) -> [Double]? {
+        let list = (text ?? "")
+            .split(whereSeparator: { $0 == "," || $0.isWhitespace })
+            .compactMap { Double($0) }
+            .filter { $0 > 0 && $0 <= 50 }
+        return list.isEmpty ? nil : Array(Set(list)).sorted(by: >)
+    }
+
+    struct PlateBreakdown: Equatable {
+        var bar: Double
+        var perSide: [Double]
+        /// closest achievable total when the plates can't hit the target
+        var loaded: Double
+        var exact: Bool
+    }
+
+    /// Greedy per-side barbell breakdown for a target total weight, or
+    /// nil when the target isn't a positive number.
+    static func plateBreakdown(_ target: Double?, barKg: Double = defaultBarKg, plates: [Double] = defaultPlates) -> PlateBreakdown? {
+        guard let t = target, t > 0 else { return nil }
+        if t <= barKg { return PlateBreakdown(bar: barKg, perSide: [], loaded: barKg, exact: t == barKg) }
+        var side = (t - barKg) / 2
+        var perSide: [Double] = []
+        for p in plates.sorted(by: >) {
+            while side >= p - 1e-9 {
+                perSide.append(p)
+                side -= p
+            }
+        }
+        let loaded = barKg + 2 * perSide.reduce(0, +)
+        return PlateBreakdown(bar: barKg, perSide: perSide, loaded: loaded, exact: abs(loaded - t) < 0.05)
+    }
+
+    /// JS-style number text: 20 not 20.0, 2.5 stays 2.5.
+    static func fmtKg(_ n: Double) -> String {
+        n.rounded() == n ? String(Int64(n)) : String(n)
+    }
 }

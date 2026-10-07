@@ -35,6 +35,7 @@ enum Account {
         Keychain.removeAll()
         Defaults.removeAll()
         LocalStore.shared.wipe()
+        MediaStore.removeAll() // form photos/clips live only on this device
     }
 
     /// Sign out: this device forgets the account (data stays in the cloud).

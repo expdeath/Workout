@@ -24,6 +24,7 @@
 		5F2B505F5F4C6323D31BFC6C /* HealthRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C425F43158B5254B588FF87 /* HealthRow.swift */; };
 		6DD278FBA3F972D8AAB17ABA /* GitHubSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8E1F79407B95F9876CC298 /* GitHubSync.swift */; };
 		6EF49BF3A29F0F128AB99F6D /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED75075F64ADB343F03E577 /* Defaults.swift */; };
+		70AF43CE05D0C1E4A311CB5C /* FinishView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A1B9AE218A1F3ECC2FBA19 /* FinishView.swift */; };
 		744CCC8BCB26D0EF64CE193C /* BarlowCondensed-Medium.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 573B7BA6D7679DC5E8B43E96 /* BarlowCondensed-Medium.ttf */; };
 		7AC782CCEF0AB65599E9CA67 /* DailyLoopUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 193B1F0A99C49468BC9E65BB /* DailyLoopUITests.swift */; };
 		7ACB2ACD4CBF7562C47065DD /* AppState.swift in Sources */ = {isa = PBXBuildFile; fileRef = B137D6123B796207E89A998D /* AppState.swift */; };
@@ -34,7 +35,9 @@
 		843144A15F7F49B7DE3C3AEF /* Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D76F8B589808C9CE3ED0D39 /* Helpers.swift */; };
 		855997403D3F8E7F0B451E1D /* BarlowCondensed-SemiBold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 696076EF089475919CCBF9F2 /* BarlowCondensed-SemiBold.ttf */; };
 		8A550C3192B1F8A14F784EEA /* DebugSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCAEA435AFB6A4DE1807AFCB /* DebugSeed.swift */; };
+		8C5CE376A12B7E284DB19BAC /* MediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2B5726910E58A9446D8077 /* MediaStore.swift */; };
 		8EA307E788505041A279D0CF /* Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F578B0AEDD93EB8E02DC983 /* Cloud.swift */; };
+		9D005707815558E158A91285 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7722B7FB363CBE997AD0D121 /* WorkoutView.swift */; };
 		A2416229CC621E9384AF6AEC /* GeminiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05DE28CD06ED84C435ABB62 /* GeminiClient.swift */; };
 		A6D8C2E32A49927C348CB117 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FD893E91D3C8EFCB6AE803E /* Theme.swift */; };
 		A989565DFDAB9AD66CF14E81 /* Backup.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB6169C0C54EB8C9F04136D0 /* Backup.swift */; };
@@ -99,6 +102,7 @@
 		61A6F6FDE1FE8C3C6F0D5ABD /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		696076EF089475919CCBF9F2 /* BarlowCondensed-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-SemiBold.ttf"; sourceTree = "<group>"; };
 		6C62D9115D416D86EAE653A8 /* GeneratingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratingView.swift; sourceTree = "<group>"; };
+		7722B7FB363CBE997AD0D121 /* WorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutView.swift; sourceTree = "<group>"; };
 		7A8E1F79407B95F9876CC298 /* GitHubSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubSync.swift; sourceTree = "<group>"; };
 		7F578B0AEDD93EB8E02DC983 /* Cloud.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cloud.swift; sourceTree = "<group>"; };
 		80D902733D0D54899A36B5F1 /* Keychain.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Keychain.swift; sourceTree = "<group>"; };
@@ -110,6 +114,7 @@
 		A4857B65C34E9E4650D2DA9A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AC351811A65DE09111910C78 /* CheckInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInView.swift; sourceTree = "<group>"; };
 		AD06ADFE4533607E7A21B6A3 /* RawPreserving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawPreserving.swift; sourceTree = "<group>"; };
+		AF2B5726910E58A9446D8077 /* MediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaStore.swift; sourceTree = "<group>"; };
 		B03FD8908AA50B32B8C3684D /* IBMPlexMono-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexMono-Medium.ttf"; sourceTree = "<group>"; };
 		B137D6123B796207E89A998D /* AppState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppState.swift; sourceTree = "<group>"; };
 		BAF1A9EC27C20987F3AB6476 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
@@ -118,6 +123,7 @@
 		C4D02728AC64DA75B4EF4424 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 		CB9C1D4F979D40652BBF1211 /* HelpersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpersTests.swift; sourceTree = "<group>"; };
 		D0EE6A02CA1C2D131CE51BA3 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Bold.ttf"; sourceTree = "<group>"; };
+		D4A1B9AE218A1F3ECC2FBA19 /* FinishView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinishView.swift; sourceTree = "<group>"; };
 		D6CE98D7C81213FB136546C0 /* AISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettings.swift; sourceTree = "<group>"; };
 		DCAEA435AFB6A4DE1807AFCB /* DebugSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugSeed.swift; sourceTree = "<group>"; };
 		E05DE28CD06ED84C435ABB62 /* GeminiClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiClient.swift; sourceTree = "<group>"; };
@@ -148,9 +154,11 @@
 			isa = PBXGroup;
 			children = (
 				AC351811A65DE09111910C78 /* CheckInView.swift */,
+				D4A1B9AE218A1F3ECC2FBA19 /* FinishView.swift */,
 				6C62D9115D416D86EAE653A8 /* GeneratingView.swift */,
 				0E1915BFEFF962BBD6217A3C /* HomeView.swift */,
 				61A6F6FDE1FE8C3C6F0D5ABD /* LoginView.swift */,
+				7722B7FB363CBE997AD0D121 /* WorkoutView.swift */,
 			);
 			path = Screens;
 			sourceTree = "<group>";
@@ -288,6 +296,7 @@
 				0ED75075F64ADB343F03E577 /* Defaults.swift */,
 				80D902733D0D54899A36B5F1 /* Keychain.swift */,
 				98E442381BD61F67FD1B99C3 /* LocalStore.swift */,
+				AF2B5726910E58A9446D8077 /* MediaStore.swift */,
 			);
 			path = Persistence;
 			sourceTree = "<group>";
@@ -471,6 +480,7 @@
 				8A550C3192B1F8A14F784EEA /* DebugSeed.swift in Sources */,
 				6EF49BF3A29F0F128AB99F6D /* Defaults.swift in Sources */,
 				B151982805CDED44361EFF3F /* Event.swift in Sources */,
+				70AF43CE05D0C1E4A311CB5C /* FinishView.swift in Sources */,
 				1E41D2DBD1D0122243958933 /* FirestoreCodec.swift in Sources */,
 				BCA2BD30CF905A27369CD5A7 /* FormControls.swift in Sources */,
 				A2416229CC621E9384AF6AEC /* GeminiClient.swift in Sources */,
@@ -483,6 +493,7 @@
 				15A1C80FD0F5593B5EFF7D92 /* Keychain.swift in Sources */,
 				D5B0E22405C5CDAF5F35847B /* LocalStore.swift in Sources */,
 				F63DC9E538F539C4033954B9 /* LoginView.swift in Sources */,
+				8C5CE376A12B7E284DB19BAC /* MediaStore.swift in Sources */,
 				F6B5BB3DC931154C085344FC /* Plan.swift in Sources */,
 				BDC1C8D6FD478430CCC37975 /* QuickCardioSheet.swift in Sources */,
 				353E17B04F8CCAD2651DFF0C /* RawPreserving.swift in Sources */,
@@ -492,6 +503,7 @@
 				CC652DF84FCD828E6D231889 /* SetLog.swift in Sources */,
 				CE6932EB8D1B33435B98C5C2 /* Stats.swift in Sources */,
 				A6D8C2E32A49927C348CB117 /* Theme.swift in Sources */,
+				9D005707815558E158A91285 /* WorkoutView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

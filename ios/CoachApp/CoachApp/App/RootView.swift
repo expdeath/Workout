@@ -18,6 +18,10 @@ struct RootView: View {
                 CheckInView()
             case .generating:
                 GeneratingView()
+            case .workout:
+                WorkoutView()
+            case .finish:
+                FinishView()
             default:
                 ComingSoonView(screen: appState.screen)
             }

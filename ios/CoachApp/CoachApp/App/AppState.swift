@@ -386,10 +386,11 @@ final class AppState {
     func updateSet(_ exI: Int, _ setI: Int, weight: String? = nil, reps: String? = nil, time: String? = nil, dist: String? = nil, done: Bool? = nil, effort: String? = nil) {
         guard var t = todayPlan, exI < t.log.count, setI < t.log[exI].count else { return }
         var s = t.log[exI][setI]
-        if let weight { s.weight = weight }
-        if let reps { s.reps = reps }
-        if let time { s.time = time }
-        if let dist { s.dist = dist }
+        // clamp, don't reject — same sanitation as the web app's updateSet
+        if let weight { s.weight = Helpers.cleanWeight(weight) }
+        if let reps { s.reps = Helpers.cleanReps(reps) }
+        if let time { s.time = Helpers.cleanTime(time) }
+        if let dist { s.dist = Helpers.cleanDist(dist) }
         if let done { s.done = done }
         if let effort { s.effort = effort }
         t.log[exI][setI] = s

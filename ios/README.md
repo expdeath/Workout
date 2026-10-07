@@ -22,8 +22,8 @@ next.
 | CheckIn screen | ✅ Done |
 | Generating screen | ✅ Done |
 | Past workout screen (`src/screens/AddPast.jsx`) | ❌ Not started |
-| Workout screen (rest timer, set logging) | ❌ Not started |
-| Finish screen | ❌ Not started |
+| Workout screen (rest timer, set logging) | ✅ Done — UI-tested (set → rest timer → plates → effort → finish) |
+| Finish screen | ✅ Done (PR banner + confetti) |
 | History / HistoryDetail screens | ❌ Not started |
 | Records screen | ❌ Not started |
 | Progress screen (charts) | ❌ Not started |
@@ -32,7 +32,8 @@ next.
 | HealthKit | Planned next — replaces the Watch Shortcut (decided 2026-10-07) |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-64 unit tests (`CoachAppTests/`) and 2 UI tests (`CoachAppUITests/`).
+67 unit tests (`CoachAppTests/`) and 3 UI tests (`CoachAppUITests/`), all
+passing on the iPhone 17 simulator (2026-10-07).
 The unit tests pass (run on macOS on 2026-10-07 — see "Dev workflow"
 for why). The UI tests and the Firestore/Google sign-in flow haven't
 run since the move to Firestore: the simulator was unavailable (Xcode 27
@@ -293,12 +294,14 @@ device with a free Apple ID.
 
 ## Immediate next step
 
-1. Run the Firestore build on a simulator/device: sign in with Google,
-   confirm Home shows the account's real history, log something and
-   watch it appear on the web app (and the reverse). Run the 2 UI tests.
-2. Build `WorkoutView` next, then `FinishView` — Home → CheckIn →
-   Generating already works end to end against the real Gemini client,
-   so those two close the daily loop (Workout → Finish). Port
-   `src/screens/Workout.jsx` directly, following the same pattern
-   `CheckInView.swift` used for `CheckIn.jsx`.
-3. HealthKit (replaces the Watch Shortcut).
+The daily loop (Home → Check-in → Generating → Workout → Finish) is
+complete and verified against real Firestore data in the simulator.
+Next, in order: History / HistoryDetail (view + edit + delete logged
+sessions), Past workout (AddPast), Settings (account, sign out, coach
+setup, gym setup, GitHub backup), Coach chat sheet (the Workout header's
+🗨 Coach button is left out until it exists), Records, Progress charts,
+then HealthKit (replaces the Watch Shortcut).
+
+iOS-native differences from the web, on purpose: the rest timer schedules
+a real local notification (fires with the phone locked) instead of a
+wake-lock workaround; set ticks and rest-over use haptics.

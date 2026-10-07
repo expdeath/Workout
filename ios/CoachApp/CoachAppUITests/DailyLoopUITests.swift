@@ -83,6 +83,55 @@ final class DailyLoopUITests: XCTestCase {
         XCTAssertTrue(text("Session RPE 6/10").exists)
     }
 
+    /// Workout → Finish on the seeded in-progress Push session: log a set,
+    /// rest timer + skip, plate math, then finish with a PR and save.
+    func testWorkoutLogsSetsRestsAndFinishesWithPR() {
+        app.terminate()
+        app.launchEnvironment["COACH_DEBUG_SCREEN"] = "workout"
+        app.launch()
+        XCTAssertTrue(text("PUSH").waitForExistence(timeout: 10))
+        XCTAssertTrue(text("0/8 sets").exists)
+        // each exercise logs the right way: walk = min/km, stretch = tick-off
+        XCTAssertTrue(app.staticTexts["30s each side — tap to tick off"].exists)
+        XCTAssertTrue(app.staticTexts["km"].exists, "cardio row shows min/km inputs")
+
+        // first set of Flat Dumbbell Press: 25kg × 10 (seeded history: 24×11)
+        let weight = app.textFields.element(boundBy: 0)
+        weight.tap()
+        weight.typeText("25")
+        let reps = app.textFields.element(boundBy: 1)
+        reps.tap()
+        reps.typeText("10")
+        text("PUSH").tap() // dismiss the keyboard
+
+        // plate math follows the typed weight
+        app.buttons["Plate breakdown for 25kg"].firstMatch.tap()
+        XCTAssertTrue(app.staticTexts["25kg → 20kg bar + 2.5 per side"].waitForExistence(timeout: 3))
+
+        // ticking the set starts the rest timer
+        app.buttons["Set 1"].firstMatch.tap()
+        XCTAssertTrue(text("1/8 sets").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.descendants(matching: .any)["rest-bar"].waitForExistence(timeout: 3))
+        button("Skip").tap()
+        XCTAssertTrue(app.descendants(matching: .any)["rest-bar"].waitForNonExistence(timeout: 3))
+
+        // effort cycles '' → easy
+        app.buttons["Effort for set 1: not rated"].firstMatch.tap()
+        XCTAssertTrue(app.buttons["Effort for set 1: easy"].firstMatch.waitForExistence(timeout: 3))
+
+        // finish: 25kg beats the seeded 24kg → PR banner
+        let finish = button("Finish session")
+        for _ in 0..<8 where !finish.isHittable { app.swipeUp() }
+        finish.tap()
+        XCTAssertTrue(text("Log it. 20 seconds.").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("🏆 New personal record").exists)
+        button("Save session").tap()
+
+        // back home, today's session done
+        XCTAssertTrue(button("Plan another session").waitForExistence(timeout: 10))
+        XCTAssertTrue(text("Push").exists, "today's Push is the new Last session")
+    }
+
     private func logCardio(open: String, title: String, save: String, minutes: String, day: String?) {
         button(open).tap()
         XCTAssertTrue(text(title).waitForExistence(timeout: 5))

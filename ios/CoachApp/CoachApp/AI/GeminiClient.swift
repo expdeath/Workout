@@ -765,7 +765,3 @@ enum Gemini {
         throw GeminiError.message("Couldn't build today's session. Check Settings for your API key, then try again.")
     }
 }
-
-private extension Array {
-    subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
-}

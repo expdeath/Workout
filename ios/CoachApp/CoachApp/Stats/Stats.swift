@@ -640,6 +640,7 @@ enum Stats {
     }
 }
 
-private extension Array {
+extension Array {
+    /// nil instead of a crash for an out-of-range index — shared app-wide.
     subscript(safe index: Int) -> Element? { indices.contains(index) ? self[index] : nil }
 }
