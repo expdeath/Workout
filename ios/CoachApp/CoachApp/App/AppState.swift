@@ -146,7 +146,10 @@ final class AppState {
         loadStateFromCloud()
         pruneOldHealthText()
         LocalStore.shared.logEvent(type: "app_open", data: ["sessions": .number(Double(history.count))])
-        Task { await runSync() }
+        Task {
+            await HealthKitSync.shared.sync() // today + any missing days of the last week
+            await runSync()
+        }
         Task { await maybeWeeklyReview() }
         Task { await maybeMonthlyReport() }
         screen = Cloud.shared.geminiKey.isEmpty ? .settings : .home
@@ -255,7 +258,17 @@ final class AppState {
     /// Call when the app regains focus/foreground — throttled to 20s.
     func maybeSyncOnForeground() {
         guard Date().timeIntervalSince(lastSyncAt) >= 20 else { return }
-        Task { await runSync() }
+        Task {
+            await HealthKitSync.shared.sync() // Apple Health → today's row (no-op until connected)
+            await runSync()
+        }
+    }
+
+    /// Home's Start check-in / Quick start: fresh Apple Health numbers
+    /// for today first, so the check-in is pre-filled with them.
+    func prepareCheckin() async -> Checkin {
+        await HealthKitSync.shared.sync(days: 1)
+        return buildDefaultCheckin()
     }
 
     // MARK: - Check-in defaults

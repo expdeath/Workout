@@ -26,6 +26,7 @@
 		4FB215E244426BB20D24276A /* GitHubSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F2D03D9C91E568C8F16E21 /* GitHubSyncTests.swift */; };
 		52117873534E423B28660223 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 58427C02DEE6A795B79725A0 /* FirebaseFirestore */; };
 		5F2B505F5F4C6323D31BFC6C /* HealthRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C425F43158B5254B588FF87 /* HealthRow.swift */; };
+		6D2311C551B755FDF064AF32 /* HealthKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4082505E7AA67B1465333C3 /* HealthKitSync.swift */; };
 		6DD278FBA3F972D8AAB17ABA /* GitHubSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A8E1F79407B95F9876CC298 /* GitHubSync.swift */; };
 		6EF49BF3A29F0F128AB99F6D /* Defaults.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0ED75075F64ADB343F03E577 /* Defaults.swift */; };
 		70AF43CE05D0C1E4A311CB5C /* FinishView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4A1B9AE218A1F3ECC2FBA19 /* FinishView.swift */; };
@@ -56,6 +57,7 @@
 		BFE41F2D8F909AEA7C9108E7 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C5007568985F1CEDE236DA /* Account.swift */; };
 		C813E970915002A9E1505C10 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 79CFF7F363D6C714AA676AFD /* FirebaseAuth */; };
 		CC652DF84FCD828E6D231889 /* SetLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 459C2153FE9C6D2EF12DA926 /* SetLog.swift */; };
+		CD8362533B0D8914F6B7CBEB /* HealthKitSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4CA8DE6672468D3E7F5C97D /* HealthKitSyncTests.swift */; };
 		CE6932EB8D1B33435B98C5C2 /* Stats.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9286486D9E3853F9AE29E1FA /* Stats.swift */; };
 		D1FE6FB71BBE08E46ECD81DD /* Goals.swift in Sources */ = {isa = PBXBuildFile; fileRef = 368422A12F504996535F0598 /* Goals.swift */; };
 		D31F58BB46BB223D0ABCBD55 /* Charts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0CE66B20671C1A6583ADDAD /* Charts.swift */; };
@@ -127,9 +129,11 @@
 		969A3682A2C9753F57C08238 /* GeminiClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiClientTests.swift; sourceTree = "<group>"; };
 		98E442381BD61F67FD1B99C3 /* LocalStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalStore.swift; sourceTree = "<group>"; };
 		99D3D991679FD15919611154 /* JSONValue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JSONValue.swift; sourceTree = "<group>"; };
+		9A3CA8B93261AC2EA09093B1 /* CoachApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = CoachApp.entitlements; sourceTree = "<group>"; };
 		9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreCodecTests.swift; sourceTree = "<group>"; };
 		A0CE66B20671C1A6583ADDAD /* Charts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Charts.swift; sourceTree = "<group>"; };
 		A4857B65C34E9E4650D2DA9A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A4CA8DE6672468D3E7F5C97D /* HealthKitSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSyncTests.swift; sourceTree = "<group>"; };
 		AC351811A65DE09111910C78 /* CheckInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckInView.swift; sourceTree = "<group>"; };
 		AD06ADFE4533607E7A21B6A3 /* RawPreserving.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RawPreserving.swift; sourceTree = "<group>"; };
 		AF2B5726910E58A9446D8077 /* MediaStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaStore.swift; sourceTree = "<group>"; };
@@ -141,6 +145,7 @@
 		BEBDE669FB3442C977E83D36 /* IBMPlexMono-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "IBMPlexMono-Regular.ttf"; sourceTree = "<group>"; };
 		C0F2D03D9C91E568C8F16E21 /* GitHubSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubSyncTests.swift; sourceTree = "<group>"; };
 		C2E6B54A53354408D2D89552 /* CoachChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachChatView.swift; sourceTree = "<group>"; };
+		C4082505E7AA67B1465333C3 /* HealthKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitSync.swift; sourceTree = "<group>"; };
 		C4D02728AC64DA75B4EF4424 /* Session.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Session.swift; sourceTree = "<group>"; };
 		CB9C1D4F979D40652BBF1211 /* HelpersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HelpersTests.swift; sourceTree = "<group>"; };
 		CD8BA800263FD9A95B27CF7D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -272,6 +277,7 @@
 				7F578B0AEDD93EB8E02DC983 /* Cloud.swift */,
 				5C41053E5BC0BD24649F83A6 /* FirestoreCodec.swift */,
 				7A8E1F79407B95F9876CC298 /* GitHubSync.swift */,
+				C4082505E7AA67B1465333C3 /* HealthKitSync.swift */,
 			);
 			path = Sync;
 			sourceTree = "<group>";
@@ -297,6 +303,7 @@
 			isa = PBXGroup;
 			children = (
 				A4857B65C34E9E4650D2DA9A /* Assets.xcassets */,
+				9A3CA8B93261AC2EA09093B1 /* CoachApp.entitlements */,
 				603465482B7BC774B7E3E841 /* GoogleService-Info.plist */,
 				5F8DC321378F931AB7FF4102 /* Info.plist */,
 				EEB9D466644CB8DB3C55F465 /* Account */,
@@ -340,6 +347,7 @@
 				9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */,
 				969A3682A2C9753F57C08238 /* GeminiClientTests.swift */,
 				C0F2D03D9C91E568C8F16E21 /* GitHubSyncTests.swift */,
+				A4CA8DE6672468D3E7F5C97D /* HealthKitSyncTests.swift */,
 				CB9C1D4F979D40652BBF1211 /* HelpersTests.swift */,
 				F532E7DB967C7E61C02AEC8C /* LenientDecodingTests.swift */,
 				37B5A5069CED84D6E719D757 /* StatsTests.swift */,
@@ -492,6 +500,7 @@
 				BA9BB5DD39275A0CB1CE917A /* FirestoreCodecTests.swift in Sources */,
 				08A6085FD3B53DC52BFA2F4D /* GeminiClientTests.swift in Sources */,
 				4FB215E244426BB20D24276A /* GitHubSyncTests.swift in Sources */,
+				CD8362533B0D8914F6B7CBEB /* HealthKitSyncTests.swift in Sources */,
 				D793EEAFC8A8AE5BAB0E4EC4 /* HelpersTests.swift in Sources */,
 				31DFBD66C7E446FE6E214BB9 /* LenientDecodingTests.swift in Sources */,
 				3664BD3FA68CC56DE50BF7D9 /* StatsTests.swift in Sources */,
@@ -526,6 +535,7 @@
 				B51FE8EE2605AA822E51254D /* GeneratingView.swift in Sources */,
 				6DD278FBA3F972D8AAB17ABA /* GitHubSync.swift in Sources */,
 				D1FE6FB71BBE08E46ECD81DD /* Goals.swift in Sources */,
+				6D2311C551B755FDF064AF32 /* HealthKitSync.swift in Sources */,
 				5F2B505F5F4C6323D31BFC6C /* HealthRow.swift in Sources */,
 				843144A15F7F49B7DE3C3AEF /* Helpers.swift in Sources */,
 				091B71B0A3C9EAD19DAC8DEC /* HistoryDetailView.swift in Sources */,
@@ -620,6 +630,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETSCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CoachApp/CoachApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = WFR2GPT97L;
@@ -642,6 +653,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETSCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = CoachApp/CoachApp.entitlements;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = WFR2GPT97L;

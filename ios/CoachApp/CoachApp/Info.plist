@@ -29,6 +29,10 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>COACH reads your Watch data (HRV, resting heart rate, sleep, steps, VO₂max, workouts' energy) to judge recovery and plan each session.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>COACH doesn't write to Apple Health.</string>
 	<key>UIAppFonts</key>
 	<array>
 		<string>BarlowCondensed-Bold.ttf</string>
@@ -36,6 +40,10 @@
 		<string>BarlowCondensed-Medium.ttf</string>
 		<string>IBMPlexMono-Regular.ttf</string>
 		<string>IBMPlexMono-Medium.ttf</string>
+	</array>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>

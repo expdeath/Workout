@@ -34,6 +34,9 @@ struct SettingsView: View {
     @State private var feedbackMsg = ""
     @State private var sendingFb = false
     @State private var confirmOut = false
+    // apple health
+    @State private var healthBusy = false
+    @State private var healthMsg = ""
 
     private var account: Cloud.AccountInfo? { Account.current() }
 
@@ -214,7 +217,7 @@ struct SettingsView: View {
     private var watchSection: some View {
         let today = Cloud.shared.stateValue("healthText-\(Helpers.todayStr())")
         let text: String? = { if case .string(let t)? = today { return t }; return nil }()
-        return section("watch", "⌚ Apple Watch", status: text == nil ? "Nothing received today yet" : "Received today",
+        return section("watch", "⌚ Apple Watch & Health", status: text == nil ? "Nothing received today yet" : "Received today",
                        statusColor: text == nil ? nil : Theme.teal) {
             if let text {
                 Text("⌚ Today: \(Stats.fmtHealthLine(Stats.parseHealthNumbers(text)).isEmpty ? text : Stats.fmtHealthLine(Stats.parseHealthNumbers(text)))")
@@ -226,9 +229,37 @@ struct SettingsView: View {
                 Text("📥 Last delivery on this device: \(inbox.files) file\(inbox.files > 1 ? "s" : ""), \(Date(timeIntervalSince1970: inbox.at / 1000).formatted(date: .abbreviated, time: .shortened))")
                     .font(Theme.mono(12.5)).foregroundStyle(Theme.muted)
             }
-            Text("Your Gym Check-in Shortcut reads Health data (sleep, HRV, VO₂max, calories…) and uploads it to your data repo; the app collects it on every sync and pre-fills your check-in.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.muted)
+            QLabel(text: "Apple Health")
+            if !HealthKitSync.isAvailable {
+                Text("Apple Health isn't available on this device.").font(Theme.body(13)).foregroundStyle(Theme.muted)
+            } else {
+                Text(HealthKitSync.requested
+                     ? "Connected — the app reads HRV, resting HR, sleep, steps, VO₂max, energy, exercise, distance, breathing rate and wrist temperature straight from Apple Health whenever it opens (today + any missing day of the last week). To change what it may read: iPhone Settings → Health → Data Access & Devices → COACH."
+                     : "Let the app read your Watch data straight from Apple Health — no Shortcut needed. It only reads; it never writes to Health.")
+                    .font(Theme.body(13)).foregroundStyle(Theme.muted)
+                Button(healthBusy ? "Reading Apple Health…" : (HealthKitSync.requested ? "Read Apple Health now" : "Connect Apple Health")) {
+                    Task { await connectHealth() }
+                }
+                .buttonStyle(BigButtonStyle())
+                .disabled(healthBusy)
+                if !healthMsg.isEmpty { Text(healthMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
+            }
+            Text("The Gym Check-in Shortcut still works alongside: it uploads to your data repo and the app collects it on every sync. Once Apple Health is connected you can turn off its automation (Shortcuts → Automation).")
+                .font(Theme.body(12.5)).foregroundStyle(Theme.dim)
         }
+    }
+
+    private func connectHealth() async {
+        healthBusy = true
+        healthMsg = ""
+        do {
+            try await HealthKitSync.shared.requestAccess()
+            let n = await HealthKitSync.shared.sync()
+            healthMsg = n > 0 ? "✓ Read \(n) day\(n == 1 ? "" : "s") from Apple Health." : "Nothing new in Apple Health — if that's unexpected, check iPhone Settings → Health → Data Access & Devices → COACH."
+        } catch {
+            healthMsg = "Couldn't open Apple Health: \(error.localizedDescription)"
+        }
+        healthBusy = false
     }
 
     // MARK: - Actions

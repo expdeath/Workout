@@ -132,7 +132,7 @@ struct HomeView: View {
                     appState.screen = .workout
                 } else {
                     Task {
-                        appState.ci = appState.buildDefaultCheckin()
+                        appState.ci = await appState.prepareCheckin()
                         appState.error = ""
                         appState.screen = .checkIn
                     }
@@ -147,7 +147,7 @@ struct HomeView: View {
                 if !inProgress {
                     Button("⚡ Quick start") {
                         Task {
-                            let checkin = appState.buildDefaultCheckin()
+                            let checkin = await appState.prepareCheckin()
                             appState.ci = checkin
                             LocalStore.shared.logEvent(type: "quick_start")
                             var c = checkin

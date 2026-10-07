@@ -20,9 +20,17 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: CoachApp
+    entitlements:
+      path: CoachApp/CoachApp.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
     info:
       path: CoachApp/Info.plist
       properties:
+        NSHealthShareUsageDescription: COACH reads your Watch data (HRV, resting heart rate, sleep, steps, VO₂max, workouts' energy) to judge recovery and plan each session.
+        NSHealthUpdateUsageDescription: COACH doesn't write to Apple Health.
+        UIBackgroundModes: [fetch]
         CFBundleDisplayName: COACH
         UILaunchScreen: {}
         # Google sign-in returns to the app through this URL scheme

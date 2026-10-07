@@ -21,18 +21,18 @@ next.
 | Home screen | ✅ Done (quick cardio can be backdated, like the web) |
 | CheckIn screen | ✅ Done |
 | Generating screen | ✅ Done |
-| Past workout screen (`src/screens/AddPast.jsx`) | ❌ Not started |
+| Past workout screen (`src/screens/AddPast.jsx`) | ✅ Done, UI-tested |
 | Workout screen (rest timer, set logging) | ✅ Done — UI-tested (set → rest timer → plates → effort → finish) |
 | Finish screen | ✅ Done (PR banner + confetti) |
-| History / HistoryDetail screens | ❌ Not started |
-| Records screen | ❌ Not started |
-| Progress screen (charts) | ❌ Not started |
-| Settings screen | ❌ Not started |
-| Coach chat sheet | ❌ Not started |
-| HealthKit | Planned next — replaces the Watch Shortcut (decided 2026-10-07) |
+| History / HistoryDetail screens | ✅ Done, UI-tested (edit, delete, scoped chat) |
+| Records screen | ✅ Done |
+| Progress screen (charts) | ✅ Done (Swift Charts) |
+| Settings screen | ✅ Done (export/import/CSV, backup, sign out, Apple Health) |
+| Coach chat sheet | ✅ Done (shared chat-<date> with the web) |
+| HealthKit | ✅ Built + unit-tested; needs a run on the real iPhone (Settings → Connect Apple Health) |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-67 unit tests (`CoachAppTests/`) and 3 UI tests (`CoachAppUITests/`), all
+70 unit tests (`CoachAppTests/`) and 5 UI tests (`CoachAppUITests/`), all
 passing on the iPhone 17 simulator (2026-10-07).
 The unit tests pass (run on macOS on 2026-10-07 — see "Dev workflow"
 for why). The UI tests and the Firestore/Google sign-in flow haven't
@@ -294,14 +294,19 @@ device with a free Apple ID.
 
 ## Immediate next step
 
-The daily loop (Home → Check-in → Generating → Workout → Finish) is
-complete and verified against real Firestore data in the simulator.
-Next, in order: History / HistoryDetail (view + edit + delete logged
-sessions), Past workout (AddPast), Settings (account, sign out, coach
-setup, gym setup, GitHub backup), Coach chat sheet (the Workout header's
-🗨 Coach button is left out until it exists), Records, Progress charts,
-then HealthKit (replaces the Watch Shortcut).
+Every web screen is ported and the app runs against the shared Firestore
+data. Left: verify Apple Health on the real iPhone (Settings → ⌚ Apple
+Watch & Health → Connect Apple Health), then turn off the Shortcut
+automation once it's confirmed.
 
-iOS-native differences from the web, on purpose: the rest timer schedules
-a real local notification (fires with the phone locked) instead of a
-wake-lock workaround; set ticks and rest-over use haptics.
+iOS-native differences from the web, on purpose: Apple Health is read
+directly (HealthKit, de-duplicated across Watch + iPhone); the rest timer
+schedules a real local notification (fires with the phone locked); set
+ticks and rest-over use haptics; charts use Swift Charts.
+
+Signing: `DEVELOPMENT_TEAM` (free Personal Team) is pinned in project.yml
+so regenerating doesn't break device builds. Free-team builds expire
+after ~7 days — reinstall with
+`xcodebuild -scheme CoachApp -destination 'platform=iOS,id=<udid>' -allowProvisioningUpdates build`
+and `xcrun devicectl device install app`. HealthKit works with free
+provisioning (verified: the generated profile carries the entitlement).
