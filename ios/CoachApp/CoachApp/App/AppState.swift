@@ -49,7 +49,16 @@ struct MonthlyReportCache: Codable {
 /// weekly/monthly report generation — is ported.
 @Observable
 final class AppState {
-    var screen: Screen = .loading
+    var screen: Screen = .loading {
+        didSet {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["COACH_DEBUG_TRACE"] == "1" {
+                print("[COACH] screen \(oldValue) → \(screen) · instance \(ObjectIdentifier(self).hashValue % 10000)")
+                Thread.callStackSymbols.prefix(6).forEach { print("   ", $0) }
+            }
+            #endif
+        }
+    }
     var history: [Session] = []
     var todayPlan: Session? = nil
     var chatOpen = false
@@ -514,6 +523,58 @@ final class AppState {
         LocalStore.shared.upsert(session: t)
         LocalStore.shared.logEvent(type: "quick_cardio_logged", data: ["kind": .string(kind), "date": .string(day)])
         Task { await runSync() }
+    }
+
+    // MARK: - Backup export / import (Settings → Your data)
+
+    /// exportAll() in src/db/db.js: the account as one JSON file.
+    func exportBackupFile() async throws -> URL {
+        var b = LocalStore.shared.backup
+        b.events = try await Cloud.shared.allEvents()
+        b.sessions.sort { ($0.date + $0.id) < ($1.date + $1.id) }
+        b.health.sort { $0.date < $1.date }
+        b.version = 4
+        guard case .object(var o) = try JSONValue.encoding(b) else { throw CocoaError(.coderInvalidValue) }
+        o["exportedAt"] = .string(ISO8601DateFormatter.withMillis.string(from: Date()))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("coach-backup-\(Helpers.todayStr()).json")
+        try JSONEncoder().encode(JSONValue.object(o)).write(to: url, options: .atomic)
+        LocalStore.shared.logEvent(type: "data_exported", data: ["sessions": .number(Double(b.sessions.count))])
+        return url
+    }
+
+    /// The spreadsheet-friendly export: one row per logged set.
+    func exportCsvFile() throws -> URL {
+        func esc(_ v: String) -> String { v.contains(where: { $0 == "," || $0 == "\"" || $0 == "\n" }) ? "\"\(v.replacingOccurrences(of: "\"", with: "\"\""))\"" : v }
+        var rows = [["date", "session_type", "exercise", "set", "weight_kg", "reps", "effort", "session_rpe", "pain", "duration_min"]]
+        for s in history {
+            for (i, ex) in s.plan.exercises.enumerated() {
+                for (si, set) in (s.log[safe: i] ?? []).enumerated() where set.done || !set.weight.isEmpty || !set.reps.isEmpty {
+                    rows.append([s.date, s.plan.sessionType, ex.name, "\(si + 1)", set.weight, set.reps, set.effort,
+                                 s.fin.map { "\($0.rpe)" } ?? "", s.fin?.pain ?? "", s.durationMin.map(String.init) ?? ""])
+                }
+            }
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("coach-sessions-\(Helpers.todayStr()).csv")
+        try rows.map { $0.map(esc).joined(separator: ",") }.joined(separator: "\n").write(to: url, atomically: true, encoding: .utf8)
+        LocalStore.shared.logEvent(type: "data_exported_csv", data: ["rows": .number(Double(rows.count - 1))])
+        return url
+    }
+
+    /// importAll() in src/db/db.js: the backup becomes the account's data
+    /// (sessions/health replaced, events + deletions added, AI settings
+    /// only if the backup's are newer), then GitHub is backed up.
+    func importBackup(_ data: Data) async throws -> String {
+        guard case .object(let o)? = try? JSONDecoder().decode(JSONValue.self, from: data), case .array? = o["sessions"] else {
+            throw CocoaError(.fileReadCorruptFile, userInfo: [NSLocalizedDescriptionKey: "Not a valid COACH backup file."])
+        }
+        let b = GitHubSync.normalizeBackup(try JSONDecoder().decode(Backup.self, from: data))
+        let skipped = try await Cloud.shared.replaceData(with: b)
+        if b.aiSettings.updatedAt > LocalStore.shared.backup.aiSettings.updatedAt {
+            Cloud.shared.putAISettings(b.aiSettings)
+        }
+        LocalStore.shared.logEvent(type: "data_imported", data: ["sessions": .number(Double(b.sessions.count)), "events": .number(Double(b.events.count))])
+        Task { await runSync(replaceRemote: true) } // restored backup becomes the GitHub copy too
+        return "Restored \(b.sessions.count) sessions from backup\(skipped > 0 ? " (\(skipped) kept: newer or deleted here)" : "")."
     }
 
     // MARK: - Past workout (typed in after the fact)

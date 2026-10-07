@@ -154,6 +154,9 @@ struct WorkoutView: View {
                 .font(Theme.head(16, weight: .semibold)).textCase(.uppercase).tracking(1.3)
                 .foregroundStyle(Theme.muted)
             Spacer()
+            Button("🗨 Coach") { appState.chatOpen = true }
+                .font(Theme.head(15, weight: .semibold)).textCase(.uppercase).foregroundStyle(Theme.muted)
+                .padding(.trailing, 10)
             Text("\(done)/\(total) sets").font(Theme.mono(13)).foregroundStyle(Theme.muted)
             Button {
                 confirmCancel = confirmCancel == "top" ? nil : "top"

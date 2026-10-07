@@ -187,6 +187,42 @@ final class DailyLoopUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Bench Press: 60kg×8"].exists, "the other session stays")
     }
 
+    /// Settings sections open; the coach chat opens from anywhere and
+    /// surfaces the (fake-key) error; Records and Progress render.
+    func testSettingsChatRecordsAndProgress() {
+        XCTAssertTrue(button("Log").waitForExistence(timeout: 10))
+
+        // coach chat from the floating button
+        app.buttons["Ask the coach"].tap()
+        XCTAssertTrue(text("COACH CHAT").waitForExistence(timeout: 5))
+        let ask = app.textFields["Ask the coach…"]
+        ask.tap()
+        ask.typeText("how heavy should warm-up sets be?")
+        app.buttons["Send"].tap()
+        XCTAssertTrue(text("how heavy should warm-up sets be?").waitForExistence(timeout: 5), "message bubble shows")
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label CONTAINS[c] 'key'")).firstMatch.waitForExistence(timeout: 30),
+                      "the seeded fake key → an error the user can act on")
+        app.buttons["Close chat"].tap()
+
+        // records + progress open and show the seeded session
+        button("🏆").tap()
+        XCTAssertTrue(text("🏆 RECORDS").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("Flat Dumbbell Press").exists)
+        button("Home").tap()
+        button("Stats").tap()
+        XCTAssertTrue(text("PROGRESS").waitForExistence(timeout: 5))
+        button("Home").tap()
+
+        // settings: sections expand
+        app.buttons["Settings"].tap()
+        XCTAssertTrue(text("SETTINGS").waitForExistence(timeout: 5))
+        app.staticTexts["Plates & Bar"].tap()
+        XCTAssertTrue(button("Save gym setup").waitForExistence(timeout: 3))
+        app.staticTexts["Account"].tap()
+        XCTAssertTrue(button("Send feedback").waitForExistence(timeout: 3))
+        XCTAssertTrue(button("Sign out").exists)
+    }
+
     private func logCardio(open: String, title: String, save: String, minutes: String, day: String?) {
         button(open).tap()
         XCTAssertTrue(text(title).waitForExistence(timeout: 5))

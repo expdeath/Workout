@@ -28,29 +28,34 @@ struct RootView: View {
                 HistoryDetailView()
             case .addPast:
                 AddPastView()
-            default:
-                ComingSoonView(screen: appState.screen)
+            case .settings:
+                SettingsView()
+            case .records:
+                RecordsView()
+            case .progress:
+                ProgressScreen()
             }
         }
         .preferredColorScheme(.dark) // the web app is dark-only; match it
-    }
-}
-
-/// Placeholder for screens not yet ported. Removed as each phase lands.
-private struct ComingSoonView: View {
-    let screen: Screen
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Text("COACH")
-                .font(Theme.head(22, weight: .bold))
-                .textCase(.uppercase)
-                .tracking(5)
-                .foregroundStyle(Theme.amber)
-            Text("\(String(describing: screen)) — coming soon")
-                .font(Theme.body(14))
-                .foregroundStyle(Theme.muted)
+        // the coach is one tap away from anywhere (hidden on workout,
+        // generating and history detail, which have their own chat entry)
+        .overlay(alignment: .bottomTrailing) {
+            if !appState.chatOpen, Self.chatFabScreens.contains(appState.screen) {
+                Button { appState.chatOpen = true } label: {
+                    Text("🗨").font(.system(size: 24))
+                        .frame(width: 56, height: 56)
+                        .background(Theme.amber)
+                        .clipShape(Circle())
+                        .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
+                }
+                .accessibilityLabel("Ask the coach")
+                .padding(.trailing, 18).padding(.bottom, 18)
+            }
         }
-        .coachScreen()
+        .sheet(isPresented: Binding(get: { appState.chatOpen }, set: { appState.chatOpen = $0 })) {
+            CoachChatView().environment(appState)
+        }
     }
+
+    private static let chatFabScreens: Set<Screen> = [.home, .checkIn, .finish, .progress, .history, .records, .settings]
 }

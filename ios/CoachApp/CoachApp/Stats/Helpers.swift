@@ -5,23 +5,26 @@ import Foundation
 enum Helpers {
     static func todayStr() -> String {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         f.timeZone = .current
         return f.string(from: Date())
     }
 
     /// "2026-08-29" → noon that day, local time (the web's `date + 'T12:00:00'`).
     static func noonDate(_ iso: String) -> Date? {
+        // fixed-format parsing needs the POSIX locale — without it a
+        // 12-hour device setting can make parsing fail
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd'T'HH:mm"
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
         f.timeZone = .current
-        return f.date(from: iso + "T12:00")
+        return f.date(from: iso).flatMap { Calendar.current.date(byAdding: .hour, value: 12, to: $0) }
     }
 
     /// "2026-08-29" → "Sat, Aug 29" — mirrors fmtDate() in helpers.js.
     static func fmtDate(_ iso: String) -> String {
         let parser = DateFormatter()
-        parser.dateFormat = "yyyy-MM-dd"
+        parser.locale = Locale(identifier: "en_US_POSIX"); parser.dateFormat = "yyyy-MM-dd"
         parser.timeZone = .current
         guard let date = parser.date(from: iso) else { return iso }
         let out = DateFormatter()
@@ -67,7 +70,7 @@ enum Helpers {
     static func daysAgoStr(_ n: Int) -> String {
         let d = Calendar.current.date(byAdding: .day, value: -n, to: Date()) ?? Date()
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         f.timeZone = .current
         return f.string(from: d)
     }

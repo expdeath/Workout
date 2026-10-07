@@ -15,6 +15,10 @@ enum DebugSeed {
         case "generating": return .generating
         case "workout": return .workout
         case "finish": return .finish
+        case "history": return .history
+        case "records": return .records
+        case "progress": return .progress
+        case "settings": return .settings
         default: return nil
         }
     }

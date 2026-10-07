@@ -322,6 +322,55 @@ final class Cloud {
         ])
     }
 
+    /// "Import backup": make the account's sessions/health match a
+    /// (normalized) backup and add its events + deletion markers — the
+    /// web's cloudReplaceData. Sessions the rules would refuse (an older
+    /// copy than the stored one, or a deleted id) are skipped, since one
+    /// refused write fails its whole batch. Returns how many were skipped.
+    func replaceData(with b: Backup) async throws -> Int {
+        guard active else { return 0 }
+        var ops: [(WriteBatch) -> Void] = []
+        let mirror = LocalStore.shared.backup
+        let keepIds = Set(b.sessions.map(\.id)), keepDates = Set(b.health.map(\.date))
+        for s in mirror.sessions where !keepIds.contains(s.id) {
+            let ref = db.document(path("sessions", FirestoreCodec.docId(s.id)))
+            ops.append { $0.deleteDocument(ref) }
+        }
+        for h in mirror.health where !keepDates.contains(h.date) {
+            let ref = db.document(path("health", FirestoreCodec.docId(h.date)))
+            ops.append { $0.deleteDocument(ref) }
+        }
+        for d in b.deletedIds {
+            let ref = db.document(path("deletedIds", FirestoreCodec.docId(d.id)))
+            let data: [String: Any] = ["id": d.id, "at": FirestoreCodec.encode(.number(d.at))]
+            ops.append { $0.setData(data, forDocument: ref) }
+        }
+        let deleted = Set(mirror.deletedIds.map(\.id) + b.deletedIds.map(\.id))
+        var skipped = 0
+        for s in b.sessions {
+            if deleted.contains(s.id) || (mirror.sessions.first { $0.id == s.id }?.updatedAt ?? 0) > s.updatedAt {
+                skipped += 1
+                continue
+            }
+            let ref = db.document(path("sessions", FirestoreCodec.docId(s.id)))
+            if let data = try? FirestoreCodec.document(s) { ops.append { $0.setData(data, forDocument: ref) } }
+        }
+        for h in b.health {
+            let ref = db.document(path("health", FirestoreCodec.docId(h.date)))
+            if let data = try? FirestoreCodec.document(h) { ops.append { $0.setData(data, forDocument: ref) } }
+        }
+        for e in b.events {
+            let ref = db.document(path("events", FirestoreCodec.eventDocId(e)))
+            if let data = try? FirestoreCodec.document(e) { ops.append { $0.setData(data, forDocument: ref) } }
+        }
+        for start in stride(from: 0, to: ops.count, by: 450) {
+            let batch = db.batch()
+            ops[start..<min(start + 450, ops.count)].forEach { $0(batch) }
+            try await batch.commit()
+        }
+        return skipped
+    }
+
     // ── On-demand reads ──────────────────────────────────────────
 
     /// The whole event log (write-only otherwise) — for the GitHub backup.

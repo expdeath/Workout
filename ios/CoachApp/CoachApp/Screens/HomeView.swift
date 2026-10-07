@@ -62,6 +62,7 @@ struct HomeView: View {
                 Button { appState.screen = .settings } label: {
                     Image(systemName: "gearshape").foregroundStyle(Theme.dim)
                 }
+                .accessibilityLabel("Settings")
                 Button("Stats") { appState.screen = .progress }
                 Button("🏆") { appState.screen = .records }
                 Button("Log") { appState.screen = .history }

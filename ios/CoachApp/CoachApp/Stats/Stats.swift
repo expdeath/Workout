@@ -9,7 +9,7 @@ enum Stats {
 
     static func dateMs(_ iso: String) -> TimeInterval {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         f.timeZone = .current
         guard let d = f.date(from: iso) else { return 0 }
         return d.timeIntervalSince1970 + 12 * 3600
@@ -39,7 +39,7 @@ enum Stats {
 
     static func mondayOf(_ iso: String) -> String {
         let f = DateFormatter()
-        f.dateFormat = "yyyy-MM-dd"
+        f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"
         f.timeZone = .current
         guard let d = f.date(from: iso) else { return iso }
         var cal = Calendar(identifier: .gregorian)
@@ -104,7 +104,7 @@ enum Stats {
 
     static func weeklyBuckets(_ history: [Session], n: Int = 8) -> [WeeklyBucket] {
         let thisMonday = mondayOf(todayIso())
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
         var buckets: [WeeklyBucket] = []
         for i in stride(from: n - 1, through: 0, by: -1) {
             let start = f.string(from: Date(timeIntervalSince1970: dateMs(thisMonday) - Double(i) * 7 * day))
@@ -142,7 +142,7 @@ enum Stats {
         let thisMonday = mondayOf(todayIso())
         let thisWeek = counts[thisMonday] ?? 0
         var streak = thisWeek >= target ? 1 : 0
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
         var i = 1
         while true {
             let wk = f.string(from: Date(timeIntervalSince1970: dateMs(thisMonday) - Double(i) * 7 * day))

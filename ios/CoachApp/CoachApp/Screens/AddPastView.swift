@@ -196,12 +196,12 @@ struct AddPastView: View {
     }
 
     private static func parse(_ iso: String) -> Date {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
         return f.date(from: iso) ?? Date()
     }
 
     private static func iso(_ d: Date) -> String {
-        let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
+        let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current
         return f.string(from: d)
     }
 }
