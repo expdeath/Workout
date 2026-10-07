@@ -34,7 +34,11 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
   };
 
   const saveEdit = () => {
-    onUpdate(draft);
+    // only what this form edits (sets + RPE/pain/feedback), onto the
+    // latest copy — a debrief or another device's change that arrived
+    // while editing must survive
+    const latest = history.find((h) => sid(h) === sid(draft)) || draft;
+    onUpdate({ ...latest, log: draft.log, fin: draft.fin });
     setEditing(null);
     setDraft(null);
   };

@@ -222,7 +222,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
       return;
     }
     logEvent('signed_out', { name: account?.name });
-    signOut();
+    signOut().then((refusal) => {
+      if (refusal) {
+        setFeedbackMsg(refusal);
+        setConfirmOut(false);
+      }
+    });
   };
 
   const handleClear = () => {

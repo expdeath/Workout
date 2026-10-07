@@ -9,3 +9,6 @@ dist/
 scripts/firestore-accounts.json
 *.service-account.json
 gittoken*.docx
+
+# Office lock files (e.g. while the token .docx is open)
+~$*

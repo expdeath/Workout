@@ -34,6 +34,7 @@ import {
   getCountFromServer,
   terminate,
   clearIndexedDbPersistence,
+  waitForPendingWrites,
 } from 'firebase/firestore';
 import { encodeValue, decodeValue, docId, eventDocId } from './firestoreCodec.js';
 
@@ -359,6 +360,16 @@ export async function signInWithGoogle() {
 
 /** Finishes a redirect sign-in on the page load after it (no-op otherwise). */
 export const finishRedirectSignIn = () => getRedirectResult(auth).catch(() => null);
+
+/** True once every write made on this device reached the server,
+ *  waiting at most `ms` (false when offline). */
+export async function cloudFlushWrites(ms = 8000) {
+  if (!current) return true;
+  return Promise.race([
+    waitForPendingWrites(db).then(() => true, () => false),
+    new Promise((r) => setTimeout(() => r(false), ms)),
+  ]);
+}
 
 /** Sign out and drop this device's offline copy of the account. */
 export async function cloudSignOut() {

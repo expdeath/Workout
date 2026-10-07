@@ -901,7 +901,14 @@ export async function generateWorkoutPlan(checkin, history, onStatus) {
         continue;
       }
 
-      // Rate limit — wait and retry same model
+      // Rate limited — each model has its own quota, so switch first;
+      // only the last model waits and retries
+      if (err.message?.startsWith('RATE_LIMIT:') && mi < MODELS.length - 1) {
+        failures.push(`${model}: rate limited`);
+        console.warn(`[COACH] ${model} rate limited, trying next model`);
+        if (onStatus) onStatus(`${model} is at its limit — switching model…`);
+        continue;
+      }
       if (err.message?.startsWith('RATE_LIMIT:')) {
         const waitSec = err.retryDelay || 45;
         if (onStatus) onStatus(`Rate limited — waiting ${waitSec}s…`);

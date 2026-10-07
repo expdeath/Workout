@@ -547,9 +547,13 @@ export default function App() {
     // Background: coach debrief on the finished session
     generateDebrief(t, history)
       .then(async (text) => {
-        const t2 = { ...t, debrief: text };
+        // the session may have been edited (or deleted) while the AI was
+        // writing — attach the debrief to the latest copy only
+        const cur = (await getAllSessions()).find((s) => sid(s) === sid(t));
+        if (!cur) return;
+        const t2 = { ...cur, debrief: text };
         await putSession(t2);
-        await persistToday(t2);
+        if (cloudState('today')?.id === sid(t2)) await persistToday(t2);
         setHistory((hs) => hs.map((s) => (sid(s) === sid(t2) ? t2 : s)));
         runSync();
       })

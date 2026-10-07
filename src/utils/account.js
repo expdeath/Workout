@@ -16,6 +16,7 @@ import {
   cloudState,
   cloudSetState,
   finishRedirectSignIn,
+  cloudFlushWrites,
 } from '../db/cloud.js';
 
 /** { name, accountId, admin, email } of the signed-in account, or null. */
@@ -95,8 +96,13 @@ export async function wipeLocal() {
   });
 }
 
-/** Sign out: this device forgets the account (data stays in the cloud). */
+/** Sign out: this device forgets the account (data stays in the cloud).
+ *  Refuses (returns a reason) while changes are still waiting to upload —
+ *  signing out clears this device's offline copy, which would lose them. */
 export async function signOut() {
+  if (!(await cloudFlushWrites())) {
+    return "Some changes haven't reached the cloud yet (no connection?). Connect to the internet and try again — signing out now would lose them.";
+  }
   await cloudSignOut();
   await wipeLocal();
   window.location.reload();
