@@ -55,6 +55,9 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.expdeath.CoachApp
         SWIFT_VERSION: "5.0"
+        # app code runs on the main actor unless it says otherwise — UI
+        # state, the Firestore mirror and AI replies can't race each other
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         TARGETED_DEVICE_FAMILY: "1"
         ASSETSCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -78,6 +81,7 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: CoachApp
@@ -90,6 +94,7 @@ targets:
     settings:
       base:
         SWIFT_VERSION: "5.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         GENERATE_INFOPLIST_FILE: YES
     dependencies:
       - target: CoachApp

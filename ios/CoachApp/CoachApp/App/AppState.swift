@@ -47,6 +47,11 @@ struct MonthlyReportCache: Codable {
 /// visibility-change listeners) are left out; everything else — the
 /// daily check-in → AI plan → workout → finish loop, sync orchestration,
 /// weekly/monthly report generation — is ported.
+/// Main-actor isolated: every mutation of app state (and of LocalStore,
+/// also main-actor) happens on the main thread — an AI reply finishing on
+/// a background thread must never race a Firestore snapshot updating the
+/// same session list (that race once lost a debrief).
+@MainActor
 @Observable
 final class AppState {
     var screen: Screen = .loading {
@@ -123,15 +128,22 @@ final class AppState {
         }
     }
 
+    /// Signs out only once everything logged on this device is in the
+    /// cloud — signing out clears the device's offline copy, so unsynced
+    /// changes would be lost. Returns why it refused, or nil.
     @MainActor
-    func signOut() async {
+    func signOut() async -> String? {
         LocalStore.shared.logEvent(type: "signed_out", data: [:])
+        guard await Cloud.shared.flushWrites() else {
+            return "Some changes haven't reached the cloud yet (no connection?). Connect to the internet and try again — signing out now would lose them."
+        }
         await Account.signOut()
         history = []
         todayPlan = nil
         weeklyReview = nil
         monthlyReport = nil
         screen = .login
+        return nil
     }
 
     private static func message(for error: Error) -> String {
@@ -485,11 +497,13 @@ final class AppState {
 
         // Background: coach debrief on the finished session
         if let text = try? await Gemini.generateDebrief(t, prior) {
-            var t2 = t
-            t2.debrief = text
-            LocalStore.shared.upsert(session: t2)
-            if todayPlan?.id == t2.id { persistToday(t2) }
-            if let i = history.firstIndex(where: { $0.id == t2.id }) { history[i] = t2 }
+            // the session may have been edited (or deleted) while the AI
+            // was writing — attach the debrief to the latest copy only
+            guard var latest = LocalStore.shared.backup.sessions.first(where: { $0.id == t.id }) else { return }
+            latest.debrief = text
+            LocalStore.shared.upsert(session: latest)
+            if todayPlan?.id == latest.id { persistToday(latest) }
+            if let i = history.firstIndex(where: { $0.id == latest.id }) { history[i] = latest }
             Task { await runSync() }
         }
     }

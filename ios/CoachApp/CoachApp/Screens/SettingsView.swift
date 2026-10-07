@@ -82,7 +82,14 @@ struct SettingsView: View {
                 .disabled(sendingFb || feedback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             if !feedbackMsg.isEmpty { Text(feedbackMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
             Button(confirmOut ? "Tap again — this wipes this device" : "Sign out") {
-                if confirmOut { Task { await appState.signOut() } } else { confirmOut = true }
+                if confirmOut {
+                    Task {
+                        if let refusal = await appState.signOut() {
+                            feedbackMsg = refusal
+                            confirmOut = false
+                        }
+                    }
+                } else { confirmOut = true }
             }
             .buttonStyle(BigButtonStyle(danger: true)).padding(.top, 8)
             Text("Signed in with Google as \(account?.email ?? ""). Signing out clears this device (exercise photos/clips included — they only live here). Your training log is safe in the cloud and comes back when you sign in again.")

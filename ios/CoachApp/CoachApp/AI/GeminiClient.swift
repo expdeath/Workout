@@ -738,6 +738,13 @@ enum Gemini {
                     try? await Task.sleep(nanoseconds: 1_000_000_000)
                     continue
                 }
+                // rate limited — each model has its own quota, so switch
+                // first; only the last model waits and retries
+                if case .rateLimited = error, mi < models.count - 1 {
+                    failures.append("\(model): rate limited")
+                    onStatus?("\(model) is at its limit — switching model…")
+                    continue
+                }
                 if case .rateLimited(let waitSec) = error {
                     for s in stride(from: waitSec, through: 1, by: -1) {
                         onStatus?("Rate limited — retrying in \(s)s…")

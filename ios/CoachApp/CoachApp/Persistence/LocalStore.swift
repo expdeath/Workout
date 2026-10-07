@@ -7,6 +7,7 @@ import Foundation
 /// Firestore — whose own offline cache is what persists data on device.
 /// The event log is write-only (Cloud.allEvents fetches it on demand),
 /// except with Cloud.offline (DebugSeed), where everything stays here.
+@MainActor
 @Observable
 final class LocalStore {
     static let shared = LocalStore()

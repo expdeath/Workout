@@ -44,6 +44,7 @@
 		8A550C3192B1F8A14F784EEA /* DebugSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCAEA435AFB6A4DE1807AFCB /* DebugSeed.swift */; };
 		8C5CE376A12B7E284DB19BAC /* MediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2B5726910E58A9446D8077 /* MediaStore.swift */; };
 		8EA307E788505041A279D0CF /* Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F578B0AEDD93EB8E02DC983 /* Cloud.swift */; };
+		952B57626F88F9A754787BDD /* GeminiFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BF2E87FA4AEF080FD68926E /* GeminiFallbackTests.swift */; };
 		9D005707815558E158A91285 /* WorkoutView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7722B7FB363CBE997AD0D121 /* WorkoutView.swift */; };
 		A2416229CC621E9384AF6AEC /* GeminiClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E05DE28CD06ED84C435ABB62 /* GeminiClient.swift */; };
 		A6D8C2E32A49927C348CB117 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3FD893E91D3C8EFCB6AE803E /* Theme.swift */; };
@@ -52,6 +53,7 @@
 		B51FE8EE2605AA822E51254D /* GeneratingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C62D9115D416D86EAE653A8 /* GeneratingView.swift */; };
 		BA9BB5DD39275A0CB1CE917A /* FirestoreCodecTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */; };
 		BAEC965C87D02BF5564316EA /* JSONValue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99D3D991679FD15919611154 /* JSONValue.swift */; };
+		BB4DDC7F56A7B38F1DFFAFC9 /* CloudEndToEndUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4491298A2DA8223A1FE61FF1 /* CloudEndToEndUITests.swift */; };
 		BCA2BD30CF905A27369CD5A7 /* FormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = E6257AD445F2A36F3F4C5A4D /* FormControls.swift */; };
 		BDC1C8D6FD478430CCC37975 /* QuickCardioSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = E436E447EEC7792B59BB42DC /* QuickCardioSheet.swift */; };
 		BFE41F2D8F909AEA7C9108E7 /* Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3C5007568985F1CEDE236DA /* Account.swift */; };
@@ -109,9 +111,11 @@
 		3FD893E91D3C8EFCB6AE803E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		400E5A5CCB50C2E2BCB4B645 /* Checkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checkin.swift; sourceTree = "<group>"; };
 		404CBC204208A4A6D0C01CDF /* CoachApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CoachApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4491298A2DA8223A1FE61FF1 /* CloudEndToEndUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudEndToEndUITests.swift; sourceTree = "<group>"; };
 		459C2153FE9C6D2EF12DA926 /* SetLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLog.swift; sourceTree = "<group>"; };
 		4C425F43158B5254B588FF87 /* HealthRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthRow.swift; sourceTree = "<group>"; };
 		573B7BA6D7679DC5E8B43E96 /* BarlowCondensed-Medium.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Medium.ttf"; sourceTree = "<group>"; };
+		5BF2E87FA4AEF080FD68926E /* GeminiFallbackTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeminiFallbackTests.swift; sourceTree = "<group>"; };
 		5C41053E5BC0BD24649F83A6 /* FirestoreCodec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreCodec.swift; sourceTree = "<group>"; };
 		5F8DC321378F931AB7FF4102 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		603465482B7BC774B7E3E841 /* GoogleService-Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = "GoogleService-Info.plist"; sourceTree = "<group>"; };
@@ -346,6 +350,7 @@
 			children = (
 				9E23964E9D8DDA2ACF698922 /* FirestoreCodecTests.swift */,
 				969A3682A2C9753F57C08238 /* GeminiClientTests.swift */,
+				5BF2E87FA4AEF080FD68926E /* GeminiFallbackTests.swift */,
 				C0F2D03D9C91E568C8F16E21 /* GitHubSyncTests.swift */,
 				A4CA8DE6672468D3E7F5C97D /* HealthKitSyncTests.swift */,
 				CB9C1D4F979D40652BBF1211 /* HelpersTests.swift */,
@@ -358,6 +363,7 @@
 		D52375A390EA11DEACB59178 /* CoachAppUITests */ = {
 			isa = PBXGroup;
 			children = (
+				4491298A2DA8223A1FE61FF1 /* CloudEndToEndUITests.swift */,
 				193B1F0A99C49468BC9E65BB /* DailyLoopUITests.swift */,
 			);
 			path = CoachAppUITests;
@@ -499,6 +505,7 @@
 			files = (
 				BA9BB5DD39275A0CB1CE917A /* FirestoreCodecTests.swift in Sources */,
 				08A6085FD3B53DC52BFA2F4D /* GeminiClientTests.swift in Sources */,
+				952B57626F88F9A754787BDD /* GeminiFallbackTests.swift in Sources */,
 				4FB215E244426BB20D24276A /* GitHubSyncTests.swift in Sources */,
 				CD8362533B0D8914F6B7CBEB /* HealthKitSyncTests.swift in Sources */,
 				D793EEAFC8A8AE5BAB0E4EC4 /* HelpersTests.swift in Sources */,
@@ -566,6 +573,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				BB4DDC7F56A7B38F1DFFAFC9 /* CloudEndToEndUITests.swift in Sources */,
 				7AC782CCEF0AB65599E9CA67 /* DailyLoopUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -599,6 +607,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachAppTests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CoachApp.app/CoachApp";
@@ -618,6 +627,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachAppUITests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = CoachApp;
@@ -642,6 +652,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachApp;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -665,6 +676,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachApp;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -683,6 +695,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachAppUITests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_TARGET_NAME = CoachApp;
@@ -821,6 +834,7 @@
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.expdeath.CoachAppTests;
 				SDKROOT = iphoneos;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/CoachApp.app/CoachApp";

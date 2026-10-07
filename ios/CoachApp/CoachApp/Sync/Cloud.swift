@@ -104,6 +104,29 @@ final class Cloud {
     }
 
     /// Sign out and drop this device's offline copy of the account.
+    /// True once every write made on this device has reached the server,
+    /// waiting at most `timeout` seconds (false when offline).
+    func flushWrites(timeout: Double = 8) async -> Bool {
+        guard !offline, account != nil else { return true }
+        // not a task group: it would wait for waitForPendingWrites, which
+        // never finishes offline — the timeout must really end the wait
+        return await withCheckedContinuation { (cont: CheckedContinuation<Bool, Never>) in
+            let once = ResumeOnce(cont)
+            db.waitForPendingWrites { error in once.resume(error == nil) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { once.resume(false) }
+        }
+    }
+
+    /// Resumes a continuation exactly once (first of: writes flushed / timeout).
+    private final class ResumeOnce {
+        private var cont: CheckedContinuation<Bool, Never>?
+        init(_ c: CheckedContinuation<Bool, Never>) { cont = c }
+        func resume(_ value: Bool) {
+            cont?.resume(returning: value)
+            cont = nil
+        }
+    }
+
     func signOut() async {
         stop()
         try? Auth.auth().signOut()
@@ -221,17 +244,19 @@ final class Cloud {
 
     private var active: Bool { !offline && account != nil }
 
-    private func write(_ what: String, _ op: @escaping () async throws -> Void) {
-        guard active else { return }
-        Task {
-            do { try await op() } catch { print("[COACH] cloud write failed (\(what)): \(error.localizedDescription)") }
+    /// Completion for a write. Writes are handed to the SDK synchronously
+    /// (not from separate Tasks), so Firestore applies them in exactly the
+    /// order they were made — typing "62.5" can't land as "62.".
+    private func logged(_ what: String) -> (Error?) -> Void {
+        { error in
+            if let error { print("[COACH] cloud write failed (\(what)): \(error.localizedDescription)") }
         }
     }
 
     func putSession(_ s: Session) {
         guard active, let data = try? FirestoreCodec.document(s) else { return }
         let ref = db.document(path("sessions", FirestoreCodec.docId(s.id)))
-        write("session") { try await ref.setData(data) }
+        ref.setData(data, completion: logged("session"))
     }
 
     /// Delete for real + permanent marker, atomically.
@@ -240,7 +265,7 @@ final class Cloud {
         let batch = db.batch()
         batch.setData(["id": id, "at": FirestoreCodec.encode(.number(at))], forDocument: db.document(path("deletedIds", FirestoreCodec.docId(id))))
         batch.deleteDocument(db.document(path("sessions", FirestoreCodec.docId(id))))
-        write("delete session") { try await batch.commit() }
+        batch.commit(completion: logged("delete session"))
     }
 
     /// "Clear all history": every session removed AND marked deleted.
@@ -252,26 +277,26 @@ final class Cloud {
                 batch.setData(["id": id, "at": FirestoreCodec.encode(.number(at))], forDocument: db.document(path("deletedIds", FirestoreCodec.docId(id))))
                 batch.deleteDocument(db.document(path("sessions", FirestoreCodec.docId(id))))
             }
-            write("clear history") { try await batch.commit() }
+            batch.commit(completion: logged("clear history"))
         }
     }
 
     func putHealth(_ row: HealthRow) {
         guard active, let data = try? FirestoreCodec.document(row) else { return }
         let ref = db.document(path("health", FirestoreCodec.docId(row.date)))
-        write("health") { try await ref.setData(data) }
+        ref.setData(data, completion: logged("health"))
     }
 
     func putAISettings(_ settings: AISettings) {
         guard active, let data = try? FirestoreCodec.document(settings) else { return }
         let ref = db.document(path("state", "aiSettings"))
-        write("aiSettings") { try await ref.setData(data) }
+        ref.setData(data, completion: logged("aiSettings"))
     }
 
     func logEvent(_ e: Event) {
         guard active, let data = try? FirestoreCodec.document(e) else { return }
         let ref = db.document(path("events", FirestoreCodec.eventDocId(e)))
-        write("event") { try await ref.setData(data) }
+        ref.setData(data, completion: logged("event"))
     }
 
     /// Account state other than aiSettings; nil deletes the key.
@@ -282,12 +307,12 @@ final class Cloud {
         let ref = db.document(path("state", FirestoreCodec.docId(key)))
         state[key] = value
         onChange?("state")
-        guard let value else { write("state \(key)") { try await ref.delete() }; return }
+        guard let value else { ref.delete(completion: logged("state \(key)")); return }
         let data: [String: Any] = [
             "value": FirestoreCodec.encode(value),
             "updatedAt": FirestoreCodec.encode(.number((Date().timeIntervalSince1970 * 1000).rounded())),
         ]
-        write("state \(key)") { try await ref.setData(data) }
+        ref.setData(data, completion: logged("state \(key)"))
     }
 
     func stateKeys() -> [String] { Array(state.keys) }
@@ -301,7 +326,7 @@ final class Cloud {
         guard active else { return }
         let data = FirestoreCodec.encode(.object(g))
         let ref = db.document(path())
-        write("github settings") { try await ref.updateData(["github": data]) }
+        ref.updateData(["github": data], completion: logged("github settings"))
     }
 
     /// Owner only — the rules reject anyone else.
@@ -310,7 +335,7 @@ final class Cloud {
         onChange?("shared")
         guard active, account?.admin == true else { return }
         let ref = db.document("config/shared")
-        write("shared key") { try await ref.setData(["geminiKey": key], merge: true) }
+        ref.setData(["geminiKey": key], merge: true, completion: logged("shared key"))
     }
 
     /// Awaited: the user is told it was sent.

@@ -120,7 +120,15 @@ struct HistoryView: View {
                 .coachInput()
             HStack(spacing: 10) {
                 Button("Save changes") {
-                    if let d = draft { Task { await appState.updateSession(d) } }
+                    if let d = draft {
+                        // only what this form edits (sets + RPE/pain/feedback),
+                        // onto the latest copy — a debrief or another device's
+                        // change that arrived while editing must survive
+                        var latest = LocalStore.shared.backup.sessions.first { $0.id == d.id } ?? d
+                        latest.log = d.log
+                        latest.fin = d.fin
+                        Task { await appState.updateSession(latest) }
+                    }
                     draft = nil
                 }
                 .buttonStyle(BigButtonStyle())
