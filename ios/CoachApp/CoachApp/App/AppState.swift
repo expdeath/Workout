@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseAuth
 
 /// Mirrors the screen state machine in src/App.jsx — one enum case per
 /// screen the JS `useState('screen')` can hold.
@@ -78,6 +79,11 @@ final class AppState {
     func start() async {
         #if DEBUG
         if Cloud.shared.offline { await boot(); return }
+        // automation only: sign in with a Firebase custom token minted by
+        // an admin script (no Google UI) — compiled out of Release builds
+        if let token = ProcessInfo.processInfo.environment["COACH_DEBUG_CUSTOM_TOKEN"], !token.isEmpty {
+            _ = try? await Auth.auth().signIn(withCustomToken: token)
+        }
         #endif
         do {
             if try await Account.resume() != nil {
@@ -304,7 +310,7 @@ final class AppState {
         guard stateField("weeklyReview", "week") != thisMonday else { return } // already done this week
         guard let summary = Stats.lastWeekSummary(history), !Cloud.shared.geminiKey.isEmpty else { return }
         guard let text = try? await Gemini.generateWeeklyReview(summary) else { return }
-        let review = WeeklyReviewCache(week: thisMonday, at: Date().timeIntervalSince1970 * 1000, text: text, count: summary.count, progressions: summary.progressions)
+        let review = WeeklyReviewCache(week: thisMonday, at: (Date().timeIntervalSince1970 * 1000).rounded(), text: text, count: summary.count, progressions: summary.progressions)
         Cloud.shared.setState("weeklyReview", try? JSONValue.encoding(review))
         weeklyReview = review
     }
@@ -319,7 +325,7 @@ final class AppState {
         guard !Cloud.shared.geminiKey.isEmpty else { return }
         guard let sum = Stats.monthSummary(history, LocalStore.shared.backup.health, ym: ym) else { return }
         guard let text = try? await Gemini.generateMonthlyReport(sum) else { return }
-        let report = MonthlyReportCache(month: ym, at: Date().timeIntervalSince1970 * 1000, text: text, sum: sum)
+        let report = MonthlyReportCache(month: ym, at: (Date().timeIntervalSince1970 * 1000).rounded(), text: text, sum: sum)
         Cloud.shared.setState("monthlyReport", try? JSONValue.encoding(report))
         monthlyReport = report
     }
