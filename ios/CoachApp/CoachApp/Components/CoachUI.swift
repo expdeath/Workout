@@ -18,38 +18,62 @@ struct CoachCard<Content: View>: View {
     }
 }
 
-/// `.card__label` — small uppercase section label.
+/// `.card__label` — small section label, sentence case.
 struct CardLabel: View {
     let text: String
     var color: Color = Theme.muted
     var body: some View {
-        Text(text).font(Theme.head(13, weight: .semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(color)
+        Text(text).font(Theme.body(13.5, weight: .semibold)).foregroundStyle(color)
     }
 }
 
-/// `.header` — ghost button left, brand centre, optional button right.
+/// `.header` — optional back chevron, large left-aligned title,
+/// optional trailing icon button.
 struct ScreenHeader: View {
-    let back: String
     let title: String
-    var onBack: () -> Void
-    var trailing: (label: String, action: () -> Void)? = nil
+    var onBack: (() -> Void)? = nil
+    var trailing: (icon: String, label: String, action: () -> Void)? = nil
 
     var body: some View {
-        ZStack {
-            Text(title).font(Theme.head(18, weight: .bold)).tracking(4).foregroundStyle(Theme.amber)
-            HStack {
-                ghost(back, action: onBack)
-                Spacer()
-                if let trailing { ghost(trailing.label, action: trailing.action) }
+        HStack(spacing: 4) {
+            if let onBack { BackButton(action: onBack) }
+            Text(title).font(Theme.head(30, weight: .bold)).foregroundStyle(Theme.text)
+            Spacer()
+            if let trailing {
+                IconButton(icon: trailing.icon, label: trailing.label, action: trailing.action)
             }
         }
-        .padding(.bottom, 14)
+        .padding(.bottom, 8)
     }
+}
 
-    private func ghost(_ label: String, action: @escaping () -> Void) -> some View {
-        Button(label, action: action)
-            .font(Theme.head(16, weight: .semibold)).textCase(.uppercase).tracking(1.3)
-            .foregroundStyle(Theme.muted)
+/// ‹ — the one back affordance every pushed screen uses.
+struct BackButton: View {
+    var label = "Back"
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "chevron.left").font(.system(size: 20, weight: .semibold))
+                .foregroundStyle(Theme.muted)
+                .frame(width: 36, height: 44, alignment: .leading)
+        }
+        .accessibilityLabel(label)
+    }
+}
+
+/// A 44pt tap target around an SF Symbol.
+struct IconButton: View {
+    let icon: String
+    let label: String
+    var color: Color = Theme.muted
+    let action: () -> Void
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: icon).font(.system(size: 19, weight: .medium))
+                .foregroundStyle(color)
+                .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel(label)
     }
 }
 
@@ -60,9 +84,9 @@ struct Chip: View {
     let action: () -> Void
     var body: some View {
         Button(title, action: action)
-            .font(Theme.mono(12.5))
+            .font(Theme.body(13, weight: on ? .semibold : .regular))
             .foregroundStyle(on ? Theme.bg : Theme.text)
-            .padding(.horizontal, 10).padding(.vertical, 7)
+            .padding(.horizontal, 11).padding(.vertical, 7)
             .background(on ? Theme.teal : Theme.bgPill)
             .clipShape(Capsule())
     }
@@ -128,5 +152,19 @@ struct SetField: View {
             .background(Theme.bgInput)
             .overlay(RoundedRectangle(cornerRadius: Theme.radiusSm).stroke(Theme.borderDim))
             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
+    }
+}
+
+/// Long coach text clamped to a few lines; tap to read the rest.
+struct ExpandableText: View {
+    let text: String
+    var lines = 4
+    @State private var open = false
+    var body: some View {
+        Text(text)
+            .font(Theme.body(14.5)).foregroundStyle(Theme.textBody)
+            .lineLimit(open ? nil : lines)
+            .contentShape(Rectangle())
+            .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { open.toggle() } }
     }
 }

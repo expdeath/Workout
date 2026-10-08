@@ -46,11 +46,11 @@ final class CloudEndToEndUITests: XCTestCase {
 
     func testEveryWorkflowAgainstTheRealDatabase() {
         XCTContext.runActivity(named: "signed in: Home with the account's data") { _ in
-            XCTAssertTrue(text("Ready when you are, Verify.").waitForExistence(timeout: 30))
+            XCTAssertTrue(text("Ready, Verify?").waitForExistence(timeout: 30))
         }
 
         XCTContext.runActivity(named: "quick cardio: 25 min run") { _ in
-            button("🏃 Run").tap()
+            button("Run").tap()
             XCTAssertTrue(text("Log a run").waitForExistence(timeout: 5))
             type(app.textFields["min"], "25")
             text("Log a run").tap()
@@ -60,8 +60,8 @@ final class CloudEndToEndUITests: XCTestCase {
 
         XCTContext.runActivity(named: "check-in → real AI plan → workout") { _ in
             button("Start check-in").tap()
-            XCTAssertTrue(text("CHECK-IN").waitForExistence(timeout: 10))
-            let build = button("Build today's session")
+            XCTAssertTrue(text("Check-in").waitForExistence(timeout: 10))
+            let build = button("Build session")
             scrollTo(build)
             build.tap()
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label MATCHES '0/[0-9]+ sets'")).firstMatch.waitForExistence(timeout: 120),
@@ -76,7 +76,7 @@ final class CloudEndToEndUITests: XCTestCase {
             let finish = button("Finish session")
             scrollTo(finish, max: 25)
             finish.tap()
-            XCTAssertTrue(text("Log it. 20 seconds.").waitForExistence(timeout: 5))
+            XCTAssertTrue(text("How did it go?").waitForExistence(timeout: 5))
             type(app.textFields["e.g. leg press felt light, curls brutal"], "e2e verify")
             button("Save session").tap()
             XCTAssertTrue(button("Plan another session").waitForExistence(timeout: 15))
@@ -84,41 +84,41 @@ final class CloudEndToEndUITests: XCTestCase {
 
         XCTContext.runActivity(named: "log: edit today's workout RPE to 9") { _ in
             button("Log").tap()
-            XCTAssertTrue(text("LOG").waitForExistence(timeout: 5))
+            XCTAssertTrue(text("Log").waitForExistence(timeout: 5))
             app.buttons.matching(NSPredicate(format: "label == %@", "Session options")).element(boundBy: 0).tap()
-            button("✎ Edit sets & notes").tap()
+            button("Edit").tap()
             let rpe = app.textFields.matching(NSPredicate(format: "placeholderValue == '1-10'")).firstMatch
             XCTAssertTrue(rpe.waitForExistence(timeout: 5))
             replace(rpe, with: "9")
             let save = button("Save changes")
             scrollTo(save)
             save.tap()
-            XCTAssertTrue(textBeginning("RPE 9/10").waitForExistence(timeout: 10))
+            XCTAssertTrue(textBeginning("RPE 9").waitForExistence(timeout: 10))
         }
 
         XCTContext.runActivity(named: "past workout: add, then delete it") { _ in
-            button("+ Past").tap()
-            XCTAssertTrue(text("PAST WORKOUT").waitForExistence(timeout: 5))
-            type(app.textFields["Exercise — e.g. Bench press, Running"], "Verify Curl")
+            button("Add past workout").tap()
+            XCTAssertTrue(text("Past workout").waitForExistence(timeout: 5))
+            type(app.textFields["Exercise"], "Verify Curl")
             type(app.textFields.matching(NSPredicate(format: "placeholderValue == 'kg'")).firstMatch, "20")
             type(app.textFields.matching(NSPredicate(format: "placeholderValue == 'reps'")).firstMatch, "10")
-            text("PAST WORKOUT").tap()
-            let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] 'Save to'")).firstMatch
+            text("Past workout").tap()
+            let save = button("Save")
             scrollTo(save)
             save.tap()
             let card = text("Verify Curl: 20kg×10")
             XCTAssertTrue(card.waitForExistence(timeout: 10))
             // newest first: today's workout, today's run, then yesterday's past workout
             app.buttons.matching(NSPredicate(format: "label == %@", "Session options")).element(boundBy: 2).tap()
-            button("✕ Delete session").tap()
-            button("✕ Delete it").tap()
+            button("Delete").tap()
+            button("Delete").tap()
             XCTAssertTrue(card.waitForNonExistence(timeout: 10))
-            button("Home").tap()
+            button("Today").tap()
         }
 
         XCTContext.runActivity(named: "coach chat: a real answer") { _ in
             app.buttons["Ask the coach"].tap()
-            XCTAssertTrue(text("COACH CHAT").waitForExistence(timeout: 5))
+            XCTAssertTrue(app.buttons["Close chat"].waitForExistence(timeout: 5))
             type(app.textFields["Ask the coach…"], "Reply with the single word banana and nothing else.")
             app.buttons["Send"].tap()
             XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label MATCHES[c] '\\\\W*banana\\\\W*'")).firstMatch.waitForExistence(timeout: 60),
@@ -127,18 +127,16 @@ final class CloudEndToEndUITests: XCTestCase {
         }
 
         XCTContext.runActivity(named: "records + progress render") { _ in
-            button("🏆").tap()
-            XCTAssertTrue(text("🏆 RECORDS").waitForExistence(timeout: 5))
-            button("Home").tap()
-            button("Stats").tap()
-            XCTAssertTrue(text("PROGRESS").waitForExistence(timeout: 5))
-            XCTAssertTrue(text("Training days").exists)
-            button("Home").tap()
+            button("Records").tap()
+            XCTAssertTrue(text("Personal records").waitForExistence(timeout: 5))
+            button("Progress").tap()
+            XCTAssertTrue(text("Training days").waitForExistence(timeout: 5))
+            button("Today").tap()
         }
 
         XCTContext.runActivity(named: "settings: gym setup + feedback") { _ in
             app.buttons["Settings"].tap()
-            XCTAssertTrue(text("SETTINGS").waitForExistence(timeout: 5))
+            XCTAssertTrue(text("About").waitForExistence(timeout: 5))
             app.staticTexts["Plates & Bar"].tap()
             let plates = app.textFields.matching(NSPredicate(format: "value CONTAINS '2.5'")).firstMatch
             XCTAssertTrue(plates.waitForExistence(timeout: 5))

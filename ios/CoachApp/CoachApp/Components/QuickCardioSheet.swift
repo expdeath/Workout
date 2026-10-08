@@ -30,15 +30,7 @@ struct QuickCardioSheet: View {
             Capsule().fill(Theme.border).frame(width: 40, height: 4).frame(maxWidth: .infinity)
 
             Text(meta.label)
-                .font(Theme.mono(13, weight: .medium))
-                .textCase(.uppercase)
-                .tracking(1)
-                .foregroundStyle(Theme.muted)
-                .frame(maxWidth: .infinity)
-
-            Text("Saved straight to your log — no check-in, no AI plan.")
-                .font(Theme.body(13.5))
-                .foregroundStyle(Theme.muted)
+                .font(Theme.head(24, weight: .bold))
 
             SegGroup(options: [("0", "Today"), ("1", "Yesterday"), ("2", "2 days ago")], value: $daysAgo)
 
@@ -47,18 +39,18 @@ struct QuickCardioSheet: View {
                     .keyboardType(.decimalPad)
                     .onChange(of: time) { _, v in time = Helpers.cleanTime(v) }
                     .quickCardioField()
-                Text("min").font(Theme.mono(13)).foregroundStyle(Theme.dim)
+                Text("min").font(Theme.meta(13)).foregroundStyle(Theme.dim)
                 TextField("km", text: $dist)
                     .keyboardType(.decimalPad)
                     .onChange(of: dist) { _, v in dist = Helpers.cleanDist(v) }
                     .quickCardioField()
-                Text("km (optional)").font(Theme.mono(13)).foregroundStyle(Theme.dim)
+                Text("km").font(Theme.meta(13)).foregroundStyle(Theme.dim)
             }
 
             HStack {
-                Text("Effort").font(Theme.head(13, weight: .semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Theme.muted)
+                Text("Effort").font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.muted)
                 Spacer()
-                Text("\(rpe)/10").font(Theme.mono(15)).foregroundStyle(Theme.amber)
+                Text("\(rpe)/10").font(Theme.head(20, weight: .bold)).foregroundStyle(Theme.amber)
             }
             Slider(value: Binding(get: { Double(rpe) }, set: { rpe = Int($0) }), in: 1...10, step: 1)
                 .tint(Theme.amber)
@@ -79,7 +71,7 @@ struct QuickCardioSheet: View {
         }
         .padding(16)
         .background(Theme.bgCard)
-        .presentationDetents([.height(400)])
+        .presentationDetents([.height(360)])
         .presentationDragIndicator(.hidden)
         .coachScreen()
     }

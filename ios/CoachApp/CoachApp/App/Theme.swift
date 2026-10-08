@@ -38,8 +38,17 @@ enum Theme {
         return .custom(name, size: size)
     }
 
+    /// Monospace — only for numbers you type or watch tick (set inputs,
+    /// the rest timer), where equal-width digits keep columns aligned.
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .custom(weight == .medium ? "IBMPlexMono-Medium" : "IBMPlexMono-Regular", size: size)
+    }
+
+    /// Secondary text — dates, set summaries, captions. The system face
+    /// with tabular digits, so numbers still line up without the
+    /// typewriter look.
+    static func meta(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        .system(size: size, weight: weight).monospacedDigit()
     }
 
     static func body(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {

@@ -21,11 +21,7 @@ struct CheckInView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header
-
-                Text("Pre-set for a normal day. Only tap what's different — then build.")
-                    .font(Theme.body(15))
-                    .foregroundStyle(Theme.muted)
+                ScreenHeader(title: "Check-in", onBack: { appState.screen = .home })
 
                 QLabel(text: "Energy", value: "\(appState.ci.energy)/10")
                 Slider(
@@ -34,31 +30,31 @@ struct CheckInView: View {
                 )
                 .tint(Theme.amber)
 
-                QLabel(text: "Sleep last night")
+                QLabel(text: "Sleep")
                 SegGroup(options: [("Great", "Great"), ("OK", "OK"), ("Poor", "Poor")], value: ci.sleep)
 
                 QLabel(text: "Soreness")
                 SegGroup(options: [("None", "None"), ("Light", "Light"), ("Very sore", "Very sore")], value: ci.soreness)
                 if appState.ci.soreness != "None" {
-                    TextField("", text: ci.soreAreas, prompt: prompt("Where? e.g. chest, quads"))
+                    TextField("", text: ci.soreAreas, prompt: prompt("Where?"))
                         .coachInput()
                         .padding(.top, 10)
                 }
 
-                QLabel(text: "Gym time (walk not included)")
+                QLabel(text: "Gym time")
                 SegGroup(options: [("30", "30m"), ("45", "45m"), ("60", "60m"), ("75", "75m+")], value: ci.timeAvail)
 
                 moreToggle
                 if showMore { moreDetails }
 
-                ReadinessBar(value: Helpers.quickReadiness(appState.ci), label: "Quick readiness estimate")
+                ReadinessBar(value: Helpers.quickReadiness(appState.ci), label: "Readiness")
                     .padding(.top, 24)
 
                 if !appState.error.isEmpty {
                     ErrorBox(text: appState.error).padding(.top, 14)
                 }
 
-                Button("Build today's session") {
+                Button("Build session") {
                     Task { await appState.generateWorkout(appState.ci) }
                 }
                 .buttonStyle(BigButtonStyle())
@@ -76,24 +72,6 @@ struct CheckInView: View {
 
     // MARK: Sections
 
-    private var header: some View {
-        ZStack {
-            Text("CHECK-IN")
-                .font(Theme.head(18, weight: .bold))
-                .tracking(4)
-                .foregroundStyle(Theme.amber)
-            HStack {
-                Button("Cancel") { appState.screen = .home }
-                    .font(Theme.head(16, weight: .semibold))
-                    .textCase(.uppercase)
-                    .tracking(1.3)
-                    .foregroundStyle(Theme.muted)
-                Spacer()
-            }
-        }
-        .padding(.bottom, 14)
-    }
-
     private var moreToggle: some View {
         VStack(spacing: 0) {
             Rectangle().fill(Theme.border).frame(height: 1)
@@ -101,12 +79,12 @@ struct CheckInView: View {
                 withAnimation(.easeOut(duration: 0.2)) { showMore.toggle() }
             } label: {
                 HStack {
-                    Text(showMore ? "− Hide more details" : "+ More details — back, vibe, health data")
+                    Text(showMore ? "Fewer details" : "More details")
                     Spacer()
                     Image(systemName: "chevron.down")
                         .rotationEffect(.degrees(showMore ? 180 : 0))
                 }
-                .font(Theme.head(15, weight: .semibold))
+                .font(Theme.body(14.5, weight: .semibold))
                 .foregroundStyle(Theme.muted)
                 .padding(.vertical, 13)
                 .padding(.horizontal, 2)
@@ -122,23 +100,22 @@ struct CheckInView: View {
         VStack(alignment: .leading, spacing: 0) {
             Pill(
                 on: appState.ci.backTight, warn: true,
-                text: appState.ci.backTight ? "✓ Lower back tight today — coach will adapt" : "Lower back tight today?"
+                text: appState.ci.backTight ? "✓ Lower back tight" : "Lower back tight?"
             ) { appState.ci.backTight.toggle() }
 
             if let gap = appState.muscleGap {
-                let tip = Stats.muscleFixTips[gap.group] ?? ""
                 Pill(
                     on: !appState.ci.prioritizeMuscle.isEmpty,
                     text: appState.ci.prioritizeMuscle.isEmpty
-                        ? "\(gap.group) hasn't been trained in \(gap.lastDaysAgo) days — add \(tip) today?"
-                        : "✓ Prioritizing \(gap.group) today"
+                        ? "Prioritize \(gap.group.lowercased())? \(gap.lastDaysAgo) days since last trained"
+                        : "✓ Prioritizing \(gap.group.lowercased())"
                 ) {
                     appState.ci.prioritizeMuscle = appState.ci.prioritizeMuscle.isEmpty ? gap.group : ""
                 }
                 .padding(.top, 10)
             }
 
-            QLabel(text: "Today's vibe").padding(.top, -4)
+            QLabel(text: "Focus").padding(.top, -4)
             SegGroup(
                 options: [
                     ("", "Coach's call"), ("lift", "Lift"), ("cardio", "Cardio"),
@@ -149,24 +126,24 @@ struct CheckInView: View {
             )
 
             QLabel(text: "Health data").padding(.top, -4)
-            if autoFilled, !(appState.ci.health ?? "").isEmpty {
-                Text("⌚ Watch data loaded — the coach will read it")
-                    .font(Theme.mono(12))
-                    .foregroundStyle(Theme.teal)
-                    .padding(.bottom, 8)
-            } else {
-                Pill(on: false, text: "⌚ Paste Watch data from clipboard", action: pasteHealth)
-                    .padding(.bottom, 8)
+            HStack {
+                if autoFilled, !(appState.ci.health ?? "").isEmpty {
+                    Label("Loaded from Watch", systemImage: "applewatch")
+                        .font(Theme.body(13)).foregroundStyle(Theme.teal)
+                }
+                Spacer()
+                Chip(title: "Paste", action: pasteHealth)
             }
+            .padding(.bottom, 8)
             ZStack(alignment: .topLeading) {
                 TextEditor(text: health)
                     .font(Theme.body(14.5))
                     .scrollContentBackground(.hidden)
                     .foregroundStyle(Theme.text)
-                    .frame(minHeight: 100)
+                    .frame(minHeight: 72)
                     .padding(8)
                 if (appState.ci.health ?? "").isEmpty {
-                    Text("Paste anything — sleep, HRV, resting HR, steps.\ne.g. Sleep 6h40m · HRV 48 · RHR 58")
+                    Text("Sleep, HRV, resting HR…")
                         .font(Theme.body(14.5))
                         .foregroundStyle(Theme.dim)
                         .padding(.horizontal, 13)
@@ -178,8 +155,8 @@ struct CheckInView: View {
             .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.borderDim))
             .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
 
-            QLabel(text: "Body weight today (optional)").padding(.top, -4)
-            TextField("", text: ci.bodyKg, prompt: prompt("kg — one number a day, charted in Stats"))
+            QLabel(text: "Body weight").padding(.top, -4)
+            TextField("", text: ci.bodyKg, prompt: prompt("kg"))
                 .keyboardType(.decimalPad)
                 .onChange(of: appState.ci.bodyKg) { _, v in
                     let clean = String(v.filter { $0.isNumber || $0 == "." }.prefix(6))
@@ -187,13 +164,8 @@ struct CheckInView: View {
                 }
                 .coachInput()
 
-            TextField("", text: ci.notes, prompt: prompt("Anything else? (injury, plans — optional)"))
+            TextField("", text: ci.notes, prompt: prompt("Anything else?"))
                 .coachInput()
-                .padding(.top, 10)
-
-            Text("Tip: paste today's Apple Health numbers — the coach reads them.")
-                .font(Theme.mono(12))
-                .foregroundStyle(Theme.dim)
                 .padding(.top, 10)
         }
         .padding(.top, 4)

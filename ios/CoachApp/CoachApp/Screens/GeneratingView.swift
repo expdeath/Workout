@@ -26,12 +26,12 @@ struct GeneratingView: View {
                 .foregroundStyle(Theme.amber)
                 .opacity(pulse ? 0.45 : 1)
 
-            ReadinessBar(value: Helpers.quickReadiness(appState.ci), label: "Readiness (initial estimate)")
+            ReadinessBar(value: Helpers.quickReadiness(appState.ci), label: "Readiness")
                 .frame(maxWidth: 320)
                 .padding(.top, 28)
 
             Text(appState.statusMsg.isEmpty ? Self.messages[msg] : appState.statusMsg)
-                .font(Theme.mono(13))
+                .font(Theme.body(14))
                 .foregroundStyle(Theme.muted)
                 .multilineTextAlignment(.center)
                 .padding(.top, 18)

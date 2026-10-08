@@ -68,45 +68,41 @@ struct WorkoutView: View {
                 header(t)
                 if confirmCancel == "top" { cancelConfirm(t).padding(.top, 10) }
 
-                Text("\(Helpers.fmtDate(t.date)) · est. \(p.estTimeMin) min door-to-door")
-                    .font(Theme.mono(12.5)).foregroundStyle(Theme.muted)
-                    .padding(.top, 8)
                 Text(p.sessionType.uppercased())
                     .font(Theme.head(40, weight: .bold)).foregroundStyle(Theme.amber)
-                if !p.title.isEmpty {
-                    Text(p.title).font(Theme.body(16)).foregroundStyle(Theme.textBody)
-                }
+                    .padding(.top, 4)
+                Text([p.title, p.estTimeMin > 0 ? "~\(p.estTimeMin) min" : ""].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(Theme.body(15)).foregroundStyle(Theme.muted)
 
-                ReadinessBar(value: p.recoveryScore ?? 50, label: "Coach recovery score").padding(.top, 14)
+                ReadinessBar(value: p.recoveryScore ?? 50, label: "Recovery").padding(.top, 14)
 
+                // why + warm-up in one quiet card; the reasoning folds to 2 lines
                 card {
-                    label("Why this session")
-                    Text(p.reasoning).font(Theme.body(14.5)).foregroundStyle(Theme.textBody)
+                    if !p.reasoning.isEmpty { ExpandableText(text: p.reasoning, lines: 2) }
                     if !p.concerns.isEmpty {
-                        Text("⚠ \(p.concerns)").font(Theme.body(14.5)).foregroundStyle(Theme.amber).padding(.top, 4)
+                        Label(p.concerns, systemImage: "exclamationmark.triangle.fill")
+                            .font(Theme.body(14)).foregroundStyle(Theme.amber)
+                    }
+                    if !p.warmup.isEmpty {
+                        (Text("Warm-up  ").font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.muted)
+                         + Text(p.warmup.joined(separator: " · ")).font(Theme.body(14)).foregroundStyle(Theme.textBody))
+                            .padding(.top, p.reasoning.isEmpty ? 0 : 4)
                     }
                 }
-                .padding(.top, 16)
-
-                if !p.warmup.isEmpty {
-                    card {
-                        label("Warm-up")
-                        ForEach(Array(p.warmup.enumerated()), id: \.offset) { Text("· \($0.element)").font(Theme.body(14.5)) }
-                    }
-                }
+                .padding(.top, 4)
 
                 exerciseCards(t)
 
                 if let c = p.cardio, !(c.desc.isEmpty && c.duration.isEmpty) {
                     card {
                         label("Cardio")
-                        Text("\(c.desc) — \(c.duration)").font(Theme.body(14.5))
+                        Text([c.desc, c.duration].filter { !$0.isEmpty }.joined(separator: " · ")).font(Theme.body(14.5))
                     }
                 }
                 if !p.cooldown.isEmpty {
                     card {
                         label("Cool-down")
-                        ForEach(Array(p.cooldown.enumerated()), id: \.offset) { Text("· \($0.element)").font(Theme.body(14.5)) }
+                        Text(p.cooldown.joined(separator: " · ")).font(Theme.body(14.5))
                     }
                 }
 
@@ -119,13 +115,6 @@ struct WorkoutView: View {
                 .buttonStyle(BigButtonStyle())
                 .padding(.top, 18)
 
-                if confirmCancel == "bottom" {
-                    cancelConfirm(t).padding(.top, 10)
-                } else {
-                    Button("Cancel this session") { confirmCancel = "bottom" }
-                        .font(Theme.mono(13)).foregroundStyle(Theme.dim)
-                        .frame(maxWidth: .infinity).padding(.top, 14)
-                }
                 Spacer().frame(height: timer == nil ? 24 : 96)
             }
             .padding(16)
@@ -149,22 +138,16 @@ struct WorkoutView: View {
     private func header(_ t: Session) -> some View {
         let total = t.log.reduce(0) { $0 + $1.count }
         let done = t.log.reduce(0) { $0 + $1.filter(\.done).count }
-        return HStack {
-            Button("Home") { appState.screen = .home }
-                .font(Theme.head(16, weight: .semibold)).textCase(.uppercase).tracking(1.3)
-                .foregroundStyle(Theme.muted)
+        return HStack(spacing: 0) {
+            BackButton(label: "Home") { appState.screen = .home }
             Spacer()
-            Button("🗨 Coach") { appState.chatOpen = true }
-                .font(Theme.head(15, weight: .semibold)).textCase(.uppercase).foregroundStyle(Theme.muted)
-                .padding(.trailing, 10)
-            Text("\(done)/\(total) sets").font(Theme.mono(13)).foregroundStyle(Theme.muted)
-            Button {
+            Text("\(done)/\(total) sets").font(Theme.meta(14, weight: .medium))
+                .foregroundStyle(done == total && total > 0 ? Theme.teal : Theme.muted)
+            Spacer()
+            IconButton(icon: "bubble.left", label: "Ask the coach") { appState.chatOpen = true }
+            IconButton(icon: "xmark", label: "Cancel this session") {
                 confirmCancel = confirmCancel == "top" ? nil : "top"
-            } label: {
-                Text("✕").font(Theme.head(18, weight: .bold)).foregroundStyle(Theme.red)
             }
-            .accessibilityLabel("Cancel this session")
-            .padding(.leading, 12)
         }
     }
 
@@ -221,8 +204,8 @@ struct WorkoutView: View {
             if g.count == 2 {
                 let a = exMeta(t, g[0]), b = exMeta(t, g[1])
                 exCard {
-                    Text("⇋ superset \(a.ex.superset) — one set of each, top to bottom")
-                        .font(Theme.mono(12)).foregroundStyle(Theme.teal).padding(.bottom, 8)
+                    Text("Superset \(a.ex.superset)")
+                        .font(Theme.meta(12.5, weight: .semibold)).foregroundStyle(Theme.teal).padding(.bottom, 6)
                     exHeader(a, dot: Theme.teal, paired: true)
                     Spacer().frame(height: 12)
                     exHeader(b, dot: Theme.amber, paired: true)
@@ -268,41 +251,53 @@ struct WorkoutView: View {
         let key = cueKey(ex.name)
         let cue = LocalStore.shared.backup.aiSettings.cueNotes[key]
         let media = mediaVersion >= 0 ? MediaStore.get(key) : nil
-        return VStack(alignment: .leading, spacing: 4) {
+        let tryWeight = m.suggest.map { "\(Helpers.fmtKg($0))kg" } ?? (m.mode == "strength" && !ex.suggestedWeight.isEmpty ? ex.suggestedWeight : nil)
+        // one line of prescription, one line of guidance — everything else is in ⋯
+        let prescription = ["\(ex.sets) × \(ex.reps)", ex.rpe.isEmpty ? "" : "RPE \(ex.rpe)", ex.rest.isEmpty ? "" : "\(ex.rest) rest"]
+            .filter { !$0.isEmpty }.joined(separator: " · ")
+        return VStack(alignment: .leading, spacing: 3) {
             HStack(alignment: .firstTextBaseline) {
                 if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
-                Text(ex.name).font(Theme.head(19, weight: .bold))
+                Text(ex.name).font(Theme.head(20, weight: .bold))
                 Spacer()
-                Text("RPE \(ex.rpe) · rest \(ex.rest)").font(Theme.mono(12)).foregroundStyle(Theme.muted)
                 Button { sheet = SheetState(exI: m.exI, mode: .menu) } label: {
-                    Text("⋯").font(Theme.head(20, weight: .bold)).foregroundStyle(Theme.muted).padding(.horizontal, 4)
+                    Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.muted)
+                        .frame(width: 32, height: 24)
                 }
                 .accessibilityLabel("Options for \(ex.name)")
             }
-            HStack(spacing: 8) {
-                Text("\(ex.sets) × \(ex.reps)\(m.suggest.map { " · try \(Helpers.fmtKg($0))kg" } ?? (m.mode == "strength" && !ex.suggestedWeight.isEmpty ? " · try \(ex.suggestedWeight)" : ""))")
-                    .font(Theme.mono(13.5)).foregroundStyle(Theme.textBody)
-                if let target = m.plateTarget {
-                    Button(platesFor == m.exI ? "⚖ plates ✓" : "⚖ plates") { platesFor = platesFor == m.exI ? nil : m.exI }
-                        .font(Theme.mono(12)).foregroundStyle(platesFor == m.exI ? Theme.amber : Theme.teal)
+            Text(prescription).font(Theme.meta(13.5)).foregroundStyle(Theme.textBody)
+            if tryWeight != nil || m.lastPerf != nil {
+                HStack(spacing: 8) {
+                    if let tryWeight {
+                        Text("Try \(tryWeight)\(m.suggest != nil && m.lastPerf != nil ? " ↑" : "")")
+                            .font(Theme.meta(13, weight: .semibold)).foregroundStyle(Theme.amber)
+                    }
+                    if let lp = m.lastPerf {
+                        Text("Last \(lp.sets.map(\.formatted).joined(separator: ", "))")
+                            .font(Theme.meta(13)).foregroundStyle(Theme.muted).lineLimit(1)
+                    }
+                    if let target = m.plateTarget {
+                        Spacer(minLength: 0)
+                        Button { platesFor = platesFor == m.exI ? nil : m.exI } label: {
+                            Image(systemName: "scalemass").font(.system(size: 14))
+                                .foregroundStyle(platesFor == m.exI ? Theme.amber : Theme.teal)
+                        }
                         .accessibilityLabel("Plate breakdown for \(Helpers.fmtKg(target))kg")
+                    }
                 }
             }
             if platesFor == m.exI, let target = m.plateTarget { plateLine(target) }
-            if let lp = m.lastPerf {
-                Text("last time (\(Helpers.fmtDate(lp.date))): \(lp.sets.map(\.formatted).joined(separator: " · "))\(m.suggest != nil ? " — all reps hit, go up" : "")")
-                    .font(Theme.mono(12.5)).foregroundStyle(Theme.muted)
-            }
             if !paired && !ex.superset.isEmpty {
-                Text("⇋ superset \(ex.superset)").font(Theme.mono(12)).foregroundStyle(Theme.teal)
+                Text("Superset \(ex.superset)").font(Theme.meta(12.5, weight: .medium)).foregroundStyle(Theme.teal)
             }
             if !ex.notes.isEmpty {
-                Text(ex.notes).font(Theme.body(13.5)).foregroundStyle(Theme.muted)
+                Text(ex.notes).font(Theme.body(13.5)).foregroundStyle(Theme.muted).lineLimit(2)
             }
             if editingCue == m.exI {
                 cueEditor(ex.name, hasMedia: media != nil)
             } else if let cue {
-                Text("✎ \(cue)").font(Theme.body(13.5)).foregroundStyle(Theme.amber)
+                Label(cue, systemImage: "pencil").font(Theme.body(13.5)).foregroundStyle(Theme.amber)
                     .onTapGesture { cueDraft = cue; editingCue = m.exI }
             }
             if let media, editingCue != m.exI {
@@ -322,7 +317,7 @@ struct WorkoutView: View {
             ? "\(kg(target))kg → bar only (\(kg(info.bar))kg\(target < info.bar ? " — lighter than the bar" : ""))"
             : "\(kg(target))kg → \(kg(info.bar))kg bar + \(info.perSide.map(kg).joined(separator: " + ")) per side"
         if !info.perSide.isEmpty && !info.exact { s += " · closest load \(kg(info.loaded))kg" }
-        return Text(s).font(Theme.mono(12.5)).foregroundStyle(Theme.amber)
+        return Text(s).font(Theme.meta(13)).foregroundStyle(Theme.amber)
     }
 
     private func setRow(_ t: Session, _ m: ExMeta, _ setI: Int, dot: Color?) -> some View {
@@ -333,7 +328,7 @@ struct WorkoutView: View {
             if let dot { Circle().fill(dot).frame(width: 8, height: 8) }
             Button { toggleSet(t, m.exI, setI, set) } label: {
                 Text(set.done ? "✓" : "\(setI + 1)")
-                    .font(Theme.mono(14, weight: .medium))
+                    .font(Theme.meta(14, weight: .medium))
                     .frame(width: 34, height: 34)
                     .foregroundStyle(set.done ? Theme.bg : Theme.text)
                     .background(set.done ? Theme.teal : Theme.bgPill)
@@ -342,29 +337,35 @@ struct WorkoutView: View {
             .accessibilityLabel(set.done ? "Set \(setI + 1) done" : "Set \(setI + 1)")
             switch m.mode {
             case "check":
-                Text("\(m.ex.reps)\(set.done ? " — done" : " — tap to tick off")")
+                Text(m.ex.reps)
                     .font(Theme.body(13.5)).foregroundStyle(Theme.textBody)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .onTapGesture { toggleSet(t, m.exI, setI, set) }
             case "cardio":
                 numField(set.time, last?.time.nonEmpty ?? "min") { appState.updateSet(m.exI, setI, time: $0) }
-                Text("min").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                Text("min").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                 numField(set.dist, last?.dist.nonEmpty ?? "km") { appState.updateSet(m.exI, setI, dist: $0) }
-                Text("km").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                Text("km").font(Theme.meta(13)).foregroundStyle(Theme.muted)
             default:
                 numField(set.weight, m.suggest.map(Helpers.fmtKg) ?? last?.weight.nonEmpty ?? "kg") { appState.updateSet(m.exI, setI, weight: $0) }
-                Text("×").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                Text("×").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                 numField(set.reps, last?.reps.nonEmpty ?? "reps", decimal: false) { appState.updateSet(m.exI, setI, reps: $0) }
             }
             if m.mode != "check" {
+                // the effort tag only appears once the set is ticked — no
+                // "rate" on every untouched row (its space stays reserved)
+                let showEffort = set.done || !set.effort.isEmpty
                 Button(set.effort.isEmpty ? "rate" : set.effort) {
                     let i = Self.efforts.firstIndex(of: set.effort) ?? 0
                     appState.updateSet(m.exI, setI, effort: Self.efforts[(i + 1) % Self.efforts.count])
                 }
-                .font(Theme.mono(12))
+                .font(Theme.meta(12.5, weight: .medium))
                 .foregroundStyle(effortColor(set.effort))
                 .frame(minWidth: 44)
+                .opacity(showEffort ? 1 : 0)
+                .disabled(!showEffort)
+                .accessibilityHidden(!showEffort)
                 .accessibilityLabel("Effort for set \(setI + 1): \(set.effort.isEmpty ? "not rated" : set.effort)")
             }
         }
@@ -398,17 +399,17 @@ struct WorkoutView: View {
 
     private func cueEditor(_ name: String, hasMedia: Bool) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextField("", text: $cueDraft, prompt: Text("Note to self — sticks to this exercise forever. e.g. seat height 4 · tuck elbows").foregroundStyle(Theme.dim), axis: .vertical)
+            TextField("", text: $cueDraft, prompt: Text("Note to self, e.g. seat height 4").foregroundStyle(Theme.dim), axis: .vertical)
                 .lineLimit(2...5)
                 .coachInput()
             HStack(spacing: 8) {
-                chip("Save note", on: true) { saveCue(name) }
-                chip(hasMedia ? "📷 Replace photo/clip" : "📷 Add photo/clip") { pickFor = name }
-                if hasMedia { chip("✕ Remove media") { MediaStore.remove(cueKey(name)); mediaVersion += 1 } }
+                chip("Save", on: true) { saveCue(name) }
+                chip(hasMedia ? "Replace photo" : "Add photo") { pickFor = name }
+                if hasMedia { chip("Remove photo") { MediaStore.remove(cueKey(name)); mediaVersion += 1 } }
                 chip("Cancel") { editingCue = nil }
             }
-            Text("Photos/clips stay on this device — they don't sync.")
-                .font(Theme.mono(11.5)).foregroundStyle(Theme.dim)
+            Text("Photos stay on this device.")
+                .font(Theme.meta(12)).foregroundStyle(Theme.dim)
         }
         .padding(.top, 6)
     }
@@ -477,36 +478,36 @@ struct WorkoutView: View {
             switch s.mode {
             case .menu:
                 if let ex, !ex.alt.isEmpty {
-                    sheetItem("⇄ Swap to \(ex.alt)", color: Theme.teal) { sheet = nil; appState.swapExercise(s.exI) }
+                    sheetItem("Swap to \(ex.alt)", icon: "arrow.left.arrow.right", color: Theme.teal) { sheet = nil; appState.swapExercise(s.exI) }
                 }
-                sheetItem("⇄ Did something else…", color: Theme.teal) { swapDraft = ""; sheet = SheetState(exI: s.exI, mode: .swap) }
-                sheetItem("▶ Watch how-to video") {
+                sheetItem("Did something else…", icon: "pencil.line", color: Theme.teal) { swapDraft = ""; sheet = SheetState(exI: s.exI, mode: .swap) }
+                sheetItem("How-to video", icon: "play.rectangle") {
                     sheet = nil
                     let q = "how to \(ex?.name ?? "") proper form".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
                     if let url = URL(string: "https://www.youtube.com/results?search_query=\(q)") { openURL(url) }
                 }
-                sheetItem("＋ Add set") { sheet = nil; appState.adjustSets(s.exI, +1) }
-                sheetItem("− Remove set", enabled: canDrop) { sheet = nil; appState.adjustSets(s.exI, -1) }
+                sheetItem("Add set", icon: "plus") { sheet = nil; appState.adjustSets(s.exI, +1) }
+                sheetItem("Remove set", icon: "minus", enabled: canDrop) { sheet = nil; appState.adjustSets(s.exI, -1) }
                 let cue = LocalStore.shared.backup.aiSettings.cueNotes[cueKey(ex?.name ?? "")]
-                sheetItem(cue == nil ? "✎ Note to self" : "✎ Edit note to self") {
+                sheetItem(cue == nil ? "Note or photo" : "Edit note", icon: "note.text") {
                     cueDraft = cue ?? ""; editingCue = s.exI; sheet = nil
                 }
-                sheetItem("✕ Remove exercise", color: Theme.red) { sheet = SheetState(exI: s.exI, mode: .remove) }
+                sheetItem("Remove exercise", icon: "trash", color: Theme.red) { sheet = SheetState(exI: s.exI, mode: .remove) }
             case .swap:
-                Text("Log what you actually did instead — it replaces \(ex?.name ?? "this") for today, and one tap swaps it back.")
+                Text("What did you do instead?")
                     .font(Theme.body(14)).foregroundStyle(Theme.muted)
                 TextField("", text: Binding(get: { swapDraft }, set: { swapDraft = String($0.prefix(60)) }),
                           prompt: Text("e.g. Running").foregroundStyle(Theme.dim))
                     .coachInput()
                     .onSubmit { saveSwap(s.exI) }
-                Button("⇄ Swap it in") { saveSwap(s.exI) }
+                Button("Swap it in") { saveSwap(s.exI) }
                     .buttonStyle(BigButtonStyle())
                     .disabled(swapDraft.trimmingCharacters(in: .whitespaces).isEmpty)
                     .padding(.top, 8)
             case .remove:
-                Text("Skip \(ex?.name ?? "this") today?\(rows.contains(where: \.isLogged) ? " Logged sets will be lost." : "")")
+                Text("Skip it today?\(rows.contains(where: \.isLogged) ? " Logged sets will be lost." : "")")
                     .font(Theme.body(14)).foregroundStyle(Theme.muted)
-                Button("✕ Remove exercise") { sheet = nil; appState.removeExercise(s.exI) }
+                Button("Remove exercise") { sheet = nil; appState.removeExercise(s.exI) }
                     .buttonStyle(BigButtonStyle(danger: true))
                     .padding(.top, 8)
             }
@@ -525,9 +526,10 @@ struct WorkoutView: View {
         sheet = nil
     }
 
-    private func sheetItem(_ title: String, color: Color = Theme.text, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func sheetItem(_ title: String, icon: String, color: Color = Theme.text, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(Theme.body(16)).foregroundStyle(enabled ? color : Theme.dim)
+            Label { Text(title) } icon: { Image(systemName: icon).frame(width: 24) }
+                .font(Theme.body(16)).foregroundStyle(enabled ? color : Theme.dim)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 11)
                 .contentShape(Rectangle())
@@ -545,17 +547,17 @@ struct WorkoutView: View {
                 HStack {
                     label("Push harder")
                     Spacer()
-                    Button("close") { harder = nil }.font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                    IconButton(icon: "xmark", label: "Close") { harder = nil }.frame(height: 24)
                 }
                 if let c = h.caution { Text(c).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
-                if h.loading { Text("Coach is picking your upgrades…").font(Theme.body(14)).foregroundStyle(Theme.muted) }
+                if h.loading { Text("Picking upgrades…").font(Theme.body(14)).foregroundStyle(Theme.muted) }
                 if let e = h.error { Text(e).font(Theme.body(14)).foregroundStyle(Theme.amber) }
                 ForEach(Array(h.options.enumerated()), id: \.offset) { i, o in
                     let applied = h.applied.contains(i)
                     HStack(alignment: .top) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(harderLabel(o)).font(Theme.body(14.5))
-                            if !o.why.isEmpty { Text(o.why).font(Theme.mono(12)).foregroundStyle(Theme.muted) }
+                            if !o.why.isEmpty { Text(o.why).font(Theme.meta(12)).foregroundStyle(Theme.muted) }
                         }
                         Spacer()
                         Button(applied ? "✓ In" : "Apply") {
@@ -568,11 +570,11 @@ struct WorkoutView: View {
                     .padding(.top, 6)
                 }
                 if !h.loading && h.error == nil && h.options.isEmpty {
-                    Text("No sensible upgrades today — finish strong instead.").font(Theme.body(14)).foregroundStyle(Theme.muted)
+                    Text("Nothing to add today — finish strong.").font(Theme.body(14)).foregroundStyle(Theme.muted)
                 }
             }
         } else {
-            Button("⚡ Feeling strong? Make it harder") { Task { await openHarder(t) } }
+            Button("Make it harder") { Task { await openHarder(t) } }
                 .font(Theme.head(15, weight: .semibold))
                 .foregroundStyle(Theme.amber)
                 .frame(maxWidth: .infinity)
@@ -674,7 +676,7 @@ struct WorkoutView: View {
                         Text(remaining <= 0 ? "GO" : String(format: "%d:%02d", max(remaining, 0) / 60, max(remaining, 0) % 60))
                             .font(Theme.mono(22, weight: .medium))
                             .foregroundStyle(remaining <= 0 ? Theme.teal : Theme.text)
-                        Text(remaining <= 0 ? "next set — \(timer.exName)" : "rest · \(timer.exName)")
+                        Text(remaining <= 0 ? "Next set · \(timer.exName)" : timer.exName)
                             .font(Theme.body(14)).foregroundStyle(Theme.muted).lineLimit(1)
                         Spacer()
                         Button("Skip") { stopTimer() }
@@ -707,14 +709,14 @@ struct WorkoutView: View {
     }
 
     private func label(_ s: String) -> some View {
-        Text(s).font(Theme.head(13, weight: .semibold)).textCase(.uppercase).tracking(1.2).foregroundStyle(Theme.muted)
+        CardLabel(text: s)
     }
 
     private func chip(_ title: String, on: Bool = false, action: @escaping () -> Void) -> some View {
         Button(title, action: action)
-            .font(Theme.mono(12.5))
+            .font(Theme.body(13, weight: on ? .semibold : .regular))
             .foregroundStyle(on ? Theme.bg : Theme.text)
-            .padding(.horizontal, 10).padding(.vertical, 7)
+            .padding(.horizontal, 11).padding(.vertical, 7)
             .background(on ? Theme.teal : Theme.bgPill)
             .clipShape(Capsule())
     }

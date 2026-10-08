@@ -31,7 +31,7 @@ struct LineChartView: View {
                         .foregroundStyle(color)
                         .symbolSize(70)
                         .annotation(position: .top) {
-                            Text("\(fmt(p.value))\(unit)").font(Theme.mono(11)).foregroundStyle(Theme.text)
+                            Text("\(fmt(p.value))\(unit)").font(Theme.meta(11)).foregroundStyle(Theme.text)
                         }
                 }
             }
@@ -39,13 +39,13 @@ struct LineChartView: View {
         .chartXSelection(value: $selected)
         .chartXAxis {
             AxisMarks(values: axisLabels) { v in
-                AxisValueLabel { Text((v.as(String.self) ?? "").split(separator: "|").last.map(String.init) ?? "").font(Theme.mono(10)).foregroundStyle(Theme.muted) }
+                AxisValueLabel { Text((v.as(String.self) ?? "").split(separator: "|").last.map(String.init) ?? "").font(Theme.meta(10)).foregroundStyle(Theme.muted) }
             }
         }
         .chartYAxis {
             AxisMarks(position: .leading) { _ in
                 AxisGridLine().foregroundStyle(Theme.border)
-                AxisValueLabel().font(Theme.mono(10)).foregroundStyle(Theme.muted)
+                AxisValueLabel().font(Theme.meta(10)).foregroundStyle(Theme.muted)
             }
         }
         .frame(height: 180)
@@ -76,19 +76,19 @@ struct BarChartView: View {
                     .clipShape(UnevenRoundedRectangle(topLeadingRadius: 4, topTrailingRadius: 4))
                     .annotation(position: .top) {
                         if selected == b.label {
-                            Text("\(Self.fmtN(b.value))\(unit)").font(Theme.mono(11)).foregroundStyle(Theme.text)
+                            Text("\(Self.fmtN(b.value))\(unit)").font(Theme.meta(11)).foregroundStyle(Theme.text)
                         }
                     }
             }
         }
         .chartXSelection(value: $selected)
         .chartXAxis {
-            AxisMarks { _ in AxisValueLabel().font(Theme.mono(10)).foregroundStyle(Theme.muted) }
+            AxisMarks { _ in AxisValueLabel().font(Theme.meta(10)).foregroundStyle(Theme.muted) }
         }
         .chartYAxis {
             AxisMarks(position: .leading) { v in
                 AxisGridLine().foregroundStyle(Theme.border)
-                AxisValueLabel { Text(Self.fmtN(v.as(Double.self) ?? 0)).font(Theme.mono(10)).foregroundStyle(Theme.muted) }
+                AxisValueLabel { Text(Self.fmtN(v.as(Double.self) ?? 0)).font(Theme.meta(10)).foregroundStyle(Theme.muted) }
             }
         }
         .frame(height: 180)

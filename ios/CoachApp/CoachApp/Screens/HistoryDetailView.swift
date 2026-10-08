@@ -27,20 +27,22 @@ struct HistoryDetailView: View {
         return ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 10) {
-                    ScreenHeader(back: "Log", title: s.plan.sessionType.uppercased(), onBack: { appState.screen = .history })
+                    ScreenHeader(title: s.plan.sessionType, onBack: { appState.screen = .history })
 
-                    Text("\(Helpers.fmtDate(s.date))\(s.durationMin.map { " · \($0) min" } ?? "")\(kcal > 0 ? " · ~\(kcal.formatted()) kcal" : "")")
-                        .font(Theme.mono(12.5)).foregroundStyle(Theme.muted)
-                    if let fin = s.fin {
-                        Text("RPE \(fin.rpe)/10\(fin.pain.isEmpty ? "" : " · pain: \(fin.pain)")")
-                            .font(Theme.mono(13)).foregroundStyle(Theme.amber)
+                    Text(([Helpers.fmtDate(s.date)] + [s.durationMin.map { "\($0) min" }, kcal > 0 ? "~\(kcal.formatted()) kcal" : nil, s.fin.map { "RPE \($0.rpe)" }].compactMap { $0 })
+                        .joined(separator: " · "))
+                        .font(Theme.meta(14)).foregroundStyle(Theme.muted)
+                    if let pain = s.fin?.pain, !pain.isEmpty {
+                        Label(pain, systemImage: "bandage").font(Theme.body(14)).foregroundStyle(Theme.amber)
                     }
 
-                    ForEach(exercises, id: \.0) { name, sets in
+                    // every exercise in one card: name, then its sets on one line
+                    if !exercises.isEmpty {
                         CoachCard {
-                            Text(name).font(Theme.head(16, weight: .bold))
-                            ForEach(Array(sets.enumerated()), id: \.offset) { i, st in
-                                Text("Set \(i + 1): \(st.formatted)").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            ForEach(Array(exercises.enumerated()), id: \.offset) { i, e in
+                                if i > 0 { Divider().overlay(Theme.border).padding(.vertical, 4) }
+                                Text(e.0).font(Theme.body(15, weight: .semibold))
+                                Text(e.1.map(\.formatted).joined(separator: "  ·  ")).font(Theme.meta(13.5)).foregroundStyle(Theme.muted)
                             }
                         }
                     }
@@ -60,10 +62,6 @@ struct HistoryDetailView: View {
 
                     Divider().overlay(Theme.border).padding(.top, 12)
                     QLabel(text: "Ask about this session")
-
-                    if messages.isEmpty {
-                        ChatBubble(text: "Ask me anything about this \(s.plan.sessionType) session.")
-                    }
                     ForEach(Array(messages.enumerated()), id: \.offset) { _, m in
                         ChatBubble(text: m.text, user: m.role == "user")
                     }

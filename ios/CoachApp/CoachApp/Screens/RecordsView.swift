@@ -24,33 +24,33 @@ struct RecordsView: View {
 
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                ScreenHeader(back: "Home", title: "🏆 RECORDS", onBack: { appState.screen = .home })
+                ScreenHeader(title: "Records")
 
                 HStack(spacing: 8) {
                     StatTile(label: "Sessions", value: "\(history.count)")
-                    StatTile(label: "Lifted lifetime",
+                    StatTile(label: "Lifted",
                              value: totalVolume >= 10000 ? "\(Int((Double(totalVolume) / 1000).rounded()))" : String(format: "%.1f", Double(totalVolume) / 1000),
                              unit: "t")
-                    StatTile(label: "Week streak", value: "\(streak)")
+                    StatTile(label: "Streak", value: "\(streak)", unit: "wks")
                 }
 
                 CoachCard {
                     CardLabel(text: "Milestones")
                     // one flat list with unique ids ("10 sessions" and "10 tonnes"
                     // must not collide, or the grid drops one and leaves a hole)
-                    let badges: [(id: String, emoji: String, text: String, earned: Bool)] = ladders.flatMap { l in
-                        l.steps.filter { l.value >= $0 }.map { ("\(l.unit)-\($0)", l.emoji, "\($0) \(l.unit)", true) }
-                            + (l.steps.first { l.value < $0 }.map { [("\(l.unit)-next", l.emoji, "\($0) \(l.unit) · \(l.value)/\($0)", false)] } ?? [])
+                    let badges: [(id: String, emoji: String, text: String, progress: Double)] = ladders.flatMap { l in
+                        l.steps.filter { l.value >= $0 }.map { ("\(l.unit)-\($0)", l.emoji, "\($0) \(l.unit)", 1.0) }
+                            + (l.steps.first { l.value < $0 }.map { [("\(l.unit)-next", l.emoji, "\($0) \(l.unit)", Double(l.value) / Double($0))] } ?? [])
                     }
                     LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 8) {
-                        ForEach(badges, id: \.id) { b in badge(b.emoji, b.text, earned: b.earned) }
+                        ForEach(badges, id: \.id) { b in badge(b.emoji, b.text, progress: b.progress) }
                     }
                 }
 
                 CoachCard {
                     CardLabel(text: "Personal records")
                     if records.isEmpty {
-                        Text("Log some weighted sets and your records will appear here.").font(Theme.body(14)).foregroundStyle(Theme.muted)
+                        Text("Log weighted sets to see records.").font(Theme.body(14)).foregroundStyle(Theme.muted)
                     }
                     ForEach(records, id: \.name) { r in
                         let isOpen = openEx == r.name
@@ -60,21 +60,21 @@ struct RecordsView: View {
                                 Text(r.name).font(Theme.body(15, weight: .semibold))
                                 Spacer()
                                 Text("\(Helpers.fmtKg(r.weight!.w))kg × \(r.weight!.reps.isEmpty ? "?" : r.weight!.reps)")
-                                    .font(Theme.mono(14)).foregroundStyle(Theme.amber)
+                                    .font(Theme.meta(14)).foregroundStyle(Theme.amber)
                             }
                             HStack {
-                                Text("\(Helpers.fmtDate(r.weight!.date)) · \(r.count) sets logged\(r.e1rm.map { " · est. 1RM \(Helpers.fmtKg($0.v))kg" } ?? "")")
-                                    .font(Theme.mono(12)).foregroundStyle(Theme.muted)
+                                Text("\(Helpers.fmtDate(r.weight!.date))\(r.e1rm.map { " · e1RM \(Helpers.fmtKg($0.v))kg" } ?? "")")
+                                    .font(Theme.meta(13)).foregroundStyle(Theme.muted)
                                 Spacer()
-                                Text(isOpen ? "▾" : "▸").foregroundStyle(Theme.dim)
+                                Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold))
+                                    .rotationEffect(.degrees(isOpen ? 180 : 0)).foregroundStyle(Theme.dim)
                             }
                             if isOpen {
                                 if pts.count >= 2 {
                                     LineChartView(points: pts.map { ChartPoint(label: Self.shortDate($0.date), value: $0.e ?? $0.w) }, unit: "kg")
                                         .padding(.top, 8)
-                                    Text("est. 1RM per session, first → latest").font(Theme.mono(11.5)).foregroundStyle(Theme.dim)
                                 } else {
-                                    Text("Train it once more to unlock the trend chart.").font(Theme.mono(12)).foregroundStyle(Theme.dim)
+                                    Text("One more session unlocks the trend.").font(Theme.meta(13)).foregroundStyle(Theme.dim)
                                 }
                             }
                         }
@@ -84,24 +84,36 @@ struct RecordsView: View {
                         Divider().overlay(Theme.border)
                     }
                 }
-                Spacer().frame(height: 60)
             }
             .padding(16)
         }
         .coachScreen()
     }
 
-    private func badge(_ emoji: String, _ text: String, earned: Bool) -> some View {
-        HStack(spacing: 6) {
-            Text(emoji)
-            Text(text).font(Theme.mono(12)).foregroundStyle(earned ? Theme.text : Theme.dim).lineLimit(2)
+    /// earned (progress 1) glows amber; the next one up shows a progress bar
+    private func badge(_ emoji: String, _ text: String, progress: Double) -> some View {
+        let earned = progress >= 1
+        return HStack(spacing: 8) {
+            Text(emoji).font(.system(size: 20))
+            VStack(alignment: .leading, spacing: 5) {
+                Text(text).font(Theme.body(13, weight: .medium)).foregroundStyle(earned ? Theme.text : Theme.muted)
+                    .lineLimit(1).minimumScaleFactor(0.8)
+                if !earned {
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Theme.border)
+                            Capsule().fill(Theme.amber.opacity(0.7)).frame(width: geo.size.width * max(progress, 0.03))
+                        }
+                    }
+                    .frame(height: 4)
+                }
+            }
         }
-        .padding(8)
+        .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(earned ? Theme.amberBg : Theme.bgPill)
         .overlay(RoundedRectangle(cornerRadius: Theme.radiusSm).stroke(earned ? Theme.amber.opacity(0.6) : Theme.borderDim))
         .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
-        .opacity(earned ? 1 : 0.7)
     }
 
     /// "2026-08-30" → "30/8", like the web's toLocaleDateString day/month.
@@ -117,14 +129,14 @@ struct StatTile: View {
     let value: String
     var unit = ""
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(Theme.head(11.5, weight: .semibold)).textCase(.uppercase).tracking(1).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.8)
+        VStack(alignment: .leading, spacing: 0) {
+            Text(label).font(Theme.body(13, weight: .medium)).foregroundStyle(Theme.muted).lineLimit(1).minimumScaleFactor(0.8)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(Theme.head(26, weight: .bold))
+                Text(value).font(Theme.head(28, weight: .bold))
                 if !unit.isEmpty { Text(unit).font(Theme.body(12)).foregroundStyle(Theme.muted) }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 12).padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.bgCard)
         .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border))

@@ -17,11 +17,10 @@ struct HistoryView: View {
         let rev = Array(appState.history.reversed())
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                ScreenHeader(back: "Home", title: "LOG", onBack: { appState.screen = .home },
-                             trailing: ("+ Past", { appState.screen = .addPast }))
+                ScreenHeader(title: "Log", trailing: ("plus", "Add past workout", { appState.screen = .addPast }))
 
                 if rev.isEmpty {
-                    Text("Nothing logged yet.\nYour first session will show up here — and every one after it makes the coach smarter.")
+                    Text("Nothing logged yet.")
                         .font(Theme.body(15)).foregroundStyle(Theme.muted)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity).padding(.top, 80)
@@ -34,7 +33,6 @@ struct HistoryView: View {
                         sessionCard(h)
                     }
                 }
-                Spacer().frame(height: 24)
             }
             .padding(16)
         }
@@ -47,24 +45,32 @@ struct HistoryView: View {
 
     private func sessionCard(_ h: Session) -> some View {
         CoachCard {
-            HStack {
-                Text(h.plan.sessionType).font(Theme.head(18, weight: .bold))
-                + Text(" ›").font(Theme.body(14)).foregroundStyle(Theme.dim)
+            HStack(alignment: .firstTextBaseline) {
+                Text(h.plan.sessionType).font(Theme.head(20, weight: .bold))
+                Text(Helpers.fmtDate(h.date)).font(Theme.meta(13)).foregroundStyle(Theme.muted)
                 Spacer()
-                Text(Helpers.fmtDate(h.date)).font(Theme.mono(13)).foregroundStyle(Theme.muted)
                 Button { sheet = SheetState(id: h.id) } label: {
-                    Text("⋯").font(Theme.head(20, weight: .bold)).foregroundStyle(Theme.muted).padding(.horizontal, 4)
+                    Image(systemName: "ellipsis").font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.muted)
+                        .frame(width: 32, height: 24)
                 }
                 .accessibilityLabel("Session options")
             }
+            // exercise left, sets right — read as one line each
             ForEach(Array(h.plan.exercises.enumerated()), id: \.offset) { exI, ex in
                 let sets = (h.log[safe: exI] ?? []).filter(\.isLogged)
-                Text("\(ex.name): \(sets.isEmpty ? "—" : sets.map(\.formatted).joined(separator: "  "))")
-                    .font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                let summary = sets.isEmpty ? "—" : sets.map(\.formatted).joined(separator: "  ")
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(ex.name).font(Theme.body(14)).foregroundStyle(Theme.textBody).lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(summary).font(Theme.meta(13)).foregroundStyle(Theme.muted).lineLimit(1)
+                }
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel("\(ex.name): \(summary)")
+                .accessibilityAddTraits(.isStaticText)
             }
             if let fin = h.fin {
-                Text("RPE \(fin.rpe)/10\(h.durationMin.map { " · \($0)min" } ?? "")")
-                    .font(Theme.mono(13)).foregroundStyle(Theme.amber).padding(.top, 2)
+                Text("RPE \(fin.rpe)\(h.durationMin.map { " · \($0) min" } ?? "")")
+                    .font(Theme.meta(13)).foregroundStyle(Theme.muted).padding(.top, 2)
             }
         }
         .contentShape(Rectangle())
@@ -81,32 +87,32 @@ struct HistoryView: View {
             HStack {
                 Text(d.plan.sessionType).font(Theme.head(18, weight: .bold))
                 Spacer()
-                Text(Helpers.fmtDate(d.date)).font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                Text(Helpers.fmtDate(d.date)).font(Theme.meta(13)).foregroundStyle(Theme.muted)
             }
             ForEach(Array(d.plan.exercises.enumerated()), id: \.offset) { exI, ex in
-                Text(ex.name).font(Theme.mono(13)).foregroundStyle(Theme.textBody).padding(.top, 8)
+                Text(ex.name).font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.textBody).padding(.top, 8)
                 let mode = Stats.logMode(ex.name, d.plan.sessionType)
                 ForEach(Array((d.log[safe: exI] ?? []).enumerated()), id: \.offset) { setI, s in
                     HStack(spacing: 8) {
-                        Text("\(setI + 1)").font(Theme.mono(13)).foregroundStyle(Theme.muted).frame(width: 20)
+                        Text("\(setI + 1)").font(Theme.meta(13)).foregroundStyle(Theme.muted).frame(width: 20)
                         switch mode {
                         case "check":
-                            Text(s.done ? "✓ done" : "— skipped").font(Theme.body(13)).foregroundStyle(Theme.muted)
+                            Text(s.done ? "Done" : "Skipped").font(Theme.body(13)).foregroundStyle(Theme.muted)
                         case "cardio":
                             SetField(value: s.time, placeholder: "min") { edit(exI, setI) { $0.time = Helpers.cleanTime($1) }($0) }
-                            Text("min").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            Text("min").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                             SetField(value: s.dist, placeholder: "km") { edit(exI, setI) { $0.dist = Helpers.cleanDist($1) }($0) }
-                            Text("km").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            Text("km").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                         default:
                             SetField(value: s.weight, placeholder: "kg") { edit(exI, setI) { $0.weight = Helpers.cleanWeight($1) }($0) }
-                            Text("×").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                            Text("×").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                             SetField(value: s.reps, placeholder: "reps", decimal: false) { edit(exI, setI) { $0.reps = Helpers.cleanReps($1) }($0) }
                         }
                         Spacer()
                     }
                 }
             }
-            Text("Session RPE").font(Theme.mono(13)).foregroundStyle(Theme.muted).padding(.top, 10)
+            Text("Session RPE").font(Theme.meta(13)).foregroundStyle(Theme.muted).padding(.top, 10)
             SetField(value: d.fin.map { String($0.rpe) } ?? "", placeholder: "1-10", decimal: false) { v in
                 let n = Int(v.filter(\.isNumber)) ?? 0
                 draft?.fin = draft?.fin ?? FinishInfo()
@@ -157,12 +163,12 @@ struct HistoryView: View {
             Text("\(h?.plan.sessionType ?? "Session") · \(Helpers.fmtDate(h?.date ?? ""))")
                 .font(Theme.head(20, weight: .bold)).padding(.bottom, 8)
             if !s.deleting {
-                sheetButton("✎ Edit sets & notes") { draft = h; sheet = nil }
-                sheetButton("✕ Delete session", color: Theme.red) { sheet = SheetState(id: s.id, deleting: true) }
+                sheetButton("Edit", icon: "pencil") { draft = h; sheet = nil }
+                sheetButton("Delete", icon: "trash", color: Theme.red) { sheet = SheetState(id: s.id, deleting: true) }
             } else {
-                Text("Delete this session for good? It disappears from your log, stats, and the coach's memory.")
+                Text("Delete for good? It's removed from your log, stats and the coach's memory.")
                     .font(Theme.body(14)).foregroundStyle(Theme.muted)
-                Button("✕ Delete it") {
+                Button("Delete") {
                     sheet = nil
                     if let h { Task { await appState.deleteSession(h) } }
                 }
@@ -178,9 +184,10 @@ struct HistoryView: View {
         .presentationDragIndicator(.visible)
     }
 
-    private func sheetButton(_ title: String, color: Color = Theme.text, action: @escaping () -> Void) -> some View {
+    private func sheetButton(_ title: String, icon: String, color: Color = Theme.text, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(Theme.body(16)).foregroundStyle(color)
+            Label { Text(title) } icon: { Image(systemName: icon).frame(width: 24) }
+                .font(Theme.body(16)).foregroundStyle(color)
                 .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 11).contentShape(Rectangle())
         }
         .buttonStyle(.plain)

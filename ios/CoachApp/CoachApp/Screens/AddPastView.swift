@@ -25,10 +25,7 @@ struct AddPastView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                ScreenHeader(back: "Cancel", title: "PAST WORKOUT", onBack: { appState.screen = .history })
-
-                Text("Missed logging a session? Add it here — it counts toward your stats, records, and the coach's next plan.")
-                    .font(Theme.body(15)).foregroundStyle(Theme.muted)
+                ScreenHeader(title: "Past workout", onBack: { appState.screen = .history })
 
                 QLabel(text: "Day", value: Helpers.fmtDate(date))
                 SegGroup(options: [("1", "Yesterday"), ("2", "2 days ago"), ("3", "3 days ago")],
@@ -39,14 +36,14 @@ struct AddPastView: View {
                     .font(Theme.body(15)).foregroundStyle(Theme.muted)
                     .padding(.top, 8)
 
-                QLabel(text: "Session type")
+                QLabel(text: "Type")
                 SegGroup(options: Self.types.map { ($0, $0) }, value: $sessionType, columns: 3)
 
                 HStack {
                     QLabel(text: "Exercises")
                     if let last = lastOfType {
-                        Button("↺ Copy last \(sessionType) (\(Helpers.fmtDate(last.date)))") { copyFrom(last) }
-                            .font(Theme.mono(12)).foregroundStyle(Theme.teal)
+                        Button("Copy last \(sessionType)") { copyFrom(last) }
+                            .font(Theme.body(13.5, weight: .medium)).foregroundStyle(Theme.teal)
                             .padding(.top, 14)
                     }
                 }
@@ -54,24 +51,24 @@ struct AddPastView: View {
                 ForEach(exercises.indices, id: \.self) { exI in exerciseCard(exI) }
 
                 Button { exercises.append(DraftExercise()) } label: {
-                    Text("+ Add exercise").font(Theme.head(15, weight: .semibold)).foregroundStyle(Theme.muted)
+                    Label("Add exercise", systemImage: "plus").font(Theme.body(15, weight: .semibold)).foregroundStyle(Theme.muted)
                         .frame(maxWidth: .infinity).padding(.vertical, 13)
                 }
 
-                QLabel(text: "Duration (optional)")
+                QLabel(text: "Duration")
                 HStack {
                     SetField(value: durationMin, placeholder: "min") { durationMin = Helpers.cleanTime($0) }
-                    Text("min").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                    Text("min").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                 }
 
-                QLabel(text: "Session effort", value: "\(rpe)/10")
+                QLabel(text: "Effort (RPE)", value: "\(rpe)/10")
                 Slider(value: Binding(get: { Double(rpe) }, set: { rpe = Int($0) }), in: 1...10, step: 1).tint(Theme.amber)
-                TextField("", text: $feedback, prompt: Text("Notes (optional)").foregroundStyle(Theme.dim))
+                TextField("", text: $feedback, prompt: Text("Notes").foregroundStyle(Theme.dim))
                     .coachInput().padding(.top, 8)
 
                 if !error.isEmpty { ErrorBox(text: error).padding(.top, 12) }
 
-                Button("Save to \(Helpers.fmtDate(date))") { save() }
+                Button("Save") { save() }
                     .buttonStyle(BigButtonStyle()).padding(.top, 18)
                 Spacer().frame(height: 24)
             }
@@ -88,7 +85,7 @@ struct AddPastView: View {
         let mode = Stats.logMode(ex.name, sessionType)
         return CoachCard {
             TextField("", text: Binding(get: { exercises[exI].name }, set: { exercises[exI].name = $0 }),
-                      prompt: Text("Exercise — e.g. Bench press, Running").foregroundStyle(Theme.dim))
+                      prompt: Text("Exercise").foregroundStyle(Theme.dim))
                 .coachInput()
                 .onTapGesture { nameFocus = exI }
             // exercise names you've logged before — so names match and
@@ -104,40 +101,41 @@ struct AddPastView: View {
             ForEach(ex.sets.indices, id: \.self) { setI in
                 let s = ex.sets[setI]
                 HStack(spacing: 8) {
-                    Text("\(setI + 1)").font(Theme.mono(13)).foregroundStyle(Theme.muted).frame(width: 20)
+                    Text("\(setI + 1)").font(Theme.meta(13)).foregroundStyle(Theme.muted).frame(width: 20)
                     switch mode {
                     case "check":
                         Button { exercises[exI].sets[setI].done.toggle() } label: {
-                            Text(s.done ? "✓" : " ").font(Theme.mono(14, weight: .medium)).frame(width: 34, height: 34)
+                            Text(s.done ? "✓" : " ").font(Theme.meta(14, weight: .medium)).frame(width: 34, height: 34)
                                 .foregroundStyle(Theme.bg).background(s.done ? Theme.teal : Theme.bgPill)
                                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
                         }
                         .accessibilityLabel(s.done ? "Mark not done" : "Mark done")
                     case "cardio":
                         SetField(value: s.time, placeholder: "min") { exercises[exI].sets[setI].time = Helpers.cleanTime($0) }
-                        Text("min").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                        Text("min").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                         SetField(value: s.dist, placeholder: "km") { exercises[exI].sets[setI].dist = Helpers.cleanDist($0) }
-                        Text("km").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                        Text("km").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                     default:
                         SetField(value: s.weight, placeholder: "kg") { exercises[exI].sets[setI].weight = Helpers.cleanWeight($0) }
-                        Text("×").font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                        Text("×").font(Theme.meta(13)).foregroundStyle(Theme.muted)
                         SetField(value: s.reps, placeholder: "reps", decimal: false) { exercises[exI].sets[setI].reps = Helpers.cleanReps($0) }
                     }
                     Spacer()
                 }
             }
             HStack(spacing: 10) {
-                link("+ set") { exercises[exI].sets.append(SetLog()) }
-                if ex.sets.count > 1 { link("− set") { exercises[exI].sets.removeLast() } }
-                if exercises.count > 1 { link("✕ remove") { exercises.remove(at: exI) } }
+                link("Add set") { exercises[exI].sets.append(SetLog()) }
+                if ex.sets.count > 1 { link("Remove set") { exercises[exI].sets.removeLast() } }
+                Spacer()
+                if exercises.count > 1 { link("Delete", color: Theme.red) { exercises.remove(at: exI) } }
             }
             .padding(.top, 6)
         }
         .padding(.bottom, 10)
     }
 
-    private func link(_ t: String, _ action: @escaping () -> Void) -> some View {
-        Button(t, action: action).font(Theme.mono(13)).foregroundStyle(Theme.teal)
+    private func link(_ t: String, color: Color = Theme.teal, _ action: @escaping () -> Void) -> some View {
+        Button(t, action: action).font(Theme.body(13.5, weight: .medium)).foregroundStyle(color)
     }
 
     /// Names logged before, most recent first, filtered by what's typed.

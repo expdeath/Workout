@@ -13,24 +13,31 @@ struct CoachChatView: View {
     @State private var error = ""
 
     private static let prefix = "chat-"
+    private static let starters = ["Shoulder feels off — what do I swap?", "Too tired for legs. Alternatives?", "How heavy should warm-up sets be?"]
     private var key: String { Self.prefix + Helpers.todayStr() }
 
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("COACH CHAT").font(Theme.head(16, weight: .bold)).tracking(4).foregroundStyle(Theme.amber)
+                Text("Coach").font(Theme.head(26, weight: .bold))
                 Spacer()
-                Button("✕") { dismiss() }.font(Theme.head(18, weight: .bold)).foregroundStyle(Theme.muted)
-                    .accessibilityLabel("Close chat")
+                IconButton(icon: "xmark", label: "Close chat") { dismiss() }
             }
-            .padding(16)
+            .padding(.horizontal, 16).padding(.top, 12)
 
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 10) {
                         if messages.isEmpty {
-                            Text("Ask anything, anytime — the coach knows today's plan, your recent sessions, and your Watch data.\n\n\"shoulder feels off, what do I swap?\" · \"too tired for legs, alternatives?\" · \"how heavy should warm-up sets be?\"")
-                                .font(Theme.body(14)).foregroundStyle(Theme.muted)
+                            // tap a starter instead of reading a paragraph of examples
+                            ForEach(Self.starters, id: \.self) { q in
+                                Button { input = q } label: {
+                                    Text(q).font(Theme.body(14.5)).foregroundStyle(Theme.textBody)
+                                        .padding(.horizontal, 13).padding(.vertical, 10)
+                                        .overlay(RoundedRectangle(cornerRadius: 14).stroke(Theme.borderDim))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                         ForEach(Array(messages.enumerated()), id: \.offset) { _, m in
                             ChatBubble(text: m.text, user: m.role == "user")

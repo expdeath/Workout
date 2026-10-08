@@ -43,17 +43,16 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 10) {
-                ScreenHeader(back: "Home", title: "SETTINGS", onBack: { appState.screen = .home })
+                ScreenHeader(title: "Settings")
                 if account != nil { accountSection }
                 coachSection
                 backupSection
                 gymSection
                 watchSection
                 section("about", "About", status: nil) {
-                    Text("COACH is a personal workout planner powered by Google Gemini AI. It builds daily sessions from your check-in, training history, and recovery data. Your log is stored in Google Cloud Firestore under your Google sign-in, with a backup copy in your private GitHub repo.")
+                    Text("COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.")
                         .font(Theme.body(14)).foregroundStyle(Theme.muted)
                 }
-                Spacer().frame(height: 24)
             }
             .padding(16)
         }
@@ -71,11 +70,10 @@ struct SettingsView: View {
     // MARK: - Sections
 
     private var accountSection: some View {
-        section("account", "Account", status: "Signed in as \(account?.name.isEmpty == false ? account!.name : account?.email ?? "")", statusColor: Theme.teal) {
-            Text("Hey \(account?.name ?? "") — you're on the COACH private beta. Found a bug, or something felt off mid-workout? Tell Abhi here:")
-                .font(Theme.body(14)).foregroundStyle(Theme.muted)
+        section("account", "Account", status: account?.email ?? account?.name ?? "") {
+            QLabel(text: "Send feedback to Abhi")
             TextField("", text: Binding(get: { feedback }, set: { feedback = String($0.prefix(2000)) }),
-                      prompt: Text("What worked, what didn't, what you'd change…").foregroundStyle(Theme.dim), axis: .vertical)
+                      prompt: Text("Bugs, ideas, anything…").foregroundStyle(Theme.dim), axis: .vertical)
                 .lineLimit(3...8).coachInput()
             Button(sendingFb ? "Sending…" : "Send feedback") { Task { await sendFeedback() } }
                 .buttonStyle(BigButtonStyle())
@@ -92,15 +90,15 @@ struct SettingsView: View {
                 } else { confirmOut = true }
             }
             .buttonStyle(BigButtonStyle(danger: true)).padding(.top, 8)
-            Text("Signed in with Google as \(account?.email ?? ""). Signing out clears this device (exercise photos/clips included — they only live here). Your training log is safe in the cloud and comes back when you sign in again.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.dim)
+            Text("Signing out clears this device, including exercise photos. Your log stays in the cloud.")
+                .font(Theme.body(13)).foregroundStyle(Theme.dim)
         }
     }
 
     private var coachSection: some View {
         let status = Cloud.shared.geminiKey.isEmpty
             ? (account?.admin == true ? "No API key yet — add one to start" : "No API key yet — ask Abhi to add one")
-            : "Shared API key set\(LocalStore.shared.backup.aiSettings.profile.isEmpty ? "" : " · custom profile set")"
+            : "Ready"
         return section("coach", "AI Coach", status: status) {
             if account?.admin == true {
                 QLabel(text: "Gemini API key (shared)")
@@ -110,24 +108,19 @@ struct SettingsView: View {
                         else { SecureField("", text: $key, prompt: Text("AIzaSy…").foregroundStyle(Theme.dim)) }
                     }
                     .textInputAutocapitalization(.never).autocorrectionDisabled().coachInput()
-                    Button(showKey ? "Hide" : "Show") { showKey.toggle() }.font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                    Button(showKey ? "Hide" : "Show") { showKey.toggle() }.font(Theme.meta(13)).foregroundStyle(Theme.muted)
                 }
-                Text("One key for everyone on COACH — saved in the cloud, readable only by invited accounts, and only ever sent to Google's Gemini API. Get one free at aistudio.google.com/apikey.")
-                    .font(Theme.body(12.5)).foregroundStyle(Theme.muted)
-            } else {
-                Text(Cloud.shared.geminiKey.isEmpty ? "The AI coach needs a key — Abhi hasn't added the shared one yet." : "The AI coach runs on the shared key Abhi set up — nothing to configure.")
+                Text("Shared by everyone on COACH. Free at aistudio.google.com/apikey.")
                     .font(Theme.body(13)).foregroundStyle(Theme.muted)
             }
             QLabel(text: "About you")
-            area($ai.profile, "e.g. Desk job, long sitting. Goals: fat loss + muscle. Lower back gets tight — prefer supported variations.", max: 1500)
+            area($ai.profile, "e.g. Desk job, lower back gets tight", max: 1500)
             QLabel(text: "Goals (one per line)")
             area($ai.goals, "e.g.\nBench Press 80kg\n4 sessions a week", max: 600)
-            Text("The coach plans toward these; lift and frequency goals get progress bars in Stats.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.muted)
-            QLabel(text: "Gym equipment & limits")
-            area($ai.equipment, "What your gym has (or lacks) — e.g. no cable tower · dumbbells up to 40kg", max: 600)
-            QLabel(text: "Your base routine")
-            area($ai.routine, "Leave empty to use the built-in Push/Pull/Legs routine, or paste your own.", max: 4000, minLines: 5)
+            QLabel(text: "Equipment")
+            area($ai.equipment, "e.g. no cable tower, dumbbells to 40kg", max: 600)
+            QLabel(text: "Base routine")
+            area($ai.routine, "Empty = built-in Push/Pull/Legs", max: 4000, minLines: 3)
             Button(saved ? "✓ Saved" : "Save coach setup") {
                 if account?.admin == true, key.trimmingCharacters(in: .whitespaces) != Cloud.shared.geminiKey {
                     Cloud.shared.setSharedGeminiKey(key.trimmingCharacters(in: .whitespaces))
@@ -150,14 +143,13 @@ struct SettingsView: View {
         let last = GitHubSync.lastSync()
         let status: String = {
             if last?.status == "ok", let at = ISO8601DateFormatter.withMillis.date(from: last!.at) ?? ISO8601DateFormatter().date(from: last!.at) {
-                return "☁ live in the cloud · GitHub backup \(at.formatted(date: .abbreviated, time: .shortened))"
+                return "Backed up \(at.formatted(date: .abbreviated, time: .shortened))"
             }
-            if last?.status == "error" { return "☁ live in the cloud · GitHub backup failed: \(last?.message ?? "")" }
-            return repo.isEmpty || token.isEmpty ? "☁ live in the cloud · add a GitHub token for backups" : "☁ live in the cloud · GitHub backup not run yet"
+            if last?.status == "error" { return "Backup failed: \(last?.message ?? "")" }
+            return repo.isEmpty || token.isEmpty ? "Synced · no GitHub backup" : "Synced · backup pending"
         }()
         return section("sync", "Sync & Backup", status: status) {
-            Text("Your training log lives in the cloud and syncs live to every device you sign in on. A full backup copy also goes to your private GitHub repo whenever it changes — at most every 10 minutes, and at least daily.")
-                .font(Theme.body(14)).foregroundStyle(Theme.muted)
+            QLabel(text: "GitHub backup")
             TextField("", text: $repo, prompt: Text("your-username/workout-data").foregroundStyle(Theme.dim))
                 .textInputAutocapitalization(.never).autocorrectionDisabled().coachInput()
             HStack {
@@ -166,7 +158,7 @@ struct SettingsView: View {
                     else { SecureField("", text: $token, prompt: Text("github_pat_…").foregroundStyle(Theme.dim)) }
                 }
                 .textInputAutocapitalization(.never).autocorrectionDisabled().coachInput()
-                Button(showToken ? "Hide" : "Show") { showToken.toggle() }.font(Theme.mono(13)).foregroundStyle(Theme.muted)
+                Button(showToken ? "Hide" : "Show") { showToken.toggle() }.font(Theme.meta(13)).foregroundStyle(Theme.muted)
             }
             HStack(spacing: 10) {
                 Button(syncSaved ? "✓ Saved" : "Save settings") {
@@ -179,15 +171,15 @@ struct SettingsView: View {
                     .buttonStyle(BigButtonStyle()).disabled(syncing)
             }
             if !syncMsg.isEmpty { Text(syncMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
-            Text("Token setup (once): github.com → Settings → Developer settings → Fine-grained tokens → Generate. Repository access: only your data repo. Permissions: Contents → Read and write. It's saved to your account (so all your devices can back up) and only ever sent to api.github.com.")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.muted)
+            Text("Fine-grained token, your data repo only, Contents: read & write.")
+                .font(Theme.body(13)).foregroundStyle(Theme.muted)
 
             QLabel(text: "Your data")
-            Text("\(appState.history.count) sessions · \(eventCount.map(String.init) ?? "…") events logged")
-                .font(Theme.mono(13)).foregroundStyle(Theme.muted)
+            Text("\(appState.history.count) sessions · \(eventCount.map(String.init) ?? "…") events")
+                .font(Theme.meta(13)).foregroundStyle(Theme.muted)
             HStack(spacing: 8) {
-                Chip(title: "Export backup") { Task { do { shareURL = try await appState.exportBackupFile() } catch { dataMsg = "Export failed: \(error.localizedDescription)" } } }
-                Chip(title: "Import backup") { importing = true }
+                Chip(title: "Export") { Task { do { shareURL = try await appState.exportBackupFile() } catch { dataMsg = "Export failed: \(error.localizedDescription)" } } }
+                Chip(title: "Import") { importing = true }
                 Chip(title: "Export CSV") { do { shareURL = try appState.exportCsvFile() } catch { dataMsg = "Export failed: \(error.localizedDescription)" } }
             }
             if !dataMsg.isEmpty { Text(dataMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
@@ -200,13 +192,11 @@ struct SettingsView: View {
 
     private var gymSection: some View {
         let shownPlates = (Helpers.parsePlates(plates) ?? Helpers.defaultPlates).map(Helpers.fmtKg).joined(separator: "/")
-        return section("gym", "Plates & Bar", status: "\(Helpers.fmtKg(Double(barKg) ?? Helpers.defaultBarKg))kg bar · plates \(shownPlates)") {
-            Text("Powers the ⚖ plates button during a workout — tap it on any exercise to see exactly what to load per side.")
-                .font(Theme.body(14)).foregroundStyle(Theme.muted)
+        return section("gym", "Plates & Bar", status: "\(Helpers.fmtKg(Double(barKg) ?? Helpers.defaultBarKg))kg bar · \(shownPlates)") {
             QLabel(text: "Bar weight (kg)")
             TextField("", text: Binding(get: { barKg }, set: { barKg = $0.filter { $0.isNumber || $0 == "." } }))
                 .keyboardType(.decimalPad).coachInput()
-            QLabel(text: "Available plates (kg, per pair)")
+            QLabel(text: "Plates (kg, per pair)")
             TextField("", text: $plates, prompt: Text(Helpers.defaultPlates.map(Helpers.fmtKg).joined(separator: ", ")).foregroundStyle(Theme.dim))
                 .coachInput()
             Button(gymSaved ? "✓ Saved" : "Save gym setup") {
@@ -224,25 +214,18 @@ struct SettingsView: View {
     private var watchSection: some View {
         let today = Cloud.shared.stateValue("healthText-\(Helpers.todayStr())")
         let text: String? = { if case .string(let t)? = today { return t }; return nil }()
-        return section("watch", "⌚ Apple Watch & Health", status: text == nil ? "Nothing received today yet" : "Received today",
+        return section("watch", "Apple Health", status: text == nil ? (HealthKitSync.requested ? "Connected · nothing today yet" : "Not connected") : "Received today",
                        statusColor: text == nil ? nil : Theme.teal) {
             if let text {
-                Text("⌚ Today: \(Stats.fmtHealthLine(Stats.parseHealthNumbers(text)).isEmpty ? text : Stats.fmtHealthLine(Stats.parseHealthNumbers(text)))")
+                Text("Today: \(Stats.fmtHealthLine(Stats.parseHealthNumbers(text)).isEmpty ? text : Stats.fmtHealthLine(Stats.parseHealthNumbers(text)))")
                     .font(Theme.body(14)).foregroundStyle(Theme.teal)
-            } else {
-                Text("⌚ Nothing received today yet — run the Gym Check-in shortcut.").font(Theme.body(14)).foregroundStyle(Theme.muted)
             }
-            if let inbox = GitHubSync.lastInbox() {
-                Text("📥 Last delivery on this device: \(inbox.files) file\(inbox.files > 1 ? "s" : ""), \(Date(timeIntervalSince1970: inbox.at / 1000).formatted(date: .abbreviated, time: .shortened))")
-                    .font(Theme.mono(12.5)).foregroundStyle(Theme.muted)
-            }
-            QLabel(text: "Apple Health")
             if !HealthKitSync.isAvailable {
                 Text("Apple Health isn't available on this device.").font(Theme.body(13)).foregroundStyle(Theme.muted)
             } else {
                 Text(HealthKitSync.requested
-                     ? "Connected — the app reads HRV, resting HR, sleep, steps, VO₂max, energy, exercise, distance, breathing rate and wrist temperature straight from Apple Health whenever it opens (today + any missing day of the last week). To change what it may read: iPhone Settings → Health → Data Access & Devices → COACH."
-                     : "Let the app read your Watch data straight from Apple Health — no Shortcut needed. It only reads; it never writes to Health.")
+                     ? "Reads HRV, resting HR, sleep and more each time the app opens. Change access in iPhone Settings → Health."
+                     : "Read-only. COACH never writes to Health.")
                     .font(Theme.body(13)).foregroundStyle(Theme.muted)
                 Button(healthBusy ? "Reading Apple Health…" : (HealthKitSync.requested ? "Read Apple Health now" : "Connect Apple Health")) {
                     Task { await connectHealth() }
@@ -251,8 +234,6 @@ struct SettingsView: View {
                 .disabled(healthBusy)
                 if !healthMsg.isEmpty { Text(healthMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
             }
-            Text("The Gym Check-in Shortcut still works alongside: it uploads to your data repo and the app collects it on every sync. Once Apple Health is connected you can turn off its automation (Shortcuts → Automation).")
-                .font(Theme.body(12.5)).foregroundStyle(Theme.dim)
         }
     }
 
@@ -320,13 +301,13 @@ struct SettingsView: View {
             Button {
                 withAnimation(.easeOut(duration: 0.2)) { if open.contains(id) { open.remove(id) } else { open.insert(id) } }
             } label: {
-                HStack(alignment: .top) {
+                HStack(alignment: .center) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(title).font(Theme.head(17, weight: .bold)).foregroundStyle(Theme.text)
-                        if let status { Text(status).font(Theme.mono(12)).foregroundStyle(statusColor ?? Theme.muted).multilineTextAlignment(.leading) }
+                        Text(title).font(Theme.body(16, weight: .semibold)).foregroundStyle(Theme.text)
+                        if let status, !status.isEmpty { Text(status).font(Theme.meta(13)).foregroundStyle(statusColor ?? Theme.muted).multilineTextAlignment(.leading).lineLimit(1) }
                     }
                     Spacer()
-                    Image(systemName: "chevron.down").rotationEffect(.degrees(open.contains(id) ? 180 : 0)).foregroundStyle(Theme.muted)
+                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).rotationEffect(.degrees(open.contains(id) ? 180 : 0)).foregroundStyle(Theme.muted)
                 }
                 .contentShape(Rectangle())
             }

@@ -18,7 +18,7 @@ struct LoginView: View {
                 .foregroundStyle(Theme.amber)
                 .padding(.leading, 14) // balances the trailing tracking so the wordmark reads centered
 
-            Text("Your AI training coach. This is a private beta — sign in with the Google account Abhi added for you.")
+            Text("Your AI training coach.")
                 .font(Theme.body(15))
                 .multilineTextAlignment(.center)
                 .foregroundStyle(Theme.muted)
@@ -44,8 +44,8 @@ struct LoginView: View {
             .opacity(busy ? 0.5 : 1)
             .padding(.horizontal, 24)
 
-            Text("Not on the list yet? Ask Abhi to add your Google email.")
-                .font(Theme.mono(12.5))
+            Text("Private beta — ask Abhi for an invite.")
+                .font(Theme.body(13))
                 .foregroundStyle(Theme.dim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)

@@ -11,16 +11,14 @@ struct QLabel: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
             Text(text)
-                .font(Theme.head(13, weight: .semibold))
-                .textCase(.uppercase)
-                .tracking(1.8)
+                .font(Theme.body(14, weight: .semibold))
                 .foregroundStyle(Theme.muted)
             Spacer()
             if let value {
-                Text(value).font(Theme.mono(15)).foregroundStyle(Theme.amber)
+                Text(value).font(Theme.head(20, weight: .bold)).foregroundStyle(Theme.amber)
             }
         }
-        .padding(.top, 22)
+        .padding(.top, 20)
         .padding(.bottom, 8)
     }
 }

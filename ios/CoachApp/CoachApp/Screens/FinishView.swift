@@ -21,23 +21,15 @@ struct FinishView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                HStack {
-                    Button("Back") { appState.screen = .workout }
-                        .font(Theme.head(16, weight: .semibold)).textCase(.uppercase).tracking(1.3)
-                        .foregroundStyle(Theme.muted)
-                    Spacer()
-                }
-                .padding(.bottom, 14)
-
-                Text("Log it. 20 seconds.").font(Theme.head(28, weight: .bold))
+                ScreenHeader(title: "How did it go?", onBack: { appState.screen = .workout })
 
                 if !prs.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("🏆 New personal record\(prs.count > 1 ? "s" : "")")
+                        Text("🏆 New record\(prs.count > 1 ? "s" : "")")
                             .font(Theme.head(17, weight: .bold)).foregroundStyle(Theme.amber)
                         ForEach(prs, id: \.self) { p in
-                            Text("\(p.name) — \(p.kind == "weight" ? "heaviest set" : "est. 1RM") \(Helpers.fmtKg(p.from)) → \(Helpers.fmtKg(p.to))kg")
-                                .font(Theme.mono(13))
+                            Text("\(p.name) · \(p.kind == "weight" ? "" : "e1RM ")\(Helpers.fmtKg(p.from)) → \(Helpers.fmtKg(p.to))kg")
+                                .font(Theme.meta(14))
                         }
                     }
                     .padding(14)
@@ -48,16 +40,16 @@ struct FinishView: View {
                     .padding(.top, 14)
                 }
 
-                QLabel(text: "Overall session RPE", value: "\(appState.fin.rpe)/10")
+                QLabel(text: "Effort (RPE)", value: "\(appState.fin.rpe)/10")
                 Slider(value: Binding(get: { Double(appState.fin.rpe) }, set: { appState.fin.rpe = Int($0) }), in: 1...10, step: 1)
                     .tint(Theme.amber)
 
-                QLabel(text: "Any pain or discomfort?")
-                TextField("", text: fin.pain, prompt: Text("e.g. none / left shoulder on incline press").foregroundStyle(Theme.dim))
+                QLabel(text: "Any pain?")
+                TextField("", text: fin.pain, prompt: Text("None").foregroundStyle(Theme.dim))
                     .coachInput()
 
-                QLabel(text: "Too easy / too hard?")
-                TextField("", text: fin.feedback, prompt: Text("e.g. leg press felt light, curls brutal").foregroundStyle(Theme.dim))
+                QLabel(text: "Too easy or too hard?")
+                TextField("", text: fin.feedback, prompt: Text("e.g. curls felt brutal").foregroundStyle(Theme.dim))
                     .coachInput()
 
                 Button(saving ? "Saving…" : "Save session") {
@@ -67,10 +59,6 @@ struct FinishView: View {
                 .buttonStyle(BigButtonStyle())
                 .disabled(saving)
                 .padding(.top, 28)
-
-                Text("Weights and reps you logged per set are saved automatically. This feeds tomorrow's plan.")
-                    .font(Theme.mono(12.5)).foregroundStyle(Theme.muted)
-                    .padding(.top, 12)
             }
             .padding(16)
         }

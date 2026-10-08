@@ -28,59 +28,59 @@ final class DailyLoopUITests: XCTestCase {
     func testCheckInUpdatesReadinessAndSurfacesAIError() {
         XCTAssertTrue(button("Start check-in").waitForExistence(timeout: 10))
         button("Start check-in").tap()
-        XCTAssertTrue(text("CHECK-IN").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("Check-in").waitForExistence(timeout: 5))
 
         // normal day: 50 + energy 7 (+10) + OK sleep (+5) + no soreness (+10)
         XCTAssertEqual(readiness, "75")
         // seeded Watch row → details open with the loaded note
-        XCTAssertTrue(text("⌚ Watch data loaded — the coach will read it").exists)
+        XCTAssertTrue(text("Loaded from Watch").exists)
 
         button("Poor").tap()
         XCTAssertEqual(readiness, "55")
 
         button("Very sore").tap()
         XCTAssertEqual(readiness, "25")
-        XCTAssertTrue(app.textFields["Where? e.g. chest, quads"].exists)
+        XCTAssertTrue(app.textFields["Where?"].exists)
 
-        button("Lower back tight today?").tap()
-        XCTAssertTrue(button("✓ Lower back tight today — coach will adapt").exists)
+        button("Lower back tight?").tap()
+        XCTAssertTrue(button("✓ Lower back tight").exists)
         XCTAssertEqual(readiness, "17")
 
         // hiding details keeps answers
-        button("− Hide more details").tap()
-        XCTAssertFalse(button("✓ Lower back tight today — coach will adapt").exists)
-        button("+ More details — back, vibe, health data").tap()
-        XCTAssertTrue(button("✓ Lower back tight today — coach will adapt").exists)
+        button("Fewer details").tap()
+        XCTAssertFalse(button("✓ Lower back tight").exists)
+        button("More details").tap()
+        XCTAssertTrue(button("✓ Lower back tight").exists)
 
         // the seeded key is fake → Gemini rejects it → back on check-in
         // with the error shown and the answers intact
-        let build = button("Build today's session")
+        let build = button("Build session")
         app.swipeUp()
         app.swipeUp()
         build.tap()
         XCTAssertTrue(app.staticTexts["error"].waitForExistence(timeout: 90))
-        XCTAssertTrue(text("CHECK-IN").exists)
+        XCTAssertTrue(text("Check-in").exists)
         XCTAssertEqual(readiness, "17")
         XCTAssertTrue(button("Poor").isSelected)
 
         app.swipeDown()
         app.swipeDown()
-        button("Cancel").tap()
+        button("Back").tap()
         XCTAssertTrue(button("Start check-in").waitForExistence(timeout: 5))
     }
 
     func testBackdatedQuickCardioDoesNotBecomeLastSession() {
-        XCTAssertTrue(button("🏃 Run").waitForExistence(timeout: 10))
+        XCTAssertTrue(button("Run").waitForExistence(timeout: 10))
 
         // today's run
-        logCardio(open: "🏃 Run", title: "Log a run", save: "🏃 Save run", minutes: "30", day: nil)
+        logCardio(open: "Run", title: "Log a run", save: "🏃 Save run", minutes: "30", day: nil)
         XCTAssertTrue(text("Run").waitForExistence(timeout: 5))
 
         // yesterday's ride — logged later, but must sort before today's run
-        logCardio(open: "🚴 Ride", title: "Log a ride", save: "🚴 Save ride", minutes: "45", day: "Yesterday")
+        logCardio(open: "Ride", title: "Log a ride", save: "🚴 Save ride", minutes: "45", day: "Yesterday")
         XCTAssertTrue(text("Run").waitForExistence(timeout: 5))
         XCTAssertFalse(text("Cycle").exists, "backdated ride replaced today's run as Last session")
-        XCTAssertTrue(text("Session RPE 6/10").exists)
+        XCTAssertTrue(text("RPE 6").exists)
     }
 
     /// Workout → Finish on the seeded in-progress Push session: log a set,
@@ -92,7 +92,7 @@ final class DailyLoopUITests: XCTestCase {
         XCTAssertTrue(text("PUSH").waitForExistence(timeout: 10))
         XCTAssertTrue(text("0/8 sets").exists)
         // each exercise logs the right way: walk = min/km, stretch = tick-off
-        XCTAssertTrue(app.staticTexts["30s each side — tap to tick off"].exists)
+        XCTAssertTrue(app.staticTexts["30s each side"].exists)
         XCTAssertTrue(app.staticTexts["km"].exists, "cardio row shows min/km inputs")
 
         // first set of Flat Dumbbell Press: 25kg × 10 (seeded history: 24×11)
@@ -123,8 +123,8 @@ final class DailyLoopUITests: XCTestCase {
         let finish = button("Finish session")
         for _ in 0..<8 where !finish.isHittable { app.swipeUp() }
         finish.tap()
-        XCTAssertTrue(text("Log it. 20 seconds.").waitForExistence(timeout: 5))
-        XCTAssertTrue(text("🏆 New personal record").exists)
+        XCTAssertTrue(text("How did it go?").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("🏆 New record").exists)
         button("Save session").tap()
 
         // back home, today's session done
@@ -138,19 +138,19 @@ final class DailyLoopUITests: XCTestCase {
         button("Log").tap()
 
         // the seeded Push session (Flat Dumbbell Press 24kg×11)
-        XCTAssertTrue(text("LOG").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("Log").waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Flat Dumbbell Press: 24kg×11"].exists)
 
         // detail: sets + the coach debrief
         app.staticTexts["Flat Dumbbell Press: 24kg×11"].tap()
-        XCTAssertTrue(text("Set 1: 24kg×11").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("24kg×11").waitForExistence(timeout: 5))
         XCTAssertTrue(text("Coach debrief").exists)
-        button("Log").tap()
+        button("Back").tap()
 
         // edit in place: 11 reps → 12
         XCTAssertTrue(app.buttons["Session options"].firstMatch.waitForExistence(timeout: 5))
         app.buttons["Session options"].firstMatch.tap()
-        button("✎ Edit sets & notes").tap()
+        button("Edit").tap()
         let reps = app.textFields.element(boundBy: 1)
         XCTAssertTrue(reps.waitForExistence(timeout: 5))
         reps.doubleTap() // select "11" so typing replaces it
@@ -160,9 +160,9 @@ final class DailyLoopUITests: XCTestCase {
                       "card shows: \(app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'Flat'")).allElementsBoundByIndex.map(\.label))")
 
         // add a past workout
-        button("+ Past").tap()
-        XCTAssertTrue(text("PAST WORKOUT").waitForExistence(timeout: 5))
-        let name = app.textFields["Exercise — e.g. Bench press, Running"]
+        button("Add past workout").tap()
+        XCTAssertTrue(text("Past workout").waitForExistence(timeout: 5))
+        let name = app.textFields["Exercise"]
         name.tap()
         name.typeText("Bench Press")
         let kg = app.textFields.matching(NSPredicate(format: "placeholderValue == 'kg'")).firstMatch
@@ -171,8 +171,8 @@ final class DailyLoopUITests: XCTestCase {
         let r = app.textFields.matching(NSPredicate(format: "placeholderValue == 'reps'")).firstMatch
         r.tap()
         r.typeText("8")
-        text("PAST WORKOUT").tap()
-        let save = app.buttons.matching(NSPredicate(format: "label BEGINSWITH[c] 'Save to'")).firstMatch
+        text("Past workout").tap()
+        let save = button("Save")
         for _ in 0..<6 where !save.isHittable { app.swipeUp() }
         save.tap()
         XCTAssertTrue(app.staticTexts["Bench Press: 60kg×8"].waitForExistence(timeout: 5))
@@ -181,8 +181,8 @@ final class DailyLoopUITests: XCTestCase {
         let pushCard = app.staticTexts["Flat Dumbbell Press: 24kg×12"]
         XCTAssertTrue(pushCard.exists)
         app.buttons.matching(NSPredicate(format: "label == %@", "Session options")).element(boundBy: 1).tap() // newest first: [past, Push]
-        button("✕ Delete session").tap()
-        button("✕ Delete it").tap()
+        button("Delete").tap()
+        button("Delete").tap()
         XCTAssertTrue(pushCard.waitForNonExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Bench Press: 60kg×8"].exists, "the other session stays")
     }
@@ -194,7 +194,7 @@ final class DailyLoopUITests: XCTestCase {
 
         // coach chat from the floating button
         app.buttons["Ask the coach"].tap()
-        XCTAssertTrue(text("COACH CHAT").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Close chat"].waitForExistence(timeout: 5))
         let ask = app.textFields["Ask the coach…"]
         ask.tap()
         ask.typeText("how heavy should warm-up sets be?")
@@ -205,17 +205,15 @@ final class DailyLoopUITests: XCTestCase {
         app.buttons["Close chat"].tap()
 
         // records + progress open and show the seeded session
-        button("🏆").tap()
-        XCTAssertTrue(text("🏆 RECORDS").waitForExistence(timeout: 5))
+        button("Records").tap()
+        XCTAssertTrue(text("Personal records").waitForExistence(timeout: 5))
         XCTAssertTrue(text("Flat Dumbbell Press").exists)
-        button("Home").tap()
-        button("Stats").tap()
-        XCTAssertTrue(text("PROGRESS").waitForExistence(timeout: 5))
-        button("Home").tap()
+        button("Progress").tap()
+        XCTAssertTrue(text("Log two sessions to unlock charts.").waitForExistence(timeout: 5))
 
         // settings: sections expand
         app.buttons["Settings"].tap()
-        XCTAssertTrue(text("SETTINGS").waitForExistence(timeout: 5))
+        XCTAssertTrue(text("About").waitForExistence(timeout: 5))
         app.staticTexts["Plates & Bar"].tap()
         XCTAssertTrue(button("Save gym setup").waitForExistence(timeout: 3))
         app.staticTexts["Account"].tap()
