@@ -33,14 +33,16 @@ import {
 import { syncNow } from './db/sync';
 import { onCloudChange, cloudState, cloudSetState, cloudSignOut, NotInvitedError } from './db/cloud';
 
-import { resumeSession } from './utils/account';
+import { resumeSession, getAccount } from './utils/account';
 
 import Login from './screens/Login';
 import Home from './screens/Home';
 import Progress from './screens/Progress';
 import Coach from './screens/Coach';
 import TabBar, { TABS } from './components/TabBar';
-import Icon from './components/Icon';
+import { ShellContext, NotificationsSheet, ProfileSheet } from './components/Shell';
+import { notifications as buildNotifications, weeklyTarget } from './utils/dashboard';
+import { getAISettings, setAISettings } from './utils/storage';
 import CheckIn from './screens/CheckIn';
 import Generating from './screens/Generating';
 import Workout from './screens/Workout';
@@ -63,6 +65,13 @@ export default function App() {
   const [todayPlan, setTodayPlan] = useState(null);
   // Coach chat is a bottom sheet reachable from any screen
   const [chatOpen, setChatOpen] = useState(false);
+  // header sheets: 'notifications' | 'profile' | null
+  const [sheet, setSheet] = useState(null);
+  // when the bell's inbox was last opened (ms) — state `notifSeenAt`
+  const [notifSeenAt, setNotifSeenAt] = useState(0);
+  const [seenBefore, setSeenBefore] = useState(0);
+  // name chosen in Edit profile — state `displayName` (shared with iOS)
+  const [nameOverride, setNameOverride] = useState('');
   // History → tapped session shown full-screen
   const [detailId, setDetailId] = useState(null);
   const [error, setError] = useState('');
@@ -125,6 +134,8 @@ export default function App() {
       if (t && t.date === todayStr()) setTodayPlan(t);
       setWeeklyReview(cloudState('weeklyReview'));
       setMonthlyReport(cloudState('monthlyReport'));
+      setNotifSeenAt(cloudState('notifSeenAt', 0) || 0);
+      setNameOverride(cloudState('displayName', '') || '');
       logEvent('app_open', { sessions: h.length });
       reparseHealthRows(); // background — parser upgrades backfill old rows
       runSync(); // background — pulls sessions logged on other devices
@@ -150,6 +161,8 @@ export default function App() {
         if (what === 'state') {
           setWeeklyReview(cloudState('weeklyReview'));
           setMonthlyReport(cloudState('monthlyReport'));
+          setNotifSeenAt(cloudState('notifSeenAt', 0) || 0);
+          setNameOverride(cloudState('displayName', '') || '');
           const t = cloudState('today');
           setTodayPlan(t && t.date === todayStr() ? t : null);
         }
@@ -718,10 +731,30 @@ export default function App() {
   }
 
   const isTab = TABS.some((t) => t.screen === screen);
+  const account = getAccount();
+  const displayName = nameOverride || account?.name || account?.email || '';
+  const notices = buildNotifications(history, weeklyReview, monthlyReport);
+  const shell = {
+    screen,
+    go: setScreen,
+    openChat: () => setChatOpen(true),
+    openSheet: (s) => {
+      if (s === 'notifications') {
+        setSeenBefore(notifSeenAt);
+        const now = Date.now();
+        setNotifSeenAt(now);
+        cloudSetState('notifSeenAt', now);
+      }
+      setSheet(s);
+    },
+    unread: notices.filter((n) => n.at > notifSeenAt).length,
+    displayName,
+  };
 
   return (
+    <ShellContext.Provider value={shell}>
     <div className="app">
-      <div className={`frame${isTab ? ' frame--tabs' : ''}`}>
+      <div className={`frame${isTab ? ' frame--tabs' : ''}${screen === 'home' ? ' frame--wide' : ''}`}>
         {screen === 'home' && (
           <Home
             todayPlan={todayPlan}
@@ -742,6 +775,7 @@ export default function App() {
             }}
             onResume={() => setScreen('workout')}
             onQuickCardio={logQuickCardio}
+            onAddPast={() => setScreen('addPast')}
             onOpenSession={(s) => {
               setDetailId(sid(s));
               setScreen('historyDetail');
@@ -853,20 +887,34 @@ export default function App() {
         )}
       </div>
 
-      {/* Coach is one tap away from every tab. The workout and history
-          detail have their own chat entry; check-in and finish stay
-          focused. */}
-      {!chatOpen && isTab && (
-        <button
-          className="chat-fab"
-          aria-label="Ask the coach"
-          onClick={() => setChatOpen(true)}
-        >
-          <Icon name="chat" size={22} fill="currentColor" />
-        </button>
-      )}
-
       {isTab && <TabBar screen={screen} onSelect={setScreen} />}
+
+      {sheet === 'notifications' && (
+        <NotificationsSheet
+          items={notices}
+          seenBefore={seenBefore}
+          onClose={() => setSheet(null)}
+          onOpen={(n) => {
+            setSheet(null);
+            setScreen(n.screen);
+          }}
+        />
+      )}
+      {sheet === 'profile' && (
+        <ProfileSheet
+          displayName={displayName}
+          nameOverride={nameOverride}
+          target={weeklyTarget(getAISettings())}
+          onClose={() => setSheet(null)}
+          onSave={(name, target) => {
+            setNameOverride(name);
+            cloudSetState('displayName', name || null);
+            setAISettings({ weeklyTarget: target });
+            logEvent('profile_saved', { weeklyTarget: target });
+            setSheet(null);
+          }}
+        />
+      )}
 
       {chatOpen && (
         <Coach
@@ -876,5 +924,6 @@ export default function App() {
         />
       )}
     </div>
+    </ShellContext.Provider>
   );
 }

@@ -9,7 +9,7 @@ const CSP = [
   "default-src 'none'",
   "script-src 'self' https://apis.google.com", // Firebase Auth's sign-in popup helper
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com", // inline style attrs + Google Fonts CSS
-  "font-src https://fonts.gstatic.com",
+  "font-src 'self' https://fonts.gstatic.com", // Google text fonts + the bundled icon subset
   "img-src 'self' data:",
   "connect-src 'self' https://generativelanguage.googleapis.com https://api.github.com " + // Gemini + GitHub backup
     "https://firestore.googleapis.com https://identitytoolkit.googleapis.com " + // Firestore + sign-in

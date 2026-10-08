@@ -136,7 +136,7 @@ export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmi
             <button className="chip" onClick={pasteHealth}>Paste</button>
           </div>
           {autoFilled && ci.health && (
-            <p style={{ fontSize: 13, color: 'var(--teal)', margin: '0 0 8px' }}>Loaded from Watch</p>
+            <p style={{ fontSize: 13, color: 'var(--green)', margin: '0 0 8px' }}>Loaded from Watch</p>
           )}
           <textarea
             className="input textarea"

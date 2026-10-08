@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import Header from '../components/Header';
 import Icon from '../components/Icon';
+import { TabHeader, SectionHead, SettingsRow, RowGroup, PanelSheet, Avatar, StatusPill, useShell } from '../components/Shell';
+import { weeklyTarget } from '../utils/dashboard';
 import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
@@ -12,22 +13,17 @@ import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/
 // Raw shortcut payload → compact readable summary for the Watch card
 const fmtWatchData = (raw) => fmtHealthLine(parseHealthNumbers(raw));
 
-function Section({ title, status, statusColor, open, onToggle, children }) {
+/** One settings row; its form opens in a sheet. */
+function Section({ title, status, icon, tint, value, open, onToggle, children }) {
   return (
-    <div className="section">
-      <button className="section__head" onClick={onToggle}>
-        <div>
-          <div className="section__title">{title}</div>
-          {status && (
-            <div className="section__status" style={statusColor ? { color: statusColor } : undefined}>
-              {status}
-            </div>
-          )}
-        </div>
-        <span className={'chevron' + (open ? ' chevron--open' : '')}><Icon name="down" size={18} /></span>
-      </button>
-      {open && <div className="section__body">{children}</div>}
-    </div>
+    <>
+      <SettingsRow icon={icon} tint={tint} title={title} subtitle={status} value={value} onClick={onToggle} />
+      {open && (
+        <PanelSheet title={title} onClose={onToggle}>
+          {children}
+        </PanelSheet>
+      )}
+    </>
   );
 }
 
@@ -41,12 +37,14 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   const fileRef = useRef(null);
 
   const account = getAccount();
+  const { openSheet, displayName } = useShell();
 
-  // first run (no key yet) lands here — open the coach section for them
+  // first run (no key yet) lands here — open the coach sheet for them
   const [open, setOpen] = useState(() => ({
     account: false,
     coach: !getApiKey(),
     sync: false,
+    data: false,
     gym: false,
     watch: false,
     about: false,
@@ -243,72 +241,55 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
 
   // ── Collapsed status lines ──
   const coachStatus = getApiKey()
-    ? 'Ready'
+    ? getAISettings().profile ? 'Ready · profile set' : 'Ready · add your profile'
     : account?.admin
     ? 'No API key yet — add one to start'
     : 'No API key yet — ask Abhi to add one';
   const lastSync = getLastSync();
   const syncStatus =
     lastSync?.status === 'ok'
-      ? `Backed up ${new Date(lastSync.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
+      ? `Live sync · backed up ${new Date(lastSync.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
       : lastSync?.status === 'error'
       ? `Backup failed: ${lastSync.message}`
       : sync.repo && sync.token
-      ? 'Synced · backup pending'
-      : 'Synced · no GitHub backup';
+      ? 'Live sync · backup pending'
+      : 'Live sync · no GitHub backup';
   const watchReceived = todaysHealth();
 
   return (
     <div className="screen screen--slide-in">
-      <Header title="Settings" />
+      <TabHeader title="Settings" />
 
       {account && (
-        <Section
-          title="Account"
-          status={account.email || account.name}
-          open={open.account}
-          onToggle={() => toggle('account')}
-        >
-          <div className="q-label" style={{ marginTop: 0 }}>Send feedback to Abhi</div>
-          <textarea
-            className="input textarea"
-            style={{ marginTop: 0, minHeight: 80 }}
-            placeholder="Bugs, ideas, anything…"
-            value={feedback}
-            onChange={(e) => setFeedback(e.target.value.slice(0, 2000))}
-          />
-          <button
-            className="big-btn"
-            onClick={handleSendFeedback}
-            disabled={sendingFb || !feedback.trim()}
-            style={{ marginTop: 10, padding: 12, fontSize: 14 }}
-          >
-            {sendingFb ? 'Sending…' : 'Send feedback'}
-          </button>
-          {feedbackMsg && (
-            <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
-              {feedbackMsg}
-            </p>
-          )}
-          <button
-            className="big-btn big-btn--danger"
-            style={{ marginTop: 14, padding: 12, fontSize: 14 }}
-            onClick={handleSignOut}
-          >
-            {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
-          </button>
-          <p className="body" style={{ marginTop: 6, fontSize: 12.5, color: 'var(--dim)' }}>
-            Signing out clears this device, including exercise photos. Your log stays in the cloud.
-          </p>
-        </Section>
+        <button className="profile-card" aria-label="Edit profile" onClick={() => openSheet('profile')}>
+          <span style={{ position: 'relative' }}>
+            <Avatar name={displayName} size={54} />
+            <span className="profile-card__online" />
+          </span>
+          <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: 18 }}>
+              {displayName}
+              {account.admin && <Icon name="verified" size={16} fill style={{ color: 'var(--amber-text)' }} />}
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+              <StatusPill text={account.admin ? 'Admin' : 'Member'} color="var(--amber-text)" dot={false} />
+              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>· Sync active</span>
+            </span>
+          </span>
+          <span className="icon-well" style={{ borderRadius: '50%', color: 'var(--muted)' }}><Icon name="edit" size={18} /></span>
+        </button>
       )}
 
+      <SectionHead title="Preferences" trailing="Coach logic" trailingColor="var(--muted)" />
+      <RowGroup>
       <Section
         title="AI Coach"
+        icon="psychology"
         status={coachStatus}
         open={open.coach}
         onToggle={() => toggle('coach')}
       >
+
         {account?.admin ? (
           <>
             <div className="q-label" style={{ marginTop: 0 }}>Gemini API key (shared)</div>
@@ -380,152 +361,28 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
         </button>
       </Section>
 
-      <Section
-        title="Sync & Backup"
-        status={syncStatus}
-        open={open.sync}
-        onToggle={() => toggle('sync')}
-      >
-        <div className="q-label" style={{ marginTop: 0 }}>GitHub backup</div>
-        <input
-          className="input"
-          type="text"
-          placeholder="your-username/workout-data"
-          value={sync.repo}
-          onChange={(e) => setSync({ ...sync, repo: e.target.value })}
-          style={{ marginTop: 0 }}
-        />
-        <div className="settings-key-row" style={{ marginTop: 8 }}>
-          <input
-            className="input"
-            type={showToken ? 'text' : 'password'}
-            placeholder="github_pat_…"
-            value={sync.token}
-            onChange={(e) => setSync({ ...sync, token: e.target.value })}
-            style={{ marginTop: 0, flex: 1 }}
-          />
-          <button
-            className="ghost-btn"
-            onClick={() => setShowToken(!showToken)}
-            style={{ flexShrink: 0 }}
-          >
-            {showToken ? 'Hide' : 'Show'}
-          </button>
-        </div>
-        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
-          <button className="big-btn" onClick={handleSyncSave} style={{ marginTop: 0, padding: 12, fontSize: 14 }}>
-            {syncSaved ? '✓ Saved' : 'Save settings'}
-          </button>
-          <button
-            className="big-btn"
-            onClick={handleSyncNow}
-            disabled={syncing}
-            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
-          >
-            {syncing ? 'Backing up…' : 'Back up now'}
-          </button>
-        </div>
-        {syncMsg && (
-          <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
-            {syncMsg}
-          </p>
-        )}
-        <p className="body" style={{ marginTop: 10, color: 'var(--muted)', fontSize: 13 }}>
-          Fine-grained token, your data repo only, Contents: read &amp; write.
-        </p>
+      <SettingsRow
+        icon="track_changes"
+        tint="var(--green)"
+        title="Weekly target"
+        subtitle="Streak, consistency and the target bar"
+        value={`${weeklyTarget(getAISettings())}/wk`}
+        onClick={() => openSheet('profile')}
+      />
+      </RowGroup>
 
-        <div className="q-label">Your data</div>
-        {sessionCount != null && (
-          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
-            {sessionCount} sessions · {eventCount ?? '…'} events
-          </p>
-        )}
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          <button
-            className="big-btn"
-            onClick={handleExport}
-            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
-          >
-            Export
-          </button>
-          <button
-            className="big-btn"
-            onClick={() => fileRef.current?.click()}
-            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
-          >
-            Import
-          </button>
-          <button
-            className="big-btn"
-            onClick={handleExportCsv}
-            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
-          >
-            Export CSV
-          </button>
-        </div>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json,.json"
-          style={{ display: 'none' }}
-          onChange={handleImportFile}
-        />
-        {dataMsg && (
-          <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
-            {dataMsg}
-          </p>
-        )}
-        <button
-          className="big-btn big-btn--danger"
-          style={{ marginTop: 10, padding: 12, fontSize: 14 }}
-          onClick={handleClear}
-        >
-          {confirmClear ? 'Tap again to confirm' : 'Clear all history'}
-        </button>
-      </Section>
-
-      <Section
-        title="Plates & Bar"
-        status={`${parseFloat(gym.barKg) || DEFAULT_BAR_KG}kg bar · ${
-          (parsePlates(gym.plates) || DEFAULT_PLATES).join('/')
-        }`}
-        open={open.gym}
-        onToggle={() => toggle('gym')}
-      >
-        <div className="q-label" style={{ marginTop: 0 }}>Bar weight (kg)</div>
-        <input
-          className="input"
-          inputMode="decimal"
-          value={gym.barKg}
-          onChange={(e) => setGym({ ...gym, barKg: e.target.value.replace(/[^\d.]/g, '') })}
-          style={{ marginTop: 6 }}
-        />
-        <div className="q-label">Plates (kg, per pair)</div>
-        <input
-          className="input"
-          placeholder={DEFAULT_PLATES.join(', ')}
-          value={gym.plates}
-          onChange={(e) => setGym({ ...gym, plates: e.target.value })}
-          style={{ marginTop: 6 }}
-        />
-        <button
-          className="big-btn"
-          onClick={handleGymSave}
-          style={{ marginTop: 14, padding: 12, fontSize: 14 }}
-        >
-          {gymSaved ? '✓ Saved' : 'Save gym setup'}
-        </button>
-      </Section>
-
+      <SectionHead title="Devices & sensors" trailing={watchReceived ? 'All synced' : null} trailingColor="var(--green)" />
+      <RowGroup>
       <Section
         title="Apple Watch"
-        status={watchReceived ? 'Received today' : 'Nothing today yet'}
-        statusColor={watchReceived ? 'var(--teal)' : undefined}
+        icon="watch"
+        tint="var(--green)"
+        status={watchReceived ? 'Synced today' : 'Nothing today yet'}
         open={open.watch}
         onToggle={() => toggle('watch')}
       >
         {watchReceived && (
-          <p className="body" style={{ color: 'var(--teal)' }}>
+          <p className="body" style={{ color: 'var(--green)' }}>
             Today: {fmtWatchData(watchReceived) || watchReceived}
           </p>
         )}
@@ -623,12 +480,200 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
           )}
         </details>
       </Section>
+      <Section
+        title="Barbell & plate setup"
+        icon="scale"
+        value={`${parseFloat(gym.barKg) || DEFAULT_BAR_KG}kg bar`}
+        status={`${(parsePlates(gym.plates) || DEFAULT_PLATES).join(' / ')} kg plates`}
+        open={open.gym}
+        onToggle={() => toggle('gym')}
+      >
+        <div className="q-label" style={{ marginTop: 0 }}>Bar weight (kg)</div>
+        <input
+          className="input"
+          inputMode="decimal"
+          value={gym.barKg}
+          onChange={(e) => setGym({ ...gym, barKg: e.target.value.replace(/[^\d.]/g, '') })}
+          style={{ marginTop: 6 }}
+        />
+        <div className="q-label">Plates (kg, per pair)</div>
+        <input
+          className="input"
+          placeholder={DEFAULT_PLATES.join(', ')}
+          value={gym.plates}
+          onChange={(e) => setGym({ ...gym, plates: e.target.value })}
+          style={{ marginTop: 6 }}
+        />
+        <button
+          className="big-btn"
+          onClick={handleGymSave}
+          style={{ marginTop: 14, padding: 12, fontSize: 14 }}
+        >
+          {gymSaved ? '✓ Saved' : 'Save gym setup'}
+        </button>
+      </Section>
+      </RowGroup>
 
-      <Section title="About" open={open.about} onToggle={() => toggle('about')}>
+      <SectionHead title="Data & account" trailing="Cloud vault" trailingColor="var(--muted)" />
+      <RowGroup>
+      <Section
+        title="Cloud backup"
+        icon="cloud"
+        tint="var(--green)"
+        status={syncStatus}
+        open={open.sync}
+        onToggle={() => toggle('sync')}
+      >
+        <div className="q-label" style={{ marginTop: 0 }}>GitHub backup</div>
+        <input
+          className="input"
+          type="text"
+          placeholder="your-username/workout-data"
+          value={sync.repo}
+          onChange={(e) => setSync({ ...sync, repo: e.target.value })}
+          style={{ marginTop: 0 }}
+        />
+        <div className="settings-key-row" style={{ marginTop: 8 }}>
+          <input
+            className="input"
+            type={showToken ? 'text' : 'password'}
+            placeholder="github_pat_…"
+            value={sync.token}
+            onChange={(e) => setSync({ ...sync, token: e.target.value })}
+            style={{ marginTop: 0, flex: 1 }}
+          />
+          <button
+            className="ghost-btn"
+            onClick={() => setShowToken(!showToken)}
+            style={{ flexShrink: 0 }}
+          >
+            {showToken ? 'Hide' : 'Show'}
+          </button>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+          <button className="big-btn" onClick={handleSyncSave} style={{ marginTop: 0, padding: 12, fontSize: 14 }}>
+            {syncSaved ? '✓ Saved' : 'Save settings'}
+          </button>
+          <button
+            className="big-btn"
+            onClick={handleSyncNow}
+            disabled={syncing}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            {syncing ? 'Backing up…' : 'Back up now'}
+          </button>
+        </div>
+        {syncMsg && (
+          <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
+            {syncMsg}
+          </p>
+        )}
+        <p className="body" style={{ marginTop: 10, color: 'var(--muted)', fontSize: 13 }}>
+          Fine-grained token, your data repo only, Contents: read &amp; write.
+        </p>
+
+      </Section>
+      <Section
+        title="Export workout log"
+        icon="upload"
+        status="CSV · JSON backup · import"
+        open={open.data}
+        onToggle={() => toggle('data')}
+      >
+        <div className="q-label" style={{ marginTop: 0 }}>Your data</div>
+        {sessionCount != null && (
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
+            {sessionCount} sessions · {eventCount ?? '…'} events
+          </p>
+        )}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button
+            className="big-btn"
+            onClick={handleExport}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            Export
+          </button>
+          <button
+            className="big-btn"
+            onClick={() => fileRef.current?.click()}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            Import
+          </button>
+          <button
+            className="big-btn"
+            onClick={handleExportCsv}
+            style={{ marginTop: 0, padding: 12, fontSize: 14 }}
+          >
+            Export CSV
+          </button>
+        </div>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          style={{ display: 'none' }}
+          onChange={handleImportFile}
+        />
+        {dataMsg && (
+          <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
+            {dataMsg}
+          </p>
+        )}
+        <button
+          className="big-btn big-btn--danger"
+          style={{ marginTop: 10, padding: 12, fontSize: 14 }}
+          onClick={handleClear}
+        >
+          {confirmClear ? 'Tap again to confirm' : 'Clear all history'}
+        </button>
+      </Section>
+
+      {account && (
+        <Section title="Send feedback" icon="chat_bubble" status="Straight to Abhi" open={open.account} onToggle={() => toggle('account')}>
+          <div className="q-label" style={{ marginTop: 0 }}>Send feedback to Abhi</div>
+          <textarea
+            className="input textarea"
+            style={{ marginTop: 0, minHeight: 80 }}
+            placeholder="Bugs, ideas, anything…"
+            value={feedback}
+            onChange={(e) => setFeedback(e.target.value.slice(0, 2000))}
+          />
+          <button
+            className="big-btn"
+            onClick={handleSendFeedback}
+            disabled={sendingFb || !feedback.trim()}
+            style={{ marginTop: 10, padding: 12, fontSize: 14 }}
+          >
+            {sendingFb ? 'Sending…' : 'Send feedback'}
+          </button>
+          {feedbackMsg && (
+            <p className="body" style={{ marginTop: 8, color: 'var(--amber)' }}>
+              {feedbackMsg}
+            </p>
+          )}
+        </Section>
+      )}
+      <Section title="About COACH" icon="info" tint="var(--muted)" open={open.about} onToggle={() => toggle('about')}>
         <p className="body" style={{ color: 'var(--muted)' }}>
           COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.
         </p>
       </Section>
+      </RowGroup>
+
+      {account && (
+        <>
+          <button className="outline-btn outline-btn--danger" style={{ width: '100%', justifyContent: 'center', marginTop: 20, padding: 12 }} onClick={handleSignOut}>
+            <Icon name="logout" size={18} /> {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
+          </button>
+          {feedbackMsg && !open.account && <p className="body" style={{ marginTop: 8, color: 'var(--amber-text)' }}>{feedbackMsg}</p>}
+          <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--dim)' }}>
+            Signing out clears this device, including exercise photos. Your log stays in the cloud.
+          </p>
+        </>
+      )}
+      <div className="caps" style={{ textAlign: 'center', fontSize: 11, color: 'var(--dim)', marginTop: 18 }}>COACH · web</div>
 
     </div>
   );

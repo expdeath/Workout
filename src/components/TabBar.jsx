@@ -2,11 +2,11 @@ import React from 'react';
 import Icon from './Icon';
 
 export const TABS = [
-  { screen: 'home', icon: 'home', label: 'Today' },
-  { screen: 'history', icon: 'list', label: 'Log' },
-  { screen: 'progress', icon: 'chart', label: 'Progress' },
-  { screen: 'records', icon: 'trophy', label: 'Records' },
-  { screen: 'settings', icon: 'settings', label: 'Settings' },
+  { screen: 'home', icon: 'bolt', label: 'Today' },
+  { screen: 'history', icon: 'edit_calendar', label: 'Log' },
+  { screen: 'progress', icon: 'bar_chart', label: 'Progress' },
+  { screen: 'records', icon: 'emoji_events', label: 'Records' },
+  { screen: 'settings', icon: 'tune', label: 'Settings' },
 ];
 
 // Bottom tab bar on the five top-level screens.
@@ -20,7 +20,7 @@ export default function TabBar({ screen, onSelect }) {
           aria-current={screen === t.screen ? 'page' : undefined}
           onClick={() => onSelect(t.screen)}
         >
-          <Icon name={t.icon} size={22} strokeWidth={screen === t.screen ? 2.2 : 1.8} />
+          <Icon name={t.icon} size={23} fill={screen === t.screen} />
           <span>{t.label}</span>
         </button>
       ))}

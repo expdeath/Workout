@@ -2,7 +2,7 @@ import React from 'react';
 
 // One thin bar — teal ≥70, amber ≥45, red below; the number carries the meaning.
 export default function ReadinessBar({ value, label }) {
-  const color = value >= 70 ? 'var(--teal)' : value >= 45 ? 'var(--amber)' : 'var(--red)';
+  const color = value >= 70 ? 'var(--green)' : value >= 45 ? 'var(--amber)' : 'var(--red)';
 
   return (
     <div className="readiness-bar" role="meter" aria-label={label} aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>

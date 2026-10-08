@@ -174,7 +174,7 @@ export default function AddPast({ history, onCancel, onSave }) {
       <div className="q-label q-label--row">
         <span>Exercises</span>
         {lastOfType && (
-          <button className="link-btn link-btn--teal" style={{ padding: 0 }} onClick={() => copyFrom(lastOfType)}>
+          <button className="link-btn link-btn--green" style={{ padding: 0 }} onClick={() => copyFrom(lastOfType)}>
             Copy last {sessionType}
           </button>
         )}

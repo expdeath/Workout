@@ -1,17 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, BarChart, TrainingHeatmap } from '../components/Charts';
-import Header from '../components/Header';
-import {
-  exerciseSeries,
-  weeklyBuckets,
-  weekStats,
-  sessionVolume,
-  muscleBalance,
-  goalProgress,
-} from '../utils/stats';
+import { TabHeader, StatusPill, SectionHead, ProgressLine, Segmented } from '../components/Shell';
+import Icon from '../components/Icon';
+import { exerciseSeries, weeklyBuckets, weekStats, sessionVolume, muscleBalance, goalProgress } from '../utils/stats';
 import { getAllHealth } from '../db/db';
 import { getAISettings } from '../utils/storage';
-import { calorieStats, latestBodyWeightKg } from '../utils/calories';
+import { daysAgoStr } from '../utils/helpers';
+import { latestBodyWeightKg } from '../utils/calories';
+import { weeklyTarget, rangeSummary, compliance, deltaPercent, readiness, toneColor } from '../utils/dashboard';
 
 const shortDate = (iso) =>
   new Date(iso + 'T12:00:00').toLocaleDateString(undefined, {
@@ -19,17 +15,32 @@ const shortDate = (iso) =>
     month: 'numeric',
   });
 
+const RANGES = { '8w': 56, '3m': 91, '1y': 364 };
+
+/** A range switch (8 weeks · 3 months · year) over the summary,
+ *  consistency heatmap, lift progression, weekly training, muscle
+ *  balance, goals and recovery. The iOS ProgressView mirrors this. */
 export default function Progress({ history }) {
-  const series = useMemo(() => exerciseSeries(history), [history]);
-  const weeks = useMemo(() => weeklyBuckets(history, 8), [history]);
-  const { thisWeek, streak } = useMemo(() => weekStats(history), [history]);
+  const [range, setRange] = useState('8w');
   const [exIdx, setExIdx] = useState(0);
   const [exMetric, setExMetric] = useState('w'); // w = best set weight | e = est. 1RM
   const [weekMode, setWeekMode] = useState('volume'); // volume | sessions
   const [recMode, setRecMode] = useState('hrv'); // hrv | rhr | sleep | weight
   const [healthLog, setHealthLog] = useState([]);
+  useEffect(() => {
+    getAllHealth().then(setHealthLog).catch(() => {});
+  }, []);
 
-  // training-day heatmap: date → total volume + session count
+  const days = RANGES[range];
+  const weeks = days / 7;
+  const start = daysAgoStr(days - 1);
+  const inRange = useMemo(() => history.filter((s) => s.date >= start), [history, start]);
+  const target = weeklyTarget(getAISettings());
+  const { streak } = weekStats(history, target);
+  const sum = rangeSummary(history, days, latestBodyWeightKg(healthLog));
+  const delta = deltaPercent(sum.sessions, sum.prevSessions);
+  const pct = compliance(history, weeks, target);
+
   const heatDays = useMemo(() => {
     const m = new Map();
     for (const s of history) {
@@ -39,179 +50,142 @@ export default function Progress({ history }) {
     return m;
   }, [history]);
   const balance = useMemo(() => muscleBalance(history), [history]);
-  const goals = useMemo(
-    () => goalProgress(history, getAISettings().goals),
-    [history]
-  );
-  const bodyKg = useMemo(() => latestBodyWeightKg(healthLog), [healthLog]);
-  const calories = useMemo(() => calorieStats(history, bodyKg), [history, bodyKg]);
+  const goals = useMemo(() => goalProgress(history, getAISettings().goals), [history]);
 
-  useEffect(() => {
-    getAllHealth().then(setHealthLog).catch(() => {});
-  }, []);
-
-  const chartable = series.filter((s) => s.points.length >= 2).slice(0, 8);
+  const chartable = exerciseSeries(inRange).filter((s) => s.points.length >= 2).slice(0, 10);
   const sel = chartable[Math.min(exIdx, chartable.length - 1)];
 
-  const shortDay = (iso) =>
-    new Date(iso + 'T12:00:00').toLocaleDateString(undefined, { day: 'numeric', month: 'numeric' });
-  const recent30 = healthLog.slice(-30);
-  const recPoints = (field) =>
-    recent30.filter((h) => h[field]).map((h) => ({ label: shortDay(h.date), value: h[field] }));
+  const health = healthLog.filter((h) => h.date >= start).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const recPoints = (field) => health.filter((h) => h[field]).map((h) => ({ label: shortDate(h.date), value: h[field] }));
   const REC = {
-    hrv: {
-      label: 'HRV',
-      points: recPoints('hrv'),
-      unit: 'ms',
-      color: 'var(--chart-teal)',
-      desc: 'Higher and steady is good.',
-    },
-    rhr: {
-      label: 'Resting HR',
-      points: recPoints('rhr'),
-      unit: '',
-      color: 'var(--chart-amber)',
-      desc: 'Lower and steady is good.',
-    },
-    sleep: {
-      label: 'Sleep',
-      points: recPoints('sleepH'),
-      unit: 'h',
-      color: 'var(--chart-teal)',
-      desc: 'Under ~6h, the coach eases off.',
-    },
-    weight: {
-      label: 'Body wt',
-      points: recPoints('weightKg'),
-      unit: 'kg',
-      color: 'var(--chart-amber)',
-      desc: 'Watch the trend, not the day.',
-    },
+    hrv: { label: 'HRV', points: recPoints('hrv'), unit: 'ms', color: 'var(--green)', desc: 'Higher and steady is good.' },
+    rhr: { label: 'Resting HR', points: recPoints('rhr'), unit: 'bpm', color: 'var(--amber)', desc: 'Lower and steady is good.' },
+    sleep: { label: 'Sleep', points: recPoints('sleepH'), unit: 'h', color: 'var(--green)', desc: 'Under ~6h, the coach eases off.' },
+    weight: { label: 'Body wt', points: recPoints('weightKg'), unit: 'kg', color: 'var(--amber)', desc: 'Watch the trend, not the day.' },
   };
-
-  // only offer recovery modes that have enough data to chart
-  const recModes = Object.entries(REC)
-    .filter(([, m]) => m.points.length >= 2)
-    .map(([v, m]) => [v, m.label]);
-  const activeRec = recModes.some(([v]) => v === recMode)
-    ? recMode
-    : recModes[0]?.[0];
+  const recModes = Object.entries(REC).filter(([, m]) => m.points.length >= 2).map(([v, m]) => [v, m.label]);
+  const activeRec = recModes.some(([v]) => v === recMode) ? recMode : recModes[0]?.[0];
+  const ready = readiness(history, healthLog);
 
   return (
     <div className="screen screen--slide-in">
-      <Header title="Progress" />
+      <TabHeader title="Progress" />
+      <Segmented options={[['8w', '8 Weeks'], ['3m', '3 Months'], ['1y', 'Year']]} value={range} onChange={setRange} />
 
       {history.length < 2 && recModes.length === 0 ? (
-        <div className="center-fill">
-          <p className="body" style={{ color: 'var(--muted)', textAlign: 'center' }}>
-            Log two sessions to unlock charts.
-          </p>
-        </div>
+        <p className="body" style={{ color: 'var(--muted)', textAlign: 'center', padding: '60px 0' }}>
+          Log two sessions to unlock charts.
+        </p>
       ) : (
         <>
-          {history.length >= 2 && (
-          <>
-          <div className="stat-row">
-            <div className="stat-tile">
-              <div className="stat-tile__label">This week</div>
-              <div className="stat-tile__value">{thisWeek} <span className="stat-tile__unit">sessions</span></div>
+          <div className="card summary-card">
+            <div>
+              <span className="caps">Sessions</span>
+              <b>{sum.sessions}</b>
+              <span className="caps" style={{ color: delta == null ? 'var(--muted)' : delta >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                {delta == null ? 'Logged' : `${delta >= 0 ? '↗ +' : '↘ '}${delta}%`}
+              </span>
             </div>
-            <div className="stat-tile">
-              <div className="stat-tile__label">Streak</div>
-              <div className="stat-tile__value">{streak} <span className="stat-tile__unit">wks</span></div>
+            <div>
+              <span className="caps">Volume</span>
+              <b>{sum.volume >= 10000 ? Math.round(sum.volume / 1000) : (sum.volume / 1000).toFixed(1)}T</b>
+              <span className="caps">Lifted</span>
             </div>
-            <div className="stat-tile">
-              <div className="stat-tile__label">Burned</div>
-              <div className="stat-tile__value">{calories.thisWeek.toLocaleString()} <span className="stat-tile__unit">kcal</span></div>
+            <div>
+              <span className="caps">Streak</span>
+              <b>{streak}wk</b>
+              <span className="caps" style={{ color: streak ? 'var(--amber-text)' : 'var(--muted)' }}>{streak ? 'Active' : '—'}</span>
             </div>
           </div>
 
           <div className="card">
-            <div className="card__label">Training days</div>
-            <TrainingHeatmap days={heatDays} />
+            <div className="row-between" style={{ alignItems: 'flex-start' }}>
+              <div>
+                <div className="hero-title" style={{ fontSize: 22 }}>Consistency</div>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Daily training frequency</div>
+              </div>
+              <StatusPill text={`${pct}% compliance`} color={pct >= 80 ? 'var(--green)' : 'var(--amber-text)'} />
+            </div>
+            <div style={{ margin: '12px 0 8px' }}>
+              <TrainingHeatmap days={heatDays} weeks={weeks} />
+            </div>
+            <div className="row-between" style={{ alignItems: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
+              <span>Target: {target} sessions/wk</span>
+              <span className="heat-legend">
+                <span className="caps">Less</span>
+                {[0.4, 0.7, 1].map((o) => <i key={o} style={{ background: `rgba(245,158,11,${o})` }} />)}
+                <span className="caps">More</span>
+              </span>
+            </div>
           </div>
 
-          {chartable.length > 0 && sel && (() => {
-            const e1Points = sel.points.filter((p) => p.e != null);
-            const showE1 = e1Points.length >= 2;
+          {sel && (() => {
+            const e1 = sel.points.filter((p) => p.e != null);
+            const showE1 = e1.length >= 2;
             const metric = exMetric === 'e' && showE1 ? 'e' : 'w';
-            const points =
-              metric === 'e'
-                ? e1Points.map((p) => ({ label: shortDate(p.date), value: p.e }))
-                : sel.points.map((p) => ({ label: shortDate(p.date), value: p.w }));
+            const pts = metric === 'e' ? e1 : sel.points;
+            const vals = pts.map((p) => (metric === 'e' ? p.e : p.w));
+            const latest = vals[vals.length - 1];
+            const first = vals[0];
+            const isPR = latest >= Math.max(...vals) && latest > first;
+            const d = Math.round((latest - first) * 10) / 10;
             return (
-            <div className="card">
-              <div className="row-between" style={{ alignItems: 'center', marginBottom: 10 }}>
-                <div className="card__label" style={{ marginBottom: 0 }}>
-                  Lift trend
-                </div>
-                {showE1 && (
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    {[
-                      ['w', 'Weight'],
-                      ['e', 'e1RM'],
-                    ].map(([v, l]) => (
-                      <button
-                        key={v}
-                        className={'chip' + (metric === v ? ' chip-on' : '')}
-                        onClick={() => setExMetric(v)}
-                      >
-                        {l}
-                      </button>
-                    ))}
+              <div className="card">
+                <div className="row-between" style={{ alignItems: 'flex-start' }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {isPR && <StatusPill text="New PR" color="var(--amber-text)" dot={false} />}
+                      <span className="caps">Lift progression</span>
+                    </div>
+                    <div className="hero-title" style={{ fontSize: 22, marginTop: 4 }}>{sel.name}</div>
                   </div>
-                )}
+                  {showE1 && (
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {[['w', 'Weight'], ['e', '1RM']].map(([v, l]) => (
+                        <button key={v} className={'chip' + (metric === v ? ' chip-on' : '')} onClick={() => setExMetric(v)}>{l}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '6px 0' }}>
+                  <span className="hero-title" style={{ fontSize: 36, color: 'var(--amber-text)' }}>{latest}</span>
+                  <span className="caps" style={{ color: 'var(--amber-text)', fontSize: 15 }}>kg</span>
+                  <span className="caps" style={{ fontSize: 12, color: d >= 0 ? 'var(--green)' : 'var(--red)' }}>
+                    {d >= 0 ? '+' : ''}{d} kg progression
+                  </span>
+                </div>
+                <LineChart points={pts.map((p) => ({ label: shortDate(p.date), value: metric === 'e' ? p.e : p.w }))} unit="kg" />
+                <div className="chip-row" style={{ marginTop: 8 }}>
+                  {chartable.map((s, i) => (
+                    <button key={s.name} className={'chip' + (s === sel ? ' chip-on' : '')} onClick={() => setExIdx(i)}>{s.name}</button>
+                  ))}
+                </div>
               </div>
-              <div className="chip-row">
-                {chartable.map((s, i) => (
-                  <button
-                    key={s.name}
-                    className={'chip' + (s === sel ? ' chip-on' : '')}
-                    onClick={() => setExIdx(i)}
-                  >
-                    {s.name}
-                  </button>
-                ))}
-              </div>
-              <LineChart points={points} unit="kg" />
-            </div>
             );
           })()}
 
           <div className="card">
             <div className="row-between" style={{ alignItems: 'center', marginBottom: 10 }}>
-              <div className="card__label" style={{ marginBottom: 0 }}>Weekly training</div>
+              <span className="caps">Weekly training</span>
               <div style={{ display: 'flex', gap: 6 }}>
-                {[
-                  ['volume', 'Volume'],
-                  ['sessions', 'Sessions'],
-                ].map(([v, l]) => (
-                  <button
-                    key={v}
-                    className={'chip' + (weekMode === v ? ' chip-on' : '')}
-                    onClick={() => setWeekMode(v)}
-                  >
-                    {l}
-                  </button>
+                {[['volume', 'Volume'], ['sessions', 'Sessions']].map(([v, l]) => (
+                  <button key={v} className={'chip' + (weekMode === v ? ' chip-on' : '')} onClick={() => setWeekMode(v)}>{l}</button>
                 ))}
               </div>
             </div>
-            {weekMode === 'volume' ? (
-              <BarChart
-                bars={weeks.map((w) => ({ label: shortDate(w.start), value: w.volume }))}
-                unit="kg"
-              />
-            ) : (
-              <BarChart
-                bars={weeks.map((w) => ({ label: shortDate(w.start), value: w.count }))}
-                color="var(--chart-amber)"
-              />
-            )}
+            {(() => {
+              const buckets = weeklyBuckets(history, Math.min(weeks, 12));
+              return weekMode === 'volume' ? (
+                <BarChart bars={buckets.map((w) => ({ label: shortDate(w.start), value: w.volume }))} unit="kg" />
+              ) : (
+                <BarChart bars={buckets.map((w) => ({ label: shortDate(w.start), value: w.count }))} color="var(--chart-green)" />
+              );
+            })()}
           </div>
 
           {balance.length > 0 && (
             <div className="card">
-              <div className="card__label">Muscle balance · 14 days</div>
+              <SectionHead title="Muscle balance" trailing="14 days" trailingColor="var(--muted)" />
               {(() => {
                 const max = Math.max(...balance.map((b) => b.sets), 1);
                 return balance.map((b) => {
@@ -219,13 +193,10 @@ export default function Progress({ history }) {
                   return (
                     <div key={b.group} className="balance-row">
                       <span className="balance-row__name">{b.group}</span>
-                      <div className="balance-row__track">
-                        <div
-                          className={'balance-row__fill' + (gap ? ' balance-row__fill--gap' : '')}
-                          style={{ width: `${Math.max((b.sets / max) * 100, b.sets ? 6 : 0)}%` }}
-                        />
+                      <div style={{ flex: 1 }}>
+                        <ProgressLine fraction={Math.max(b.sets / max, b.sets ? 0.06 : 0)} color={gap ? 'var(--red)' : 'var(--amber)'} height={7} />
                       </div>
-                      <span className={'mono balance-row__meta' + (gap ? ' balance-row__meta--gap' : '')}>
+                      <span className={'balance-row__meta' + (gap ? ' balance-row__meta--gap' : '')}>
                         {b.sets ? `${b.sets} sets` : `${b.lastDaysAgo}d ago`}
                       </span>
                     </div>
@@ -243,57 +214,51 @@ export default function Progress({ history }) {
                   <div className="row-between">
                     <span className="body" style={{ fontSize: 14 }}>{g.text}</span>
                     {g.target != null && (
-                      <span className="mono" style={{ fontSize: 12.5, color: 'var(--muted)' }}>
-                        {g.current} / {g.target}{g.unit}
-                      </span>
+                      <span className="caps" style={{ fontSize: 15, color: 'var(--amber-text)' }}>{g.current} / {g.target}{g.unit}</span>
                     )}
                   </div>
                   {g.target != null && (
-                    <div className="goal-track">
-                      <div
-                        className={'goal-fill' + (g.current >= g.target ? ' goal-fill--done' : '')}
-                        style={{ width: `${Math.min((g.current / g.target) * 100, 100)}%` }}
-                      />
+                    <div style={{ marginTop: 6 }}>
+                      <ProgressLine fraction={g.current / g.target} color={g.current >= g.target ? 'var(--green)' : 'var(--amber)'} height={7} />
                     </div>
                   )}
                 </div>
               ))}
             </div>
           )}
-          </>
-          )}
 
-          {recModes.length > 0 && (
-            <div className="card">
-              <div className="row-between" style={{ alignItems: 'center', marginBottom: 10 }}>
-                <div className="card__label" style={{ marginBottom: 0 }}>Recovery</div>
-                <div style={{ display: 'flex', gap: 6 }}>
+          {recModes.length > 0 ? (() => {
+            const m = REC[activeRec];
+            const latest = m.points[m.points.length - 1].value;
+            const prior = m.points.slice(-8, -1).map((p) => p.value);
+            const avg = prior.length ? prior.reduce((a, b) => a + b, 0) / prior.length : null;
+            const r1 = (v) => Math.round(v * 10) / 10;
+            return (
+              <div className="card">
+                <div className="row-between" style={{ alignItems: 'center' }}>
+                  <span className="caps"><Icon name="ecg_heart" size={18} style={{ color: 'var(--green)' }} /> Recovery &amp; {m.label}</span>
+                  {ready && <StatusPill text={ready.tone === 'good' ? 'Optimal recovery' : ready.tone === 'ok' ? 'Steady' : 'Strained'} color={toneColor(ready.tone)} />}
+                </div>
+                <div className="row-between" style={{ alignItems: 'baseline', margin: '6px 0' }}>
+                  <span><span className="hero-title" style={{ fontSize: 38 }}>{r1(latest)}</span> <span className="caps">{m.unit}</span></span>
+                  {avg != null && (
+                    <span className="caps" style={{ fontSize: 11, color: 'var(--green)' }}>
+                      {latest - avg >= 0 ? '+' : ''}{r1(latest - avg)}{m.unit} vs 7d avg
+                    </span>
+                  )}
+                </div>
+                <LineChart points={m.points} unit={m.unit} color={m.color} />
+                <div className="chip-row" style={{ marginTop: 8 }}>
                   {recModes.map(([v, l]) => (
-                    <button
-                      key={v}
-                      className={'chip' + (activeRec === v ? ' chip-on' : '')}
-                      onClick={() => setRecMode(v)}
-                    >
-                      {l}
-                    </button>
+                    <button key={v} className={'chip' + (activeRec === v ? ' chip-on' : '')} onClick={() => setRecMode(v)}>{l}</button>
                   ))}
                 </div>
+                <p className="card__detail">{m.desc}</p>
               </div>
-              <LineChart
-                points={REC[activeRec].points}
-                unit={REC[activeRec].unit}
-                color={REC[activeRec].color}
-              />
-              <p className="card__detail">{REC[activeRec].desc}</p>
-            </div>
+            );
+          })() : (
+            <div className="foot-note">Recovery charts appear after two days of Health data.</div>
           )}
-
-          {recModes.length === 0 && (
-            <div className="foot-note">
-              Recovery charts appear after two days of Health data.
-            </div>
-          )}
-
         </>
       )}
     </div>

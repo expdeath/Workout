@@ -597,7 +597,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
             const rounds = Math.max(t.log[exI].length, t.log[partnerI].length);
             const rows = [];
             for (let r = 0; r < rounds; r++) {
-              rows.push(renderRow(a, r, 'var(--teal)'));
+              rows.push(renderRow(a, r, 'var(--green)'));
               rows.push(renderRow(b, r, 'var(--amber)'));
             }
             cards.push(
@@ -605,7 +605,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                 <div className="superset-badge" style={{ marginTop: 0, marginBottom: 6, fontWeight: 600 }}>
                   Superset {ex.superset}
                 </div>
-                {renderHeader(a, 'var(--teal)', true)}
+                {renderHeader(a, 'var(--green)', true)}
                 <div style={{ height: 12 }} />
                 {renderHeader(b, 'var(--amber)', true)}
                 <div className="sets-list">{rows}</div>
@@ -714,7 +714,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
               <>
                 {ex.alt && (
                   <button
-                    className="action-sheet__item action-sheet__item--teal"
+                    className="action-sheet__item action-sheet__item--green"
                     onClick={() => {
                       setSheet(null);
                       swapExercise(sheet.exI);
@@ -724,7 +724,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                   </button>
                 )}
                 <button
-                  className="action-sheet__item action-sheet__item--teal"
+                  className="action-sheet__item action-sheet__item--green"
                   onClick={() => {
                     setSwapDraft('');
                     setSheet({ ...sheet, mode: 'swap' });

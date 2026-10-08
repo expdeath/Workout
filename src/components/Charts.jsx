@@ -1,7 +1,7 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useId } from 'react';
 
 // ── SVG charts ───────────────────────────────────────────────────
-// Specs: 2px lines w/ round caps, ~10% area wash, ≥8px end markers
+// Specs: 2.5px smoothed lines w/ round caps, a fading gradient area, ≥8px end markers
 // with a 2px surface ring, ≤24px columns with 4px rounded data-ends
 // (square at the baseline), hairline solid gridlines, clean y ticks,
 // text in ink tokens (never the series color), tap/hover tooltip.
@@ -9,9 +9,26 @@ import React, { useState, useRef } from 'react';
 const W = 440;
 const H = 180;
 const PAD = { t: 14, r: 14, b: 24, l: 38 };
-const INK_MUTED = '#8A93A6';
-const GRID = '#232B3A';
-const SURFACE = '#161C28';
+const INK_MUTED = '#8391A7';
+const GRID = 'rgba(255,255,255,0.07)';
+const SURFACE = '#131B2E';
+const FONT = 'Space Grotesk, system-ui, sans-serif';
+
+/** Smooth path through the points (Catmull-Rom → cubic Bézier). */
+function smoothPath(pts) {
+  if (pts.length < 3) return pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x},${y}`).join(' ');
+  let d = `M${pts[0][0]},${pts[0][1]}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1 = [p1[0] + (p2[0] - p0[0]) / 6, p1[1] + (p2[1] - p0[1]) / 6];
+    const c2 = [p2[0] - (p3[0] - p1[0]) / 6, p2[1] - (p3[1] - p1[1]) / 6];
+    d += ` C${c1[0]},${c1[1]} ${c2[0]},${c2[1]} ${p2[0]},${p2[1]}`;
+  }
+  return d;
+}
 
 function niceTicks(max) {
   if (max <= 0) return [0, 1];
@@ -34,11 +51,11 @@ function Tooltip({ x, y, lines }) {
   const ty = y - h - 10 < 2 ? y + 12 : y - h - 10;
   return (
     <g pointerEvents="none">
-      <rect x={tx} y={ty} width={w} height={h} rx="5" fill="#0D1119" stroke={GRID} />
+      <rect x={tx} y={ty} width={w} height={h} rx="5" fill="#0A0E16" stroke={GRID} />
       {lines.map((l, i) => (
         <text key={i} x={tx + w / 2} y={ty + 15 + i * 14} textAnchor="middle"
-          fontSize="11" fontFamily="IBM Plex Mono, monospace"
-          fill={i === lines.length - 1 ? '#E8ECF4' : INK_MUTED}>
+          fontSize="11" fontFamily={FONT}
+          fill={i === lines.length - 1 ? '#F8FAFC' : INK_MUTED}>
           {l}
         </text>
       ))}
@@ -59,7 +76,8 @@ function useNearest(count, x0, dx) {
 }
 
 /** Single-series line: points = [{ label, value }], unit e.g. "kg". */
-export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
+export function LineChart({ points, unit = '', color = 'var(--amber)' }) {
+  const gradId = useId();
   const plotW = W - PAD.l - PAD.r;
   const plotH = H - PAD.t - PAD.b;
   const max = Math.max(...points.map((p) => p.value));
@@ -77,7 +95,7 @@ export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
   const xOf = (i) => (points.length > 1 ? PAD.l + i * dx : PAD.l + plotW / 2);
   const { active, svgRef, onMove, clear } = useNearest(points.length, PAD.l, dx || plotW);
 
-  const path = points.map((p, i) => `${i ? 'L' : 'M'}${xOf(i)},${yOf(p.value)}`).join(' ');
+  const path = smoothPath(points.map((p, i) => [xOf(i), yOf(p.value)]));
   const area = `${path} L${xOf(points.length - 1)},${yOf(lo)} L${xOf(0)},${yOf(lo)} Z`;
   const last = points.length - 1;
 
@@ -88,13 +106,19 @@ export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
         <g key={t}>
           <line x1={PAD.l} x2={W - PAD.r} y1={yOf(t)} y2={yOf(t)} stroke={GRID} strokeWidth="1" />
           <text x={PAD.l - 6} y={yOf(t) + 3.5} textAnchor="end" fontSize="10"
-            fontFamily="IBM Plex Mono, monospace" fill={INK_MUTED} style={{ fontVariantNumeric: 'tabular-nums' }}>
+            fontFamily={FONT} fill={INK_MUTED} style={{ fontVariantNumeric: 'tabular-nums' }}>
             {fmtN(t)}
           </text>
         </g>
       ))}
-      <path d={area} fill={color} opacity="0.1" />
-      <path d={path} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      <defs>
+        <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       {active != null && (
         <line x1={xOf(active)} x2={xOf(active)} y1={PAD.t} y2={H - PAD.b} stroke={GRID} strokeWidth="1" />
       )}
@@ -103,15 +127,15 @@ export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
           <circle key={i} cx={xOf(i)} cy={yOf(p.value)} r="4.5" fill={color} stroke={SURFACE} strokeWidth="2" />
         ) : null
       )}
-      <text x={PAD.l} y={H - 8} fontSize="10" fontFamily="IBM Plex Mono, monospace" fill={INK_MUTED}>
+      <text x={PAD.l} y={H - 8} fontSize="10" fontFamily={FONT} fill={INK_MUTED}>
         {points[0].label}
       </text>
-      <text x={W - PAD.r} y={H - 8} textAnchor="end" fontSize="10" fontFamily="IBM Plex Mono, monospace" fill={INK_MUTED}>
+      <text x={W - PAD.r} y={H - 8} textAnchor="end" fontSize="10" fontFamily={FONT} fill={INK_MUTED}>
         {points[last].label}
       </text>
       {active == null && (
         <text x={Math.min(xOf(last) + 8, W - 2)} y={yOf(points[last].value) - 8}
-          textAnchor="end" fontSize="11" fontFamily="IBM Plex Mono, monospace" fill="#C7CEDC">
+          textAnchor="end" fontSize="12" fontWeight="700" fontFamily={FONT} fill="#F8FAFC">
           {fmtN(points[last].value)}{unit}
         </text>
       )}
@@ -128,7 +152,7 @@ export function LineChart({ points, unit = '', color = 'var(--chart-amber)' }) {
  * (Mon-top), teal intensity by session volume tertile.
  * `days` is a Map of 'YYYY-MM-DD' → { volume, count }.
  */
-export function TrainingHeatmap({ days, weeks = 16 }) {
+export function TrainingHeatmap({ days, weeks = 16, cellHeight }) {
   const MS = 86400000;
   const now = new Date();
   const shift = (now.getDay() + 6) % 7; // Mon=0
@@ -143,11 +167,12 @@ export function TrainingHeatmap({ days, weeks = 16 }) {
       const iso = new Date(dt.getTime() + 12 * 3600000).toISOString().slice(0, 10);
       const future = dt.getTime() > now.getTime() + 12 * 3600000;
       const day = days.get(iso);
-      const level = !day ? 0 : day.volume > t2 ? 3 : day.volume > t1 ? 2 : 1;
+      const level = !day ? 0 : !day.volume ? 'cardio' : day.volume > t2 ? 3 : day.volume > t1 ? 2 : 1;
       cells.push({ iso, level, future, title: day ? `${iso} — ${day.count} session${day.count > 1 ? 's' : ''}${day.volume ? `, ${day.volume.toLocaleString()}kg` : ''}` : iso });
     }
   }
-  const fill = ['var(--bg-pill)', 'rgba(57,208,184,0.35)', 'rgba(57,208,184,0.65)', 'var(--teal)'];
+  // amber by session size; a logged day with no lifting (cardio) is green
+  const fill = ['var(--bg-high)', 'rgba(245,158,11,0.4)', 'rgba(245,158,11,0.7)', 'var(--amber)'];
   return (
     <div
       style={{
@@ -155,7 +180,7 @@ export function TrainingHeatmap({ days, weeks = 16 }) {
         gridAutoFlow: 'column',
         gridTemplateRows: 'repeat(7, 1fr)',
         gridTemplateColumns: `repeat(${weeks}, 1fr)`,
-        gap: 3,
+        gap: weeks > 26 ? 2 : 4,
       }}
     >
       {cells.map((c) => (
@@ -163,9 +188,9 @@ export function TrainingHeatmap({ days, weeks = 16 }) {
           key={c.iso}
           title={c.title}
           style={{
-            aspectRatio: '1',
-            borderRadius: 3,
-            background: c.future ? 'transparent' : fill[c.level],
+            ...(cellHeight ? { height: cellHeight } : { aspectRatio: '1' }),
+            borderRadius: weeks > 26 ? 2 : 3,
+            background: c.future ? 'var(--bg-input)' : c.level === 'cardio' ? 'var(--chart-green)' : fill[c.level],
           }}
         />
       ))}
@@ -174,7 +199,7 @@ export function TrainingHeatmap({ days, weeks = 16 }) {
 }
 
 /** Single-series columns: bars = [{ label, value }], unit e.g. "kg". */
-export function BarChart({ bars, unit = '', color = 'var(--chart-teal)' }) {
+export function BarChart({ bars, unit = '', color = 'var(--chart-amber)' }) {
   const plotW = W - PAD.l - PAD.r;
   const plotH = H - PAD.t - PAD.b;
   const ticks = niceTicks(Math.max(...bars.map((b) => b.value), 1));
@@ -203,7 +228,7 @@ export function BarChart({ bars, unit = '', color = 'var(--chart-teal)' }) {
         <g key={t}>
           <line x1={PAD.l} x2={W - PAD.r} y1={yOf(t)} y2={yOf(t)} stroke={GRID} strokeWidth="1" />
           <text x={PAD.l - 6} y={yOf(t) + 3.5} textAnchor="end" fontSize="10"
-            fontFamily="IBM Plex Mono, monospace" fill={INK_MUTED} style={{ fontVariantNumeric: 'tabular-nums' }}>
+            fontFamily={FONT} fill={INK_MUTED} style={{ fontVariantNumeric: 'tabular-nums' }}>
             {fmtN(t)}
           </text>
         </g>
@@ -213,13 +238,13 @@ export function BarChart({ bars, unit = '', color = 'var(--chart-teal)' }) {
       ))}
       {bars.map((b, i) => (
         <text key={i} x={xOf(i) + bw / 2} y={H - 8} textAnchor="middle" fontSize="9.5"
-          fontFamily="IBM Plex Mono, monospace" fill={INK_MUTED}>
+          fontFamily={FONT} fill={INK_MUTED}>
           {b.label}
         </text>
       ))}
       {active == null && bars[last].value > 0 && (
         <text x={xOf(last) + bw / 2} y={yOf(bars[last].value) - 6} textAnchor="middle"
-          fontSize="11" fontFamily="IBM Plex Mono, monospace" fill="#C7CEDC">
+          fontSize="11" fontFamily={FONT} fill="#C7CEDC">
           {fmtN(bars[last].value)}{unit}
         </text>
       )}
