@@ -43,7 +43,7 @@ struct AddPastView: View {
                     QLabel(text: "Exercises")
                     if let last = lastOfType {
                         Button("Copy last \(sessionType)") { copyFrom(last) }
-                            .font(Theme.body(13.5, weight: .medium)).foregroundStyle(Theme.teal)
+                            .font(Theme.body(13.5, weight: .medium)).foregroundStyle(Theme.green)
                             .padding(.top, 14)
                     }
                 }
@@ -106,7 +106,7 @@ struct AddPastView: View {
                     case "check":
                         Button { exercises[exI].sets[setI].done.toggle() } label: {
                             Text(s.done ? "✓" : " ").font(Theme.meta(14, weight: .medium)).frame(width: 34, height: 34)
-                                .foregroundStyle(Theme.bg).background(s.done ? Theme.teal : Theme.bgPill)
+                                .foregroundStyle(Theme.bg).background(s.done ? Theme.green : Theme.bgPill)
                                 .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
                         }
                         .accessibilityLabel(s.done ? "Mark not done" : "Mark done")
@@ -134,7 +134,7 @@ struct AddPastView: View {
         .padding(.bottom, 10)
     }
 
-    private func link(_ t: String, color: Color = Theme.teal, _ action: @escaping () -> Void) -> some View {
+    private func link(_ t: String, color: Color = Theme.green, _ action: @escaping () -> Void) -> some View {
         Button(t, action: action).font(Theme.body(13.5, weight: .medium)).foregroundStyle(color)
     }
 

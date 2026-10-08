@@ -15,23 +15,27 @@ struct ChartPoint: Identifiable, Equatable {
 struct LineChartView: View {
     let points: [ChartPoint]
     var unit = ""
-    var color: Color = Theme.chartAmber
+    var color: Color = Theme.amber
+    var height: CGFloat = 180
     @State private var selected: String?
 
     var body: some View {
         Chart {
             ForEach(Array(points.enumerated()), id: \.offset) { i, p in
                 AreaMark(x: .value("When", "\(i)|\(p.label)"), y: .value("Value", p.value))
-                    .foregroundStyle(color.opacity(0.1))
+                    .foregroundStyle(LinearGradient(colors: [color.opacity(0.35), color.opacity(0)], startPoint: .top, endPoint: .bottom))
+                    .interpolationMethod(.catmullRom)
                 LineMark(x: .value("When", "\(i)|\(p.label)"), y: .value("Value", p.value))
                     .foregroundStyle(color)
-                    .lineStyle(StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
+                    .interpolationMethod(.catmullRom)
+                    .lineStyle(StrokeStyle(lineWidth: 2.5, lineCap: .round, lineJoin: .round))
                 if i == points.count - 1 || selected == "\(i)|\(p.label)" {
                     PointMark(x: .value("When", "\(i)|\(p.label)"), y: .value("Value", p.value))
                         .foregroundStyle(color)
                         .symbolSize(70)
                         .annotation(position: .top) {
-                            Text("\(fmt(p.value))\(unit)").font(Theme.meta(11)).foregroundStyle(Theme.text)
+                            Text("\(fmt(p.value))\(unit)").font(Theme.head(13, weight: .bold)).foregroundStyle(Theme.text)
+                                .padding(.horizontal, 6).padding(.vertical, 2).background(Theme.bgHigh).clipShape(Capsule())
                         }
                 }
             }
@@ -48,7 +52,8 @@ struct LineChartView: View {
                 AxisValueLabel().font(Theme.meta(10)).foregroundStyle(Theme.muted)
             }
         }
-        .frame(height: 180)
+        .chartYScale(domain: .automatic(includesZero: false))
+        .frame(height: height)
     }
 
     /// First, middle, last — enough to read the time span without clutter.
@@ -65,7 +70,7 @@ struct LineChartView: View {
 struct BarChartView: View {
     let bars: [ChartPoint]
     var unit = ""
-    var color: Color = Theme.chartTeal
+    var color: Color = Theme.chartAmber
     @State private var selected: String?
 
     var body: some View {
@@ -99,8 +104,9 @@ struct BarChartView: View {
     }
 }
 
-/// Training-day heatmap: last `weeks` weeks, Monday on top, deeper teal
-/// = bigger session (TrainingHeatmap in Charts.jsx).
+/// Training-day heatmap: last `weeks` weeks, Monday on top, deeper
+/// amber = bigger session (TrainingHeatmap in Charts.jsx). Cells grow or
+/// shrink to fill the width.
 struct TrainingHeatmapView: View {
     /// date (yyyy-MM-dd) → total volume that day
     let days: [String: Int]
@@ -113,31 +119,45 @@ struct TrainingHeatmapView: View {
         let start = cal.date(byAdding: .day, value: -7 * (weeks - 1), to: thisMonday) ?? today
         let maxVol = max(days.values.max() ?? 1, 1)
         let f: DateFormatter = { let f = DateFormatter(); f.locale = Locale(identifier: "en_US_POSIX"); f.dateFormat = "yyyy-MM-dd"; f.timeZone = .current; return f }()
+        let gap: CGFloat = weeks > 26 ? 2 : 4
         GeometryReader { geo in
-            let gap: CGFloat = 3
-            let cell = min((geo.size.width - gap * CGFloat(weeks - 1)) / CGFloat(weeks), 18)
+            let cell = (geo.size.width - gap * CGFloat(weeks - 1)) / CGFloat(weeks)
             HStack(alignment: .top, spacing: gap) {
                 ForEach(0..<weeks, id: \.self) { w in
                     VStack(spacing: gap) {
                         ForEach(0..<7, id: \.self) { d in
                             let date = cal.date(byAdding: .day, value: w * 7 + d, to: start) ?? today
                             let vol = days[f.string(from: date)]
-                            RoundedRectangle(cornerRadius: 3)
-                                .fill(color(vol, maxVol: maxVol, future: date > today))
+                            RoundedRectangle(cornerRadius: min(3, cell / 4))
+                                .fill(Self.color(vol, maxVol: maxVol, future: date > today))
                                 .frame(width: cell, height: cell)
                         }
                     }
                 }
             }
         }
-        .frame(height: 7 * 18 + 6 * 3)
+        .aspectRatio(CGFloat(weeks) / 7, contentMode: .fit)
+        .frame(maxHeight: 220)
     }
 
-    private func color(_ vol: Int?, maxVol: Int, future: Bool) -> Color {
-        if future { return .clear }
-        guard let vol else { return Theme.bgPill }
-        // logged but no volume (cardio / mobility) → the lightest step
-        let t = vol <= 0 ? 0.25 : 0.35 + 0.65 * Double(vol) / Double(maxVol)
-        return Theme.chartTeal.opacity(t)
+    static func color(_ vol: Int?, maxVol: Int, future: Bool) -> Color {
+        if future { return Theme.bgInput }
+        guard let vol else { return Theme.bgHigh }
+        // logged but no volume (cardio / mobility) → green
+        if vol <= 0 { return Theme.chartGreen.opacity(0.8) }
+        return Theme.amber.opacity(0.35 + 0.65 * Double(vol) / Double(maxVol))
+    }
+}
+
+/// LESS ▢▢▢▢ MORE key under a heatmap.
+struct HeatLegend: View {
+    var body: some View {
+        HStack(spacing: 4) {
+            Text("Less").capsLabel(Theme.dim, size: 10.5)
+            ForEach([0.35, 0.6, 0.8, 1.0], id: \.self) { o in
+                RoundedRectangle(cornerRadius: 2).fill(Theme.amber.opacity(o)).frame(width: 10, height: 10)
+            }
+            Text("More").capsLabel(Theme.dim, size: 10.5)
+        }
     }
 }

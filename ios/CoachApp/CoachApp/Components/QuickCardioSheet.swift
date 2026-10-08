@@ -65,7 +65,7 @@ struct QuickCardioSheet: View {
                     .padding(.vertical, 15)
             }
             .foregroundStyle(Theme.bg)
-            .background(canSave ? Theme.teal : Theme.teal.opacity(0.4))
+            .background(canSave ? Theme.green : Theme.green.opacity(0.4))
             .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
             .disabled(!canSave)
         }
@@ -80,7 +80,7 @@ struct QuickCardioSheet: View {
 private struct QuickCardioFieldStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(Theme.mono(15))
+            .font(Theme.data(15))
             .multilineTextAlignment(.center)
             .foregroundStyle(Theme.text)
             .padding(10)

@@ -38,8 +38,9 @@
 		<string>BarlowCondensed-Bold.ttf</string>
 		<string>BarlowCondensed-SemiBold.ttf</string>
 		<string>BarlowCondensed-Medium.ttf</string>
-		<string>IBMPlexMono-Regular.ttf</string>
-		<string>IBMPlexMono-Medium.ttf</string>
+		<string>SpaceGrotesk-Regular.ttf</string>
+		<string>SpaceGrotesk-Medium.ttf</string>
+		<string>SpaceGrotesk-Bold.ttf</string>
 	</array>
 	<key>UIBackgroundModes</key>
 	<array>

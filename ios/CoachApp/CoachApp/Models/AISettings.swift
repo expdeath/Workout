@@ -20,11 +20,14 @@ struct AISettings: RawPreserving, Equatable {
     var barKg: Double? = nil
     /// Available plate sizes, comma-separated as typed ("20,15,10,5,2.5").
     var plates: String? = nil
+    /// Sessions per week the user aims for (Settings → Weekly target).
+    /// nil = derive from a "N sessions a week" goal, else 3.
+    var weeklyTarget: Int? = nil
     var updatedAt: Double = 0
     var source: RawSource? = nil
 
     enum CodingKeys: String, CodingKey {
-        case profile, goals, equipment, routine, cueNotes, barKg, plates, updatedAt
+        case profile, goals, equipment, routine, cueNotes, barKg, plates, weeklyTarget, updatedAt
     }
 
     init(profile: String = "", goals: String = "", equipment: String = "", routine: String = "", cueNotes: [String: String] = [:], barKg: Double? = nil, plates: String? = nil, updatedAt: Double = 0) {
@@ -42,6 +45,7 @@ struct AISettings: RawPreserving, Equatable {
         cueNotes = c.lenient([String: String].self, .cueNotes) ?? [:]
         barKg = c.lenientDouble(.barKg)
         plates = c.lenientString(.plates)
+        weeklyTarget = c.lenientDouble(.weeklyTarget).map { Int($0) }
         updatedAt = c.lenientDouble(.updatedAt) ?? 0
         try rememberSource(from: decoder)
     }
@@ -55,6 +59,7 @@ struct AISettings: RawPreserving, Equatable {
         try c.encode(cueNotes, forKey: .cueNotes)
         try c.encodeIfPresent(barKg, forKey: .barKg)
         try c.encodeIfPresent(plates, forKey: .plates)
+        try c.encodeIfPresent(weeklyTarget, forKey: .weeklyTarget)
         try c.encode(updatedAt, forKey: .updatedAt)
     }
 

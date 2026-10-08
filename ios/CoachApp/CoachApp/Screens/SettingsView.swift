@@ -1,13 +1,16 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Ports src/screens/Settings.jsx — account (feedback, sign out), AI
-/// coach setup (+ the shared Gemini key, owner only), GitHub backup +
-/// your data (export / CSV / import / clear), plates & bar, Apple Watch.
+/// Ports src/screens/Settings.jsx — a profile card, then grouped rows
+/// (preferences, devices, data & account); each row opens its form in a
+/// sheet: AI coach setup (+ the shared Gemini key, owner only), weekly
+/// target, Apple Health, plates & bar, GitHub backup, your data
+/// (export / CSV / import / clear), feedback, about. Sign out at the end.
 struct SettingsView: View {
     @Environment(AppState.self) private var appState
 
-    @State private var open: Set<String> = []
+    @State private var detail: String?
+    @State private var target = Dashboard.weeklyTarget(LocalStore.shared.backup.aiSettings)
     // coach setup
     @State private var key = Cloud.shared.geminiKey
     @State private var showKey = false
@@ -34,6 +37,7 @@ struct SettingsView: View {
     @State private var feedbackMsg = ""
     @State private var sendingFb = false
     @State private var confirmOut = false
+    @State private var signOutMsg = ""
     // apple health
     @State private var healthBusy = false
     @State private var healthMsg = ""
@@ -42,24 +46,136 @@ struct SettingsView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 10) {
-                ScreenHeader(title: "Settings")
-                if account != nil { accountSection }
-                coachSection
-                backupSection
-                gymSection
-                watchSection
-                section("about", "About", status: nil) {
-                    Text("COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.")
-                        .font(Theme.body(14)).foregroundStyle(Theme.muted)
+            VStack(alignment: .leading, spacing: 18) {
+                TabHeader(title: "Settings")
+                if account != nil { profileCard }
+
+                group("Preferences", note: "Coach logic") {
+                    SettingsRow(icon: "brain.head.profile", title: "AI Coach", subtitle: coachStatus) { detail = "coach" }
+                    SettingsRow(icon: "target", tint: Theme.green, title: "Weekly target", subtitle: "Streak, consistency and the target bar") { detail = "target" } trailing: {
+                        Text("\(Dashboard.weeklyTarget(LocalStore.shared.backup.aiSettings))/wk").capsLabel(Theme.amberText, size: 14)
+                    }
                 }
+
+                group("Devices & sensors", note: watchStatus.hasPrefix("Synced") ? "All synced" : nil) {
+                    SettingsRow(icon: "applewatch", tint: Theme.green, title: "Apple Watch & Health", subtitle: watchStatus) { detail = "watch" }
+                    SettingsRow(icon: "scalemass", title: "Barbell & plate setup", subtitle: plateSummary) { detail = "gym" } trailing: {
+                        Text("\(Helpers.fmtKg(Double(barKg) ?? Helpers.defaultBarKg))kg bar").capsLabel(Theme.textBody, size: 13)
+                    }
+                }
+
+                group("Data & account", note: "Cloud vault") {
+                    SettingsRow(icon: "icloud", tint: Theme.green, title: "Cloud backup", subtitle: backupStatus) { detail = "sync" }
+                    SettingsRow(icon: "square.and.arrow.up", title: "Export workout log", subtitle: "CSV · JSON backup · import") { detail = "data" }
+                    if account != nil {
+                        SettingsRow(icon: "bubble.left.and.text.bubble.right", title: "Send feedback", subtitle: "Straight to Abhi") { detail = "account" }
+                    }
+                    SettingsRow(icon: "info.circle", tint: Theme.muted, title: "About COACH", subtitle: nil) { detail = "about" }
+                }
+
+                if account != nil {
+                    Button {
+                        if confirmOut {
+                            Task {
+                                if let refusal = await appState.signOut() {
+                                    signOutMsg = refusal
+                                    confirmOut = false
+                                }
+                            }
+                        } else { confirmOut = true }
+                    } label: {
+                        Label(confirmOut ? "Tap again — this wipes this device" : "Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(OutlineButtonStyle(color: Theme.red))
+                    if !signOutMsg.isEmpty { Text(signOutMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amberText) }
+                    Text("Signing out clears this device, including exercise photos. Your log stays in the cloud.")
+                        .font(Theme.body(12.5)).foregroundStyle(Theme.dim)
+                }
+                Text("COACH · v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
+                    .capsLabel(Theme.dim, size: 11).frame(maxWidth: .infinity)
             }
-            .padding(16)
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
         }
-        .scrollDismissesKeyboard(.interactively)
         .coachScreen()
-        .onAppear { if Cloud.shared.geminiKey.isEmpty { open.insert("coach") } }
+        .onAppear { if Cloud.shared.geminiKey.isEmpty { detail = "coach" } }
         .task { eventCount = await Cloud.shared.countEvents() }
+        .sheet(item: $detail) { id in detailSheet(id) }
+    }
+
+    // MARK: - Profile + groups
+
+    private var profileCard: some View {
+        Button { appState.sheet = .profile } label: {
+            HStack(spacing: 14) {
+                ZStack(alignment: .bottomTrailing) {
+                    Avatar(name: appState.displayName, size: 54)
+                    Circle().fill(Theme.green).frame(width: 12, height: 12).overlay(Circle().stroke(Theme.bgCard, lineWidth: 3))
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 5) {
+                        Text(appState.displayName).font(Theme.body(18, weight: .bold)).foregroundStyle(Theme.text).lineLimit(1)
+                        if account?.admin == true { Image(systemName: "checkmark.seal.fill").font(.system(size: 14)).foregroundStyle(Theme.amberText) }
+                    }
+                    HStack(spacing: 6) {
+                        StatusPill(text: account?.admin == true ? "Admin" : "Member", color: Theme.amberText, dot: false)
+                        Text("· Sync active").font(Theme.meta(12.5)).foregroundStyle(Theme.muted)
+                    }
+                }
+                Spacer()
+                Image(systemName: "pencil").font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.muted)
+                    .frame(width: 38, height: 38).background(Theme.bgHigh).clipShape(Circle())
+            }
+            .padding(14)
+            .background(Theme.bgCard)
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.border))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Edit profile")
+    }
+
+    private func group(_ title: String, note: String?, @ViewBuilder _ rows: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            SectionHead(title: title, trailing: note, trailingColor: note == "All synced" ? Theme.green : Theme.muted)
+                .padding(.horizontal, 4)
+            RowGroup { rows() }
+        }
+    }
+
+    private static let titles = ["coach": "AI Coach", "target": "Weekly target", "watch": "Apple Health", "gym": "Plates & Bar",
+                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About"]
+
+    private func detailSheet(_ id: String) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text(Self.titles[id] ?? "").font(Theme.head(26, weight: .bold)).textCase(.uppercase).tracking(0.6)
+                Spacer()
+                IconButton(icon: "xmark", label: "Close") { detail = nil }
+            }
+            .padding(.horizontal, 20).padding(.top, 14)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    switch id {
+                    case "coach": coachSection
+                    case "target": targetSection
+                    case "watch": watchSection
+                    case "gym": gymSection
+                    case "sync": backupSection
+                    case "data": dataSection
+                    case "account": accountSection
+                    default:
+                        Text("COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.")
+                            .font(Theme.body(14)).foregroundStyle(Theme.muted)
+                    }
+                }
+                .padding(.horizontal, 20).padding(.bottom, 24)
+            }
+            .scrollDismissesKeyboard(.interactively)
+        }
+        .coachScreen()
+        .presentationDetents([.large])
+        .presentationDragIndicator(.visible)
         .sheet(item: Binding(get: { shareURL.map(ShareItem.init) }, set: { shareURL = $0?.url })) { ShareSheet(url: $0.url) }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             guard case .success(let url) = result else { return }
@@ -67,10 +183,51 @@ struct SettingsView: View {
         }
     }
 
+    // MARK: - Row statuses
+
+    private var coachStatus: String {
+        Cloud.shared.geminiKey.isEmpty
+            ? (account?.admin == true ? "No API key yet — add one to start" : "No API key yet — ask Abhi")
+            : (LocalStore.shared.backup.aiSettings.profile.isEmpty ? "Ready · add your profile" : "Ready · profile set")
+    }
+
+    private var watchStatus: String {
+        if LocalStore.shared.backup.health.contains(where: { $0.date == Helpers.todayStr() }) { return "Synced today" }
+        return HealthKitSync.requested ? "Connected · nothing today yet" : "Not connected"
+    }
+
+    private var plateSummary: String {
+        (Helpers.parsePlates(plates) ?? Helpers.defaultPlates).map(Helpers.fmtKg).joined(separator: " / ") + " kg plates"
+    }
+
+    private var backupStatus: String {
+        let last = GitHubSync.lastSync()
+        if last?.status == "ok", let at = ISO8601DateFormatter.withMillis.date(from: last!.at) ?? ISO8601DateFormatter().date(from: last!.at) {
+            return "Live sync · backed up \(at.formatted(date: .abbreviated, time: .shortened))"
+        }
+        if last?.status == "error" { return "Backup failed: \(last?.message ?? "")" }
+        return repo.isEmpty || token.isEmpty ? "Live sync · no GitHub backup" : "Live sync · backup pending"
+    }
+
+    private var targetSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            QLabel(text: "Sessions per week", value: "\(target)")
+            Stepper("Weekly target", value: $target, in: 1...14).labelsHidden()
+            Text("Your streak counts weeks that hit this, and Progress measures consistency against it.")
+                .font(Theme.body(13.5)).foregroundStyle(Theme.muted)
+            Button("Save target") {
+                LocalStore.shared.updateAISettings { $0.weeklyTarget = target }
+                LocalStore.shared.logEvent(type: "weekly_target_saved", data: ["target": .number(Double(target))])
+                detail = nil
+            }
+            .buttonStyle(BigButtonStyle()).padding(.top, 10)
+        }
+    }
+
     // MARK: - Sections
 
     private var accountSection: some View {
-        section("account", "Account", status: account?.email ?? account?.name ?? "") {
+        VStack(alignment: .leading, spacing: 10) {
             QLabel(text: "Send feedback to Abhi")
             TextField("", text: Binding(get: { feedback }, set: { feedback = String($0.prefix(2000)) }),
                       prompt: Text("Bugs, ideas, anything…").foregroundStyle(Theme.dim), axis: .vertical)
@@ -78,28 +235,12 @@ struct SettingsView: View {
             Button(sendingFb ? "Sending…" : "Send feedback") { Task { await sendFeedback() } }
                 .buttonStyle(BigButtonStyle())
                 .disabled(sendingFb || feedback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            if !feedbackMsg.isEmpty { Text(feedbackMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
-            Button(confirmOut ? "Tap again — this wipes this device" : "Sign out") {
-                if confirmOut {
-                    Task {
-                        if let refusal = await appState.signOut() {
-                            feedbackMsg = refusal
-                            confirmOut = false
-                        }
-                    }
-                } else { confirmOut = true }
-            }
-            .buttonStyle(BigButtonStyle(danger: true)).padding(.top, 8)
-            Text("Signing out clears this device, including exercise photos. Your log stays in the cloud.")
-                .font(Theme.body(13)).foregroundStyle(Theme.dim)
+            if !feedbackMsg.isEmpty { Text(feedbackMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amberText) }
         }
     }
 
     private var coachSection: some View {
-        let status = Cloud.shared.geminiKey.isEmpty
-            ? (account?.admin == true ? "No API key yet — add one to start" : "No API key yet — ask Abhi to add one")
-            : "Ready"
-        return section("coach", "AI Coach", status: status) {
+        return section {
             if account?.admin == true {
                 QLabel(text: "Gemini API key (shared)")
                 HStack {
@@ -140,15 +281,8 @@ struct SettingsView: View {
     }
 
     private var backupSection: some View {
-        let last = GitHubSync.lastSync()
-        let status: String = {
-            if last?.status == "ok", let at = ISO8601DateFormatter.withMillis.date(from: last!.at) ?? ISO8601DateFormatter().date(from: last!.at) {
-                return "Backed up \(at.formatted(date: .abbreviated, time: .shortened))"
-            }
-            if last?.status == "error" { return "Backup failed: \(last?.message ?? "")" }
-            return repo.isEmpty || token.isEmpty ? "Synced · no GitHub backup" : "Synced · backup pending"
-        }()
-        return section("sync", "Sync & Backup", status: status) {
+        return section {
+            Text(backupStatus).font(Theme.meta(13.5)).foregroundStyle(Theme.green)
             QLabel(text: "GitHub backup")
             TextField("", text: $repo, prompt: Text("your-username/workout-data").foregroundStyle(Theme.dim))
                 .textInputAutocapitalization(.never).autocorrectionDisabled().coachInput()
@@ -173,7 +307,11 @@ struct SettingsView: View {
             if !syncMsg.isEmpty { Text(syncMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
             Text("Fine-grained token, your data repo only, Contents: read & write.")
                 .font(Theme.body(13)).foregroundStyle(Theme.muted)
+        }
+    }
 
+    private var dataSection: some View {
+        section {
             QLabel(text: "Your data")
             Text("\(appState.history.count) sessions · \(eventCount.map(String.init) ?? "…") events")
                 .font(Theme.meta(13)).foregroundStyle(Theme.muted)
@@ -191,8 +329,7 @@ struct SettingsView: View {
     }
 
     private var gymSection: some View {
-        let shownPlates = (Helpers.parsePlates(plates) ?? Helpers.defaultPlates).map(Helpers.fmtKg).joined(separator: "/")
-        return section("gym", "Plates & Bar", status: "\(Helpers.fmtKg(Double(barKg) ?? Helpers.defaultBarKg))kg bar · \(shownPlates)") {
+        section {
             QLabel(text: "Bar weight (kg)")
             TextField("", text: Binding(get: { barKg }, set: { barKg = $0.filter { $0.isNumber || $0 == "." } }))
                 .keyboardType(.decimalPad).coachInput()
@@ -214,11 +351,11 @@ struct SettingsView: View {
     private var watchSection: some View {
         let today = Cloud.shared.stateValue("healthText-\(Helpers.todayStr())")
         let text: String? = { if case .string(let t)? = today { return t }; return nil }()
-        return section("watch", "Apple Health", status: text == nil ? (HealthKitSync.requested ? "Connected · nothing today yet" : "Not connected") : "Received today",
-                       statusColor: text == nil ? nil : Theme.teal) {
+        return section {
+            Text(watchStatus).font(Theme.meta(13.5)).foregroundStyle(watchStatus == "Synced today" ? Theme.green : Theme.muted)
             if let text {
                 Text("Today: \(Stats.fmtHealthLine(Stats.parseHealthNumbers(text)).isEmpty ? text : Stats.fmtHealthLine(Stats.parseHealthNumbers(text)))")
-                    .font(Theme.body(14)).foregroundStyle(Theme.teal)
+                    .font(Theme.body(14)).foregroundStyle(Theme.green)
             }
             if !HealthKitSync.isAvailable {
                 Text("Apple Health isn't available on this device.").font(Theme.body(13)).foregroundStyle(Theme.muted)
@@ -295,30 +432,9 @@ struct SettingsView: View {
 
     // MARK: - Pieces
 
-    /// `.section` — collapsible card with a status line.
-    private func section(_ id: String, _ title: String, status: String?, statusColor: Color? = nil, @ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) { if open.contains(id) { open.remove(id) } else { open.insert(id) } }
-            } label: {
-                HStack(alignment: .center) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(title).font(Theme.body(16, weight: .semibold)).foregroundStyle(Theme.text)
-                        if let status, !status.isEmpty { Text(status).font(Theme.meta(13)).foregroundStyle(statusColor ?? Theme.muted).multilineTextAlignment(.leading).lineLimit(1) }
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.down").font(.system(size: 13, weight: .semibold)).rotationEffect(.degrees(open.contains(id) ? 180 : 0)).foregroundStyle(Theme.muted)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if open.contains(id) { content() }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.bgCard)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+    /// The body of one settings sheet.
+    private func section(@ViewBuilder _ content: () -> some View) -> some View {
+        VStack(alignment: .leading, spacing: 10) { content() }
     }
 
     private func area(_ text: Binding<String>, _ placeholder: String, max: Int, minLines: Int = 3) -> some View {

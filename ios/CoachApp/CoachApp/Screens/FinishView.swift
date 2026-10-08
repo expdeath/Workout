@@ -80,7 +80,7 @@ extension PRRecord: Hashable {
 
 /// One burst of falling pieces — the web app's .confetti-burst.
 private struct ConfettiBurst: View {
-    private static let colors: [Color] = [Theme.amber, Theme.teal, Theme.red, Color(hex: 0x7EA6F5), Color(hex: 0xE4C1F9)]
+    private static let colors: [Color] = [Theme.amber, Theme.green, Theme.red, Color(hex: 0x7EA6F5), Color(hex: 0xE4C1F9)]
     @State private var fall = false
 
     var body: some View {

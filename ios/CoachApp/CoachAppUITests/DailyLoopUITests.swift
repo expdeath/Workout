@@ -26,8 +26,8 @@ final class DailyLoopUITests: XCTestCase {
     }
 
     func testCheckInUpdatesReadinessAndSurfacesAIError() {
-        XCTAssertTrue(button("Start check-in").waitForExistence(timeout: 10))
-        button("Start check-in").tap()
+        XCTAssertTrue(button("Start workout").waitForExistence(timeout: 10))
+        button("Start workout").tap()
         XCTAssertTrue(text("Check-in").waitForExistence(timeout: 5))
 
         // normal day: 50 + energy 7 (+10) + OK sleep (+5) + no soreness (+10)
@@ -66,7 +66,7 @@ final class DailyLoopUITests: XCTestCase {
         app.swipeDown()
         app.swipeDown()
         button("Back").tap()
-        XCTAssertTrue(button("Start check-in").waitForExistence(timeout: 5))
+        XCTAssertTrue(button("Start workout").waitForExistence(timeout: 5))
     }
 
     func testBackdatedQuickCardioDoesNotBecomeLastSession() {
@@ -74,12 +74,14 @@ final class DailyLoopUITests: XCTestCase {
 
         // today's run
         logCardio(open: "Run", title: "Log a run", save: "🏃 Save run", minutes: "30", day: nil)
-        XCTAssertTrue(text("Run").waitForExistence(timeout: 5))
 
-        // yesterday's ride — logged later, but must sort before today's run
+        // yesterday's ride — logged later, but must sort after today's run
         logCardio(open: "Ride", title: "Log a ride", save: "🚴 Save ride", minutes: "45", day: "Yesterday")
-        XCTAssertTrue(text("Run").waitForExistence(timeout: 5))
-        XCTAssertFalse(text("Cycle").exists, "backdated ride replaced today's run as Last session")
+        button("Log").tap()
+        let run = text("Running"), ride = text("Cycling")
+        XCTAssertTrue(run.waitForExistence(timeout: 5))
+        XCTAssertTrue(ride.exists)
+        XCTAssertLessThan(run.frame.minY, ride.frame.minY, "backdated ride sorted above today's run")
         XCTAssertTrue(text("RPE 6").exists)
     }
 
@@ -129,7 +131,7 @@ final class DailyLoopUITests: XCTestCase {
 
         // back home, today's session done
         XCTAssertTrue(button("Plan another session").waitForExistence(timeout: 10))
-        XCTAssertTrue(text("Push").exists, "today's Push is the new Last session")
+        XCTAssertTrue(text("Completed").exists, "today's focus shows the finished session")
     }
 
     /// Log → detail → edit a set → add a past workout → delete a session.
@@ -213,12 +215,21 @@ final class DailyLoopUITests: XCTestCase {
 
         // settings: sections expand
         app.buttons["Settings"].tap()
-        XCTAssertTrue(text("About").waitForExistence(timeout: 5))
-        app.staticTexts["Plates & Bar"].tap()
-        XCTAssertTrue(button("Save gym setup").waitForExistence(timeout: 3))
-        app.staticTexts["Account"].tap()
-        XCTAssertTrue(button("Send feedback").waitForExistence(timeout: 3))
+        XCTAssertTrue(text("About COACH").waitForExistence(timeout: 5))
         XCTAssertTrue(button("Sign out").exists)
+        text("Barbell & plate setup").tap()
+        XCTAssertTrue(button("Save gym setup").waitForExistence(timeout: 3))
+        button("Close").tap()
+        text("Send feedback").tap()
+        XCTAssertTrue(button("Send feedback").waitForExistence(timeout: 3))
+        button("Close").tap()
+
+        // notifications + profile open from the tab header
+        app.buttons.matching(NSPredicate(format: "label BEGINSWITH 'Notifications'")).firstMatch.tap()
+        XCTAssertTrue(button("Close").waitForExistence(timeout: 3))
+        button("Close").tap()
+        button("Profile").tap()
+        XCTAssertTrue(text("Display name").waitForExistence(timeout: 3))
     }
 
     private func logCardio(open: String, title: String, save: String, minutes: String, day: String?) {

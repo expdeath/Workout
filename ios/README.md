@@ -105,7 +105,7 @@ ios/CoachApp/
                                src/utils/account.js
     Screens/                  one SwiftUI view per src/screens/*.jsx
     Components/                one SwiftUI view per src/components/*.jsx
-    Resources/Fonts/           bundled Barlow Condensed + IBM Plex Mono
+    Resources/Fonts/           bundled Barlow Condensed + Space Grotesk
                                .ttf files (see "Gotcha: fonts" below)
   CoachAppTests/               XCTest target, 64 tests
 ```
@@ -219,16 +219,15 @@ its `init(from:)` (lenient helpers), its `encodeKnown`, and its
 `CodingKeys`; `LenientDecodingTests` / `FirestoreCodecTests` show the
 pattern.
 
-### Fonts: only 2 of 3 are bundled
-The website uses Barlow Condensed (headers), IBM Plex Mono (numbers/
-mono UI), and Archivo (body text) — see `src/index.css`'s `@import`.
-Only the first two are bundled here (`Resources/Fonts/`, registered via
-`Info.plist`'s `UIAppFonts`); body text currently falls back to the
-system font (San Francisco). Archivo only ships as a variable font
-(`Archivo[wdth,wght].ttf`) upstream, which complicates per-weight
-`Font.custom(...)` lookups — worth doing properly if/when visual
-fidelity on body text matters, but San Francisco reads close enough
-that it wasn't blocking.
+### Fonts and icons
+Both apps use Barlow Condensed (titles, numbers, tracked caps labels)
+and Space Grotesk (body text). Here they're bundled as static weights in
+`Resources/Fonts/` (registered via `project.yml`'s `UIAppFonts`; Space
+Grotesk's OFL licence sits next to it) and reached through
+`Theme.head` / `Theme.body` / `Theme.meta` / `Theme.data`. Icons are SF
+Symbols; the website uses a bundled subset of Material Symbols instead
+(`src/assets/fonts/`). Colors and fonts mirror `src/index.css`'s
+`:root` tokens one-for-one — change both together.
 
 ### Health data: HealthKit next; the Watch Shortcut meanwhile
 Decided 2026-10-07: native HealthKit replaces the Shortcut → GitHub

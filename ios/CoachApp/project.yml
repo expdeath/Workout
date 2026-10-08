@@ -49,8 +49,9 @@ targets:
           - BarlowCondensed-Bold.ttf
           - BarlowCondensed-SemiBold.ttf
           - BarlowCondensed-Medium.ttf
-          - IBMPlexMono-Regular.ttf
-          - IBMPlexMono-Medium.ttf
+          - SpaceGrotesk-Regular.ttf
+          - SpaceGrotesk-Medium.ttf
+          - SpaceGrotesk-Bold.ttf
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.expdeath.CoachApp

@@ -73,6 +73,49 @@ enum DebugSeed {
         }
         // today's Watch row → check-in shows "Watch data loaded" with details open
         LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), hrv: 52, rhr: 57, raw: "Sleep 7h10m · HRV 52 · RHR 57 · Steps 8400"))
+        if ProcessInfo.processInfo.environment["COACH_DEBUG_RICH"] == "1" { seedRich() }
+    }
+
+    /// `COACH_DEBUG_RICH=1`: eight weeks of push/pull/legs + walks with
+    /// slowly rising weights and daily Watch rows — enough for every
+    /// dashboard card to have something to show in screenshots. (The UI
+    /// tests use the plain seed above.)
+    private static func seedRich() {
+        let days: [(Int, String)] = (1...56).compactMap { d in
+            let dow = d % 7
+            return dow == 1 || dow == 3 || dow == 5 ? (d, ["Push", "Pull", "Legs"][(d / 2) % 3]) : (dow == 6 ? (d, "Cardio") : nil)
+        }
+        let lifts: [String: [(String, Double)]] = [
+            "Push": [("Flat Dumbbell Press", 20), ("Incline Machine Press", 30), ("Cable Triceps Pushdown", 18)],
+            "Pull": [("Chest Supported Row", 36), ("Lat Pulldown", 50), ("Cable Curl", 14)],
+            "Legs": [("Leg Press", 90), ("Romanian Deadlift", 40), ("Leg Curl", 30)],
+        ]
+        for (d, type) in days {
+            let date = Helpers.daysAgoStr(d)
+            let progress = Double(56 - d) / 56
+            if type == "Cardio" {
+                let km = String(format: "%.1f", 3 + progress * 2)
+                let plan = Plan(sessionType: "Cardio", title: "Outdoor walk", exercises: [Plan.Exercise(name: "Outdoor Walk", sets: 1, reps: "40min")])
+                LocalStore.shared.seed(session: Session(id: "\(date)#9", date: date, startedAt: 0, checkin: nil, plan: plan,
+                                                        log: [[SetLog(done: true, time: "45", dist: km)]], finished: true,
+                                                        fin: FinishInfo(rpe: 4), durationMin: 45))
+                continue
+            }
+            let exs = lifts[type] ?? []
+            let plan = Plan(sessionType: type, title: "", exercises: exs.map { Plan.Exercise(name: $0.0, sets: 3, reps: "8-12", rpe: "8") })
+            let log = exs.map { ex in
+                let w = Helpers.fmtKg(((ex.1 * (1 + 0.5 * progress)) / 2.5).rounded() * 2.5)
+                return (0..<3).map { i in SetLog(weight: w, reps: "\(12 - i)", done: true) }
+            }
+            LocalStore.shared.seed(session: Session(id: "\(date)#1", date: date, startedAt: 0, checkin: nil, plan: plan, log: log,
+                                                    finished: true, fin: FinishInfo(rpe: 7), durationMin: 60 + d % 4 * 5))
+        }
+        for d in 1...30 {
+            let wave = sin(Double(d) / 3)
+            LocalStore.shared.mergeHealth(HealthRow(date: Helpers.daysAgoStr(d), hrv: 48 + 6 * wave, rhr: 58 - 2 * wave,
+                                                    sleepH: 7 + 0.6 * wave, weightKg: 78 - Double(30 - d) * 0.05))
+        }
+        LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), hrv: 56, rhr: 55, sleepH: 7.6))
     }
 }
 #endif

@@ -1,19 +1,18 @@
 import SwiftUI
 
-/// Ports src/screens/Home.jsx — the daily landing screen.
+/// Ports src/screens/Home.jsx — the Today tab: readiness, this week's
+/// numbers, the start button, quick launchers, today's plan and the
+/// coach's notes.
 struct HomeView: View {
     @Environment(AppState.self) private var appState
     @State private var quickCardioKind: String? = nil
+    /// the readiness notice was dismissed on this day (yyyy-MM-dd)
+    @AppStorage("coach:noticeDismissed") private var noticeDismissed = ""
 
-    private var name: String? {
-        Account.current()?.name.split(separator: " ").first.map(String.init)
-    }
-
-    private var last: Session? { appState.history.last }
     private var doneToday: Bool { appState.todayPlan?.finished == true }
     private var inProgress: Bool { appState.todayPlan != nil && appState.todayPlan?.finished == false }
-    private var weekStats: (thisWeek: Int, streak: Int) { Stats.weekStats(appState.history) }
-    private var deload: Stats.DeloadSignal? { Stats.deloadSignal(appState.history) }
+    private var settings: AISettings { LocalStore.shared.backup.aiSettings }
+    private var health: [HealthRow] { LocalStore.shared.backup.health }
 
     private var showReview: Bool {
         guard let r = appState.weeklyReview else { return false }
@@ -25,20 +24,32 @@ struct HomeView: View {
     }
 
     var body: some View {
+        let target = Dashboard.weeklyTarget(settings)
+        let week = Stats.weekStats(appState.history, target: target)
+        let kcal = Calories.stats(appState.history, bodyKg: Calories.latestBodyWeightKg(health)).thisWeek
+        let readiness = Dashboard.readiness(appState.history, health)
+
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                hero
-                if !appState.history.isEmpty { statRow }
-                actionButtons
-                if let deload { deloadCard(deload) }
-                if let last { lastSessionCard(last) }
+            VStack(alignment: .leading, spacing: 16) {
+                TabHeader(title: "Today")
+                hero(readiness)
+                HStack(spacing: 10) {
+                    StatBlock(value: "\(week.thisWeek)", label: "This week")
+                    StatBlock(value: "\(week.streak)", label: "Streak (wks)", color: Theme.amberText)
+                    StatBlock(value: kcal >= 10000 ? "\(kcal / 1000)k" : "\(kcal)", label: "Active kcal")
+                }
+                startButton
+                quickLaunch
+                focus(target: target)
+                if let r = readiness, noticeDismissed != Helpers.todayStr() { notice(r) }
                 if showMonthly, let r = appState.monthlyReport { monthlyCard(r) }
                 if showReview, let r = appState.weeklyReview { weeklyCard(r) }
-                // sync status lives in Settings; Home only speaks up when it fails
-                if let sync = appState.syncInfo, sync.state == "error" { syncFootnote(sync) }
+                // sync status lives in Settings; Today only speaks up when it fails
+                if let sync = appState.syncInfo, sync.state == "error" {
+                    Text("Sync error — \(sync.message ?? "")").font(Theme.meta(12.5)).foregroundStyle(Theme.red)
+                }
             }
-            .padding(16)
+            .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
         }
         .coachScreen()
         .sheet(item: $quickCardioKind) { kind in
@@ -51,75 +62,62 @@ struct HomeView: View {
 
     // MARK: Sections
 
-    private var header: some View {
-        Text("COACH")
-            .font(Theme.head(18, weight: .bold))
-            .tracking(4)
-            .foregroundStyle(Theme.amber)
-    }
-
-    private var hero: some View {
+    private func hero(_ r: Dashboard.Readiness?) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(Date().formatted(.dateTime.weekday(.wide).month(.wide).day()))
-                .font(Theme.body(14))
-                .foregroundStyle(Theme.muted)
-            Text(heroTitle)
-                .font(Theme.head(36, weight: .bold))
-                .foregroundStyle(Theme.text)
+            Text(Date().formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
+                .capsLabel()
+            HStack(alignment: .center, spacing: 10) {
+                Text(heroTitle)
+                    .font(Theme.head(36, weight: .bold)).textCase(.uppercase).tracking(0.6)
+                    .foregroundStyle(Theme.text).lineLimit(2).minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                if doneToday {
+                    StatusPill(text: "Done", color: Theme.green)
+                } else if let r {
+                    StatusPill(text: r.label, color: tone(r.tone))
+                }
+            }
         }
-        .padding(.top, 6)
     }
 
     private var heroTitle: String {
+        let name = appState.firstName
         if doneToday { return name.map { "Nice work, \($0)." } ?? "Session done." }
         if inProgress { return "\(appState.todayPlan?.plan.sessionType ?? "Session") in progress" }
         return name.map { "Ready, \($0)?" } ?? "Ready?"
     }
 
-    private var statRow: some View {
-        HStack(spacing: 10) {
-            statTile("This week", "\(weekStats.thisWeek)", "sessions")
-            statTile("Streak", "\(weekStats.streak)", "wks")
+    private func tone(_ t: Dashboard.Tone) -> Color {
+        switch t {
+        case .good: return Theme.green
+        case .ok: return Theme.amberText
+        case .low: return Theme.red
         }
     }
 
-    private func statTile(_ label: String, _ value: String, _ unit: String) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(label).font(Theme.body(13, weight: .medium)).foregroundStyle(Theme.muted)
-            HStack(alignment: .lastTextBaseline, spacing: 4) {
-                Text(value).font(Theme.head(30, weight: .bold)).foregroundStyle(Theme.text)
-                Text(unit).font(Theme.body(13)).foregroundStyle(Theme.muted)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Theme.bgCard)
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border))
-        .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private var actionButtons: some View {
-        VStack(spacing: 10) {
-            Button {
-                if inProgress {
-                    appState.screen = .workout
-                } else {
-                    Task {
-                        appState.ci = await appState.prepareCheckin()
-                        appState.error = ""
-                        appState.screen = .checkIn
-                    }
+    private var startButton: some View {
+        Button {
+            if inProgress {
+                appState.screen = .workout
+            } else {
+                Task {
+                    appState.ci = await appState.prepareCheckin()
+                    appState.error = ""
+                    appState.screen = .checkIn
                 }
-            } label: {
-                Text(inProgress ? "Resume \(appState.todayPlan?.plan.sessionType ?? "")" : (doneToday ? "Plan another session" : "Start check-in"))
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(BigButtonStyle())
+        } label: {
+            Text(inProgress ? "Resume \(appState.todayPlan?.plan.sessionType ?? "")" : (doneToday ? "Plan another session" : "Start workout"))
+        }
+        .buttonStyle(BigButtonStyle(icon: "play.fill"))
+    }
 
-            // one row of shortcuts: skip the check-in, or log cardio directly
+    private var quickLaunch: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHead(title: "Quick launch", trailing: "Manual activity") { appState.screen = .addPast }
             HStack(spacing: 8) {
                 if !inProgress {
-                    shortcut("bolt.fill", "Quick start", tint: Theme.amber) {
+                    LaunchTile(icon: "timer", label: "Quick") {
                         Task {
                             let checkin = await appState.prepareCheckin()
                             appState.ci = checkin
@@ -131,96 +129,116 @@ struct HomeView: View {
                     }
                 }
                 ForEach([("run", "figure.run", "Run"), ("cycle", "bicycle", "Ride"), ("walk", "figure.walk", "Walk"), ("hike", "figure.hiking", "Hike")], id: \.0) { kind, icon, label in
-                    shortcut(icon, label) { quickCardioKind = kind }
+                    LaunchTile(icon: icon, label: label, tint: Theme.green) { quickCardioKind = kind }
                 }
             }
         }
     }
 
-    private func shortcut(_ icon: String, _ label: String, tint: Color = Theme.teal, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            VStack(spacing: 4) {
-                Image(systemName: icon).font(.system(size: 18, weight: .medium)).foregroundStyle(tint)
-                    .frame(height: 22)
-                Text(label).font(Theme.body(11.5, weight: .medium)).foregroundStyle(Theme.muted)
-                    .lineLimit(1).minimumScaleFactor(0.8)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(Theme.bgCard)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+    // MARK: Today's focus
+
+    @ViewBuilder
+    private func focus(target: Int) -> some View {
+        let t = appState.todayPlan
+        VStack(alignment: .leading, spacing: 10) {
+            SectionHead(title: "Today's focus",
+                        trailing: t == nil ? "Not planned" : (t!.finished ? "Completed" : "Scheduled"),
+                        trailingColor: t?.finished == true ? Theme.green : (t == nil ? Theme.muted : Theme.amberText))
+            if let t { planCard(t) } else { emptyFocus }
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
     }
 
-    private func card(@ViewBuilder _ content: () -> some View) -> some View {
-        VStack(alignment: .leading, spacing: 6) { content() }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Theme.bgCard)
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.border))
-            .clipShape(RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func deloadCard(_ d: Stats.DeloadSignal) -> some View {
-        card {
-            Label("Deload suggested", systemImage: "exclamationmark.triangle.fill")
-                .font(Theme.body(14, weight: .semibold)).foregroundStyle(Theme.amber)
-            Text(d.reason).font(Theme.body(14.5)).foregroundStyle(Theme.textBody)
-        }
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.amber))
-    }
-
-    private func lastSessionCard(_ s: Session) -> some View {
-        card {
-            HStack(alignment: .firstTextBaseline) {
-                Text(s.plan.sessionType).font(Theme.head(20, weight: .bold))
-                Text(Helpers.fmtDate(s.date)).font(Theme.meta(13)).foregroundStyle(Theme.muted)
+    private func planCard(_ t: Session) -> some View {
+        let p = t.plan
+        let total = t.log.reduce(0) { $0 + $1.count }
+        let done = t.log.reduce(0) { $0 + $1.filter(\.done).count }
+        let load = Dashboard.projectedLoad(p, appState.history)
+        let meta = [p.estTimeMin > 0 ? "\(p.estTimeMin) min" : nil,
+                    Dashboard.averageRPE(p).map { "RPE \(Helpers.fmtKg($0))" },
+                    "\(p.exercises.count) exercises"].compactMap { $0 }.joined(separator: " • ")
+        return CoachCard {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(p.title.isEmpty ? p.sessionType : p.title)
+                        .font(Theme.head(26, weight: .bold)).textCase(.uppercase).tracking(0.5)
+                        .foregroundStyle(Theme.text).lineLimit(2)
+                    Text(meta).capsLabel(Theme.amberText, size: 13)
+                }
                 Spacer()
-                if let fin = s.fin {
-                    Text("RPE \(fin.rpe)").font(Theme.meta(13, weight: .medium)).foregroundStyle(Theme.amber)
+                IconWell(icon: "arrow.up.left.and.arrow.down.right")
+            }
+            ProgressLine(fraction: total > 0 ? Double(done) / Double(total) : 0, color: t.finished ? Theme.green : Theme.amber)
+                .padding(.vertical, 6)
+            HStack {
+                Text(load > 0 ? "Target load: \(Self.kgShort(load)) kg volume" : "\(done)/\(total) sets done")
+                    .font(Theme.meta(13)).foregroundStyle(Theme.muted)
+                Spacer()
+                Button { appState.screen = .workout } label: {
+                    HStack(spacing: 6) {
+                        Text(t.finished ? "View" : (done > 0 ? "Resume" : "Start"))
+                        Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold))
+                    }
+                    .font(Theme.head(15, weight: .bold)).textCase(.uppercase).tracking(1)
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Theme.bgHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
                 }
-            }
-            if let debrief = s.debrief, !debrief.isEmpty {
-                Text(debrief).font(Theme.body(14)).foregroundStyle(Theme.muted).lineLimit(3)
+                .buttonStyle(.plain)
+                .disabled(t.finished)
+                .opacity(t.finished ? 0.5 : 1)
             }
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            appState.detailSession = s
-            appState.screen = .historyDetail
+    }
+
+    private var emptyFocus: some View {
+        CoachCard {
+            Text("No plan yet").font(Theme.head(24, weight: .bold)).textCase(.uppercase).tracking(0.5)
+            Text("A one-minute check-in and the coach builds today's session around your recovery.")
+                .font(Theme.body(14)).foregroundStyle(Theme.muted)
         }
+    }
+
+    /// 12400 → "12.4k"
+    static func kgShort(_ kg: Int) -> String {
+        kg >= 1000 ? String(format: "%.1fk", Double(kg) / 1000).replacingOccurrences(of: ".0k", with: "k") : "\(kg)"
+    }
+
+    // MARK: Notices + reviews
+
+    private func notice(_ r: Dashboard.Readiness) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            IconWell(icon: r.tone == .low ? "exclamationmark.triangle" : "checkmark.shield", tint: tone(r.tone), size: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(r.tone == .low ? "Go easier today" : r.tone == .good ? "Recovery looks good" : "Normal recovery")
+                    .capsLabel(tone(r.tone), size: 12)
+                Text(r.note).font(Theme.body(14)).foregroundStyle(Theme.textBody).lineLimit(3)
+            }
+            Spacer(minLength: 0)
+            Button { noticeDismissed = Helpers.todayStr() } label: {
+                Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
+                    .frame(width: 28, height: 28)
+            }
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Theme.bgPill)
+        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
     }
 
     private func monthlyCard(_ r: MonthlyReportCache) -> some View {
-        card {
-            CardLabel(text: "Monthly report", color: Theme.amber)
-            Text("\(r.sum.count) sessions · \(r.sum.volume.formatted())kg lifted")
-                .font(Theme.meta(13)).foregroundStyle(Theme.muted)
+        CoachCard {
+            SectionHead(title: "Monthly report", trailing: "\(r.sum.count) sessions")
             ExpandableText(text: r.text)
         }
     }
 
     private func weeklyCard(_ r: WeeklyReviewCache) -> some View {
-        card {
-            CardLabel(text: "Weekly review")
+        CoachCard {
+            SectionHead(title: "Weekly review", trailing: "\(r.count) sessions")
             ExpandableText(text: r.text)
         }
-    }
-
-    private func syncFootnote(_ sync: SyncInfo) -> some View {
-        Group {
-            switch sync.state {
-            case "syncing": Text("Syncing…")
-            case "ok": Text("Synced")
-            default: Text("Sync error — \(sync.message ?? "")")
-            }
-        }
-        .font(Theme.meta(12.5))
-        .foregroundStyle(Theme.red)
-        .padding(.top, 4)
     }
 }
 

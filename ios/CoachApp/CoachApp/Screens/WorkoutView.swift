@@ -141,8 +141,7 @@ struct WorkoutView: View {
         return HStack(spacing: 0) {
             BackButton(label: "Home") { appState.screen = .home }
             Spacer()
-            Text("\(done)/\(total) sets").font(Theme.meta(14, weight: .medium))
-                .foregroundStyle(done == total && total > 0 ? Theme.teal : Theme.muted)
+            Text("\(done)/\(total) sets").capsLabel(done == total && total > 0 ? Theme.green : Theme.muted, size: 15)
             Spacer()
             IconButton(icon: "bubble.left", label: "Ask the coach") { appState.chatOpen = true }
             IconButton(icon: "xmark", label: "Cancel this session") {
@@ -204,15 +203,14 @@ struct WorkoutView: View {
             if g.count == 2 {
                 let a = exMeta(t, g[0]), b = exMeta(t, g[1])
                 exCard {
-                    Text("Superset \(a.ex.superset)")
-                        .font(Theme.meta(12.5, weight: .semibold)).foregroundStyle(Theme.teal).padding(.bottom, 6)
-                    exHeader(a, dot: Theme.teal, paired: true)
+                    Text("Superset \(a.ex.superset)").capsLabel(Theme.green, size: 12).padding(.bottom, 6)
+                    exHeader(a, dot: Theme.green, paired: true)
                     Spacer().frame(height: 12)
                     exHeader(b, dot: Theme.amber, paired: true)
                     let rounds = max(t.log[safe: a.exI]?.count ?? 0, t.log[safe: b.exI]?.count ?? 0)
                     VStack(spacing: 8) {
                         ForEach(0..<rounds, id: \.self) { r in
-                            setRow(t, a, r, dot: Theme.teal)
+                            setRow(t, a, r, dot: Theme.green)
                             setRow(t, b, r, dot: Theme.amber)
                         }
                     }
@@ -281,7 +279,7 @@ struct WorkoutView: View {
                         Spacer(minLength: 0)
                         Button { platesFor = platesFor == m.exI ? nil : m.exI } label: {
                             Image(systemName: "scalemass").font(.system(size: 14))
-                                .foregroundStyle(platesFor == m.exI ? Theme.amber : Theme.teal)
+                                .foregroundStyle(platesFor == m.exI ? Theme.amber : Theme.green)
                         }
                         .accessibilityLabel("Plate breakdown for \(Helpers.fmtKg(target))kg")
                     }
@@ -289,7 +287,7 @@ struct WorkoutView: View {
             }
             if platesFor == m.exI, let target = m.plateTarget { plateLine(target) }
             if !paired && !ex.superset.isEmpty {
-                Text("Superset \(ex.superset)").font(Theme.meta(12.5, weight: .medium)).foregroundStyle(Theme.teal)
+                Text("Superset \(ex.superset)").font(Theme.meta(12.5, weight: .medium)).foregroundStyle(Theme.green)
             }
             if !ex.notes.isEmpty {
                 Text(ex.notes).font(Theme.body(13.5)).foregroundStyle(Theme.muted).lineLimit(2)
@@ -331,7 +329,7 @@ struct WorkoutView: View {
                     .font(Theme.meta(14, weight: .medium))
                     .frame(width: 34, height: 34)
                     .foregroundStyle(set.done ? Theme.bg : Theme.text)
-                    .background(set.done ? Theme.teal : Theme.bgPill)
+                    .background(set.done ? Theme.green : Theme.bgPill)
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
             }
             .accessibilityLabel(set.done ? "Set \(setI + 1) done" : "Set \(setI + 1)")
@@ -374,7 +372,7 @@ struct WorkoutView: View {
 
     private func effortColor(_ e: String) -> Color {
         switch e {
-        case "easy": return Theme.teal
+        case "easy": return Theme.green
         case "good": return Theme.amber
         case "grind": return Theme.red
         default: return Theme.dim
@@ -385,7 +383,7 @@ struct WorkoutView: View {
         TextField("", text: Binding(get: { value }, set: set), prompt: Text(placeholder).foregroundStyle(Theme.dim))
             .keyboardType(decimal ? .decimalPad : .numberPad)
             .multilineTextAlignment(.center)
-            .font(Theme.mono(15))
+            .font(Theme.data(15))
             .frame(maxWidth: 76)
             .padding(.vertical, 8)
             .background(Theme.bgInput)
@@ -478,9 +476,9 @@ struct WorkoutView: View {
             switch s.mode {
             case .menu:
                 if let ex, !ex.alt.isEmpty {
-                    sheetItem("Swap to \(ex.alt)", icon: "arrow.left.arrow.right", color: Theme.teal) { sheet = nil; appState.swapExercise(s.exI) }
+                    sheetItem("Swap to \(ex.alt)", icon: "arrow.left.arrow.right", color: Theme.green) { sheet = nil; appState.swapExercise(s.exI) }
                 }
-                sheetItem("Did something else…", icon: "pencil.line", color: Theme.teal) { swapDraft = ""; sheet = SheetState(exI: s.exI, mode: .swap) }
+                sheetItem("Did something else…", icon: "pencil.line", color: Theme.green) { swapDraft = ""; sheet = SheetState(exI: s.exI, mode: .swap) }
                 sheetItem("How-to video", icon: "play.rectangle") {
                     sheet = nil
                     let q = "how to \(ex?.name ?? "") proper form".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
@@ -564,7 +562,7 @@ struct WorkoutView: View {
                             if appState.applyHarder(o) { harder?.applied.insert(i) }
                         }
                         .font(Theme.head(14, weight: .bold))
-                        .foregroundStyle(applied ? Theme.muted : Theme.teal)
+                        .foregroundStyle(applied ? Theme.muted : Theme.green)
                         .disabled(applied)
                     }
                     .padding(.top, 6)
@@ -669,13 +667,13 @@ struct WorkoutView: View {
                 let frac = max(0, min(1, Double(remaining) / timer.total))
                 ZStack(alignment: .leading) {
                     GeometryReader { geo in
-                        (remaining <= 0 ? Theme.teal : Theme.amber).opacity(0.25)
+                        (remaining <= 0 ? Theme.green : Theme.amber).opacity(0.25)
                             .frame(width: geo.size.width * frac)
                     }
                     HStack {
                         Text(remaining <= 0 ? "GO" : String(format: "%d:%02d", max(remaining, 0) / 60, max(remaining, 0) % 60))
-                            .font(Theme.mono(22, weight: .medium))
-                            .foregroundStyle(remaining <= 0 ? Theme.teal : Theme.text)
+                            .font(Theme.data(22))
+                            .foregroundStyle(remaining <= 0 ? Theme.green : Theme.text)
                         Text(remaining <= 0 ? "Next set · \(timer.exName)" : timer.exName)
                             .font(Theme.body(14)).foregroundStyle(Theme.muted).lineLimit(1)
                         Spacer()
@@ -717,7 +715,7 @@ struct WorkoutView: View {
             .font(Theme.body(13, weight: on ? .semibold : .regular))
             .foregroundStyle(on ? Theme.bg : Theme.text)
             .padding(.horizontal, 11).padding(.vertical, 7)
-            .background(on ? Theme.teal : Theme.bgPill)
+            .background(on ? Theme.green : Theme.bgPill)
             .clipShape(Capsule())
     }
 }

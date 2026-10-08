@@ -19,6 +19,12 @@ enum Screen: Equatable {
     case settings
 }
 
+/// App-wide sheets opened from the tab header.
+enum AppSheet: String, Identifiable {
+    case notifications, profile
+    var id: String { rawValue }
+}
+
 struct SyncInfo: Equatable {
     var state: String // "syncing" | "ok" | "error"
     var at: Date?
@@ -67,6 +73,12 @@ final class AppState {
     var history: [Session] = []
     var todayPlan: Session? = nil
     var chatOpen = false
+    var sheet: AppSheet? = nil
+    /// When the notification inbox was last opened (ms) — state `notifSeenAt`.
+    var notifSeenAt: Double = 0
+    /// Name the user chose in Edit profile — state `displayName` (shared
+    /// with the web app); falls back to the Google account name.
+    var displayNameOverride: String? = nil
     var detailSession: Session? = nil
     var error = ""
     var statusMsg = ""
@@ -203,6 +215,35 @@ final class AppState {
         todayPlan = t?.date == Helpers.todayStr() ? t : nil
         weeklyReview = decodeState(WeeklyReviewCache.self, "weeklyReview")
         monthlyReport = decodeState(MonthlyReportCache.self, "monthlyReport")
+        if case .number(let n)? = Cloud.shared.stateValue("notifSeenAt") { notifSeenAt = n }
+        if case .string(let n)? = Cloud.shared.stateValue("displayName"), !n.isEmpty { displayNameOverride = n } else { displayNameOverride = nil }
+    }
+
+    // MARK: - Profile + notifications
+
+    var displayName: String {
+        displayNameOverride ?? Account.current().map { $0.name.isEmpty ? $0.email : $0.name } ?? ""
+    }
+
+    var firstName: String? {
+        displayName.split(separator: " ").first.map(String.init)
+    }
+
+    func setDisplayName(_ name: String) {
+        let n = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(40))
+        displayNameOverride = n.isEmpty ? nil : n
+        Cloud.shared.setState("displayName", n.isEmpty ? nil : .string(n))
+    }
+
+    var notifications: [Dashboard.Notice] {
+        Dashboard.notifications(history, weekly: weeklyReview, monthly: monthlyReport)
+    }
+
+    var unreadNotifications: Int { notifications.filter { $0.at > notifSeenAt }.count }
+
+    func markNotificationsSeen() {
+        notifSeenAt = (Date().timeIntervalSince1970 * 1000).rounded()
+        Cloud.shared.setState("notifSeenAt", .number(notifSeenAt))
     }
 
     /// Another device (or this one) changed the account.

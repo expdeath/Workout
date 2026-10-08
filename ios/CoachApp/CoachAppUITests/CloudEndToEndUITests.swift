@@ -55,11 +55,11 @@ final class CloudEndToEndUITests: XCTestCase {
             type(app.textFields["min"], "25")
             text("Log a run").tap()
             button("🏃 Save run").tap()
-            XCTAssertTrue(text("Run").waitForExistence(timeout: 10), "Run is the last session")
+            XCTAssertTrue(text("Log a run").waitForNonExistence(timeout: 10), "run saved")
         }
 
         XCTContext.runActivity(named: "check-in → real AI plan → workout") { _ in
-            button("Start check-in").tap()
+            button("Start workout").tap()
             XCTAssertTrue(text("Check-in").waitForExistence(timeout: 10))
             let build = button("Build session")
             scrollTo(build)
@@ -77,7 +77,7 @@ final class CloudEndToEndUITests: XCTestCase {
             scrollTo(finish, max: 25)
             finish.tap()
             XCTAssertTrue(text("How did it go?").waitForExistence(timeout: 5))
-            type(app.textFields["e.g. leg press felt light, curls brutal"], "e2e verify")
+            type(app.textFields["e.g. curls felt brutal"], "e2e verify")
             button("Save session").tap()
             XCTAssertTrue(button("Plan another session").waitForExistence(timeout: 15))
         }
@@ -136,21 +136,22 @@ final class CloudEndToEndUITests: XCTestCase {
 
         XCTContext.runActivity(named: "settings: gym setup + feedback") { _ in
             app.buttons["Settings"].tap()
-            XCTAssertTrue(text("About").waitForExistence(timeout: 5))
-            app.staticTexts["Plates & Bar"].tap()
+            XCTAssertTrue(text("About COACH").waitForExistence(timeout: 5))
+            app.staticTexts["Barbell & plate setup"].tap()
             let plates = app.textFields.matching(NSPredicate(format: "value CONTAINS '2.5'")).firstMatch
             XCTAssertTrue(plates.waitForExistence(timeout: 5))
             replace(plates, with: "20, 10, 5")
             button("Save gym setup").tap()
             XCTAssertTrue(button("✓ Saved").waitForExistence(timeout: 5))
-            app.staticTexts["Plates & Bar"].tap()
+            button("Close").tap()
 
-            app.staticTexts["Account"].tap()
-            let fbQuery = NSPredicate(format: "placeholderValue BEGINSWITH 'What worked'")
+            app.staticTexts["Send feedback"].tap()
+            let fbQuery = NSPredicate(format: "placeholderValue BEGINSWITH 'Bugs, ideas'")
             let fb = app.textViews.matching(fbQuery).firstMatch.exists ? app.textViews.matching(fbQuery).firstMatch : app.textFields.matching(fbQuery).firstMatch
             type(fb, "e2e verify feedback")
             button("Send feedback").tap()
             XCTAssertTrue(text("✓ Sent — thank you!").waitForExistence(timeout: 15))
+            button("Close").tap()
         }
 
         XCTContext.runActivity(named: "sign out → login screen") { _ in

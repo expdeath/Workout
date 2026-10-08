@@ -84,8 +84,7 @@ struct CheckInView: View {
                     Image(systemName: "chevron.down")
                         .rotationEffect(.degrees(showMore ? 180 : 0))
                 }
-                .font(Theme.body(14.5, weight: .semibold))
-                .foregroundStyle(Theme.muted)
+                .capsLabel()
                 .padding(.vertical, 13)
                 .padding(.horizontal, 2)
                 .contentShape(Rectangle())
@@ -129,7 +128,7 @@ struct CheckInView: View {
             HStack {
                 if autoFilled, !(appState.ci.health ?? "").isEmpty {
                     Label("Loaded from Watch", systemImage: "applewatch")
-                        .font(Theme.body(13)).foregroundStyle(Theme.teal)
+                        .font(Theme.body(13)).foregroundStyle(Theme.green)
                 }
                 Spacer()
                 Chip(title: "Paste", action: pasteHealth)

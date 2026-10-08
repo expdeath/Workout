@@ -37,30 +37,17 @@ struct RootView: View {
             }
         }
         .preferredColorScheme(.dark) // the web app is dark-only; match it
-        // the coach is one tap away from every tab (the workout and
-        // session detail have their own chat entry; check-in and finish
-        // stay focused)
-        .overlay(alignment: .bottomTrailing) {
-            if !appState.chatOpen, isTab {
-                Button { appState.chatOpen = true } label: {
-                    Image(systemName: "bubble.left.fill").font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(Theme.bg)
-                        .frame(width: 52, height: 52)
-                        .background(Theme.amber)
-                        .clipShape(Circle())
-                        .shadow(color: .black.opacity(0.4), radius: 8, y: 3)
-                }
-                .accessibilityLabel("Ask the coach")
-                .padding(.trailing, 16).padding(.bottom, 12)
-            }
-        }
-        // room under the last card so the coach button never covers it
-        .contentMargins(.bottom, isTab ? 72 : 0, for: .scrollContent)
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if isTab { TabBar() }
         }
         .sheet(isPresented: Binding(get: { appState.chatOpen }, set: { appState.chatOpen = $0 })) {
             CoachChatView().environment(appState)
+        }
+        .sheet(item: Binding(get: { appState.sheet }, set: { appState.sheet = $0 })) { sheet in
+            switch sheet {
+            case .notifications: NotificationsView().environment(appState)
+            case .profile: ProfileView().environment(appState)
+            }
         }
     }
 
@@ -72,11 +59,11 @@ struct TabBar: View {
     @Environment(AppState.self) private var appState
 
     static let tabs: [(screen: Screen, icon: String, label: String)] = [
-        (.home, "house", "Today"),
-        (.history, "list.bullet", "Log"),
-        (.progress, "chart.line.uptrend.xyaxis", "Progress"),
+        (.home, "bolt", "Today"),
+        (.history, "calendar", "Log"),
+        (.progress, "chart.bar.xaxis", "Progress"),
         (.records, "trophy", "Records"),
-        (.settings, "gearshape", "Settings"),
+        (.settings, "slider.horizontal.3", "Settings"),
     ]
 
     var body: some View {
@@ -84,15 +71,15 @@ struct TabBar: View {
             ForEach(Self.tabs, id: \.label) { tab in
                 let on = appState.screen == tab.screen
                 Button { appState.screen = tab.screen } label: {
-                    VStack(spacing: 3) {
-                        Image(systemName: on ? tab.icon + (tab.icon == "list.bullet" || tab.icon.hasPrefix("chart") ? "" : ".fill") : tab.icon)
-                            .font(.system(size: 19, weight: on ? .semibold : .regular))
-                            .frame(height: 24)
-                        Text(tab.label).font(Theme.body(10.5, weight: .medium))
+                    VStack(spacing: 4) {
+                        Image(systemName: on && ["bolt", "trophy"].contains(tab.icon) ? tab.icon + ".fill" : tab.icon)
+                            .font(.system(size: 18, weight: on ? .semibold : .regular))
+                            .frame(height: 22)
+                        Text(tab.label).capsLabel(on ? Theme.amberText : Theme.dim, size: 11)
                     }
-                    .foregroundStyle(on ? Theme.amber : Theme.dim)
+                    .foregroundStyle(on ? Theme.amberText : Theme.dim)
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 8).padding(.bottom, 4)
+                    .padding(.top, 9).padding(.bottom, 4)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)

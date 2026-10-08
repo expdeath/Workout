@@ -10,12 +10,10 @@ struct QLabel: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(text)
-                .font(Theme.body(14, weight: .semibold))
-                .foregroundStyle(Theme.muted)
+            Text(text).capsLabel()
             Spacer()
             if let value {
-                Text(value).font(Theme.head(20, weight: .bold)).foregroundStyle(Theme.amber)
+                Text(value).font(Theme.head(22, weight: .bold)).foregroundStyle(Theme.amberText)
             }
         }
         .padding(.top, 20)
@@ -38,16 +36,16 @@ struct SegGroup: View {
                 let on = value == opt.value
                 Button { value = opt.value } label: {
                     Text(opt.label)
-                        .font(Theme.body(wrap ? 14 : 15, weight: on ? .semibold : .regular))
+                        .font(Theme.body(wrap ? 14 : 15, weight: on ? .bold : .regular))
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, wrap ? 11 : 13)
                         .padding(.horizontal, 6)
-                        .foregroundStyle(on ? Theme.amber : Theme.textBody)
-                        .background(on ? Theme.amberBg : Theme.bgPill)
-                        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(on ? Theme.amber : Theme.borderDim))
-                        .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+                        .foregroundStyle(on ? Theme.amberText : Theme.textBody)
+                        .background(on ? Theme.amberBg : Theme.bgCard)
+                        .overlay(RoundedRectangle(cornerRadius: Theme.radiusSm).stroke(on ? Theme.amber : Theme.border))
+                        .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(on ? .isSelected : [])
@@ -64,12 +62,12 @@ struct Pill: View {
     let action: () -> Void
 
     var body: some View {
-        let fg = on ? (warn ? Theme.red : Theme.amber) : Theme.text
-        let bg = on ? (warn ? Theme.redBg : Theme.amberBg) : Theme.bgPill
-        let stroke = on ? (warn ? Theme.red : Theme.amber) : Theme.borderDim
+        let fg = on ? (warn ? Theme.red : Theme.amberText) : Theme.text
+        let bg = on ? (warn ? Theme.redBg : Theme.amberBg) : Theme.bgCard
+        let stroke = on ? (warn ? Theme.red : Theme.amber) : Theme.border
         Button(action: action) {
             Text(text)
-                .font(Theme.body(16))
+                .font(Theme.body(15))
                 .multilineTextAlignment(.leading)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 18)
@@ -105,13 +103,13 @@ struct ErrorBox: View {
 private struct CoachInputStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(Theme.body(14.5))
+            .font(Theme.body(15))
             .foregroundStyle(Theme.text)
             .padding(.horizontal, 14)
             .padding(.vertical, 13)
             .background(Theme.bgInput)
-            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.borderDim))
-            .clipShape(RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radiusSm).stroke(Theme.borderDim))
+            .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
     }
 }
 
