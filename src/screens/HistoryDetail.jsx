@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Header from '../components/Header';
 import { fmtDate, fmtSet, setLogged } from '../utils/helpers';
 import { askCoach } from '../api/gemini';
 import { getAllHealth } from '../db/db';
@@ -51,34 +52,28 @@ export default function HistoryDetail({ session, history, onBack }) {
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onBack}>Log</button>
-        <div className="brand-sm">{s.plan?.sessionType?.toUpperCase()}</div>
-        <div />
-      </header>
+      <Header title={s.plan?.sessionType} onBack={onBack} />
 
       <div className="eyebrow">
-        {fmtDate(s.date)}
-        {s.durationMin ? ` · ${s.durationMin} min` : ''}
-        {kcal ? ` · ~${kcal.toLocaleString()} kcal` : ''}
+        {[fmtDate(s.date), s.durationMin ? `${s.durationMin} min` : '', kcal ? `~${kcal.toLocaleString()} kcal` : '', s.fin ? `RPE ${s.fin.rpe}` : '']
+          .filter(Boolean)
+          .join(' · ')}
       </div>
-      {s.fin && (
-        <div className="mono" style={{ fontSize: 13, color: 'var(--amber)', marginBottom: 14 }}>
-          RPE {s.fin.rpe}/10
-          {s.fin.pain ? ` · pain: ${s.fin.pain}` : ''}
-        </div>
+      {s.fin?.pain && (
+        <div style={{ fontSize: 14, color: 'var(--amber)' }}>Pain: {s.fin.pain}</div>
       )}
 
-      {exercises.map((ex) => (
-        <div key={ex.name} className="card" style={{ marginTop: 10, padding: '14px 16px' }}>
-          <div className="ex-name" style={{ fontSize: 16, marginBottom: 4 }}>{ex.name}</div>
-          {ex.sets.map((st, i) => (
-            <div key={i} className="mono" style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>
-              Set {i + 1}: {fmtSet(st)}
+      {/* every exercise in one card: name, then its sets on one line */}
+      {exercises.length > 0 && (
+        <div className="card">
+          {exercises.map((ex, i) => (
+            <div key={ex.name} style={i ? { borderTop: '1px solid var(--border)', marginTop: 10, paddingTop: 10 } : undefined}>
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{ex.name}</div>
+              <div style={{ fontSize: 13.5, color: 'var(--muted)' }}>{ex.sets.map(fmtSet).join('  ·  ')}</div>
             </div>
           ))}
         </div>
-      ))}
+      )}
 
       {exercises.length === 0 && (
         <p className="body" style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 10 }}>
@@ -106,17 +101,12 @@ export default function HistoryDetail({ session, history, onBack }) {
         Ask about this session
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-        {messages.length === 0 && (
-          <div className="chat-bubble">
-            Ask me anything about this {s.plan?.sessionType} session.
-          </div>
-        )}
         {messages.map((m, i) => (
           <div key={i} className={'chat-bubble' + (m.role === 'user' ? ' chat-bubble--user' : '')}>
             {m.text}
           </div>
         ))}
-        {busy && <div className="chat-bubble mono pulse">…</div>}
+        {busy && <div className="chat-bubble pulse">…</div>}
         {error && <div className="err-box" style={{ marginTop: 0 }}>{error}</div>}
       </div>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 12 }}>

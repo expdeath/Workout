@@ -10,7 +10,7 @@ import {
   setLogged,
 } from './utils/helpers';
 import { generateWorkoutPlan, generateDebrief, generateWeeklyReview, generateMonthlyReport } from './api/gemini';
-import { lastWeekSummary, mondayOf, detectPRs, monthSummary, biggestMuscleGap, MUSCLE_FIX_TIPS } from './utils/stats';
+import { lastWeekSummary, mondayOf, detectPRs, monthSummary, biggestMuscleGap } from './utils/stats';
 import {
   ingestHealthFromUrl,
   todaysHealth,
@@ -39,6 +39,8 @@ import Login from './screens/Login';
 import Home from './screens/Home';
 import Progress from './screens/Progress';
 import Coach from './screens/Coach';
+import TabBar, { TABS } from './components/TabBar';
+import Icon from './components/Icon';
 import CheckIn from './screens/CheckIn';
 import Generating from './screens/Generating';
 import Workout from './screens/Workout';
@@ -715,9 +717,11 @@ export default function App() {
     );
   }
 
+  const isTab = TABS.some((t) => t.screen === screen);
+
   return (
     <div className="app">
-      <div className="frame">
+      <div className={`frame${isTab ? ' frame--tabs' : ''}`}>
         {screen === 'home' && (
           <Home
             todayPlan={todayPlan}
@@ -725,8 +729,6 @@ export default function App() {
             syncInfo={syncInfo}
             weeklyReview={weeklyReview}
             monthlyReport={monthlyReport}
-            onProgress={() => setScreen('progress')}
-            onRecords={() => setScreen('records')}
             onStart={async () => {
               setCi(await buildDefaultCheckin());
               setError('');
@@ -739,11 +741,11 @@ export default function App() {
               generateWorkout({ ...checkin, notes: 'Quick start — assumed a normal day.' });
             }}
             onResume={() => setScreen('workout')}
-            onHistory={() => setScreen('history')}
-            onSettings={() => setScreen('settings')}
-            onCoach={() => setChatOpen(true)}
             onQuickCardio={logQuickCardio}
-            onAddPast={() => setScreen('addPast')}
+            onOpenSession={(s) => {
+              setDetailId(sid(s));
+              setScreen('historyDetail');
+            }}
           />
         )}
 
@@ -761,7 +763,6 @@ export default function App() {
             setCi={setCi}
             error={error}
             muscleGap={muscleGap}
-            muscleFixTip={muscleGap ? MUSCLE_FIX_TIPS[muscleGap.group] : ''}
             onCancel={() => setScreen('home')}
             onSubmit={() => generateWorkout(ci)}
           />
@@ -852,19 +853,20 @@ export default function App() {
         )}
       </div>
 
-      {/* Coach is one tap away from anywhere. Hidden on the workout
-          screen (header button + rest bar live there), while generating,
-          and on history detail (it has its own scoped chat). */}
-      {!chatOpen &&
-        ['home', 'checkin', 'finish', 'progress', 'history', 'records', 'settings'].includes(screen) && (
-          <button
-            className="chat-fab"
-            aria-label="Ask the coach"
-            onClick={() => setChatOpen(true)}
-          >
-            🗨
-          </button>
-        )}
+      {/* Coach is one tap away from every tab. The workout and history
+          detail have their own chat entry; check-in and finish stay
+          focused. */}
+      {!chatOpen && isTab && (
+        <button
+          className="chat-fab"
+          aria-label="Ask the coach"
+          onClick={() => setChatOpen(true)}
+        >
+          <Icon name="chat" size={22} fill="currentColor" />
+        </button>
+      )}
+
+      {isTab && <TabBar screen={screen} onSelect={setScreen} />}
 
       {chatOpen && (
         <Coach

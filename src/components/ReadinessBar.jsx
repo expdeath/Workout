@@ -1,30 +1,16 @@
 import React from 'react';
 
+// One thin bar — teal ≥70, amber ≥45, red below; the number carries the meaning.
 export default function ReadinessBar({ value, label }) {
-  const segs = 20;
-  const filled = Math.round((value / 100) * segs);
-  const color = value >= 70 ? '#39D0B8' : value >= 45 ? '#F5A623' : '#F26D5B';
+  const color = value >= 70 ? 'var(--teal)' : value >= 45 ? 'var(--amber)' : 'var(--red)';
 
   return (
-    <div className="readiness-bar">
-      <div className="readiness-bar__header">
-        <span className="readiness-bar__label">{label}</span>
-        <span className="readiness-bar__value" style={{ color }}>
-          {value}
-        </span>
-      </div>
+    <div className="readiness-bar" role="meter" aria-label={label} aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}>
+      <span className="readiness-bar__label">{label}</span>
       <div className="readiness-bar__track">
-        {Array.from({ length: segs }, (_, i) => (
-          <div
-            key={i}
-            className="readiness-bar__seg"
-            style={{
-              background: i < filled ? color : '#232B3A',
-              opacity: i < filled ? 0.5 + 0.5 * (i / segs) : 1,
-            }}
-          />
-        ))}
+        <div className="readiness-bar__fill" style={{ width: `${Math.max(0, Math.min(100, value))}%`, background: color }} />
       </div>
+      <span className="readiness-bar__value" style={{ color }}>{value}</span>
     </div>
   );
 }

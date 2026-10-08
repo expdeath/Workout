@@ -36,8 +36,10 @@ Skip the AI/onboarding by seeding localStorage in `addInitScript`:
 - `coach:ai-settings` — profile/routine plus gym setup (`barKg`,
   `plates`).
 
-Nav labels: Home header has a gear SVG (settings, first
-`.header__actions .ghost-btn`), "Stats" (Progress), "Log" (History).
+Nav: a bottom tab bar (`.tab-bar`) on the five top-level screens —
+"Today", "Log", "Progress", "Records", "Settings" (button text). Pushed
+screens (check-in, workout, finish, detail, past workout) have a back
+chevron `.icon-btn--back` (aria-label "Back", or "Home" on workout).
 
 ## Seeding health rows (HRV/RHR/sleep/body weight)
 

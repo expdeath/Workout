@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import Header from '../components/Header';
 import Seg from '../components/Seg';
 import {
   todayStr,
@@ -134,16 +135,7 @@ export default function AddPast({ history, onCancel, onSave }) {
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onCancel}>Cancel</button>
-        <div className="brand-sm">PAST WORKOUT</div>
-        <div />
-      </header>
-
-      <p className="subtitle" style={{ marginTop: 0 }}>
-        Missed logging a session? Add it here — it counts toward your stats,
-        records, and the coach's next plan.
-      </p>
+      <Header title="Past workout" onBack={onCancel} />
 
       <div className="q-label q-label--row">
         <span>Day</span>
@@ -166,7 +158,7 @@ export default function AddPast({ history, onCancel, onSave }) {
         onChange={(e) => setDate(e.target.value)}
       />
 
-      <div className="q-label">Session type</div>
+      <div className="q-label">Type</div>
       <div className="seg-group seg-group--wrap">
         {TYPES.map((t) => (
           <button
@@ -182,8 +174,8 @@ export default function AddPast({ history, onCancel, onSave }) {
       <div className="q-label q-label--row">
         <span>Exercises</span>
         {lastOfType && (
-          <button className="link-btn" style={{ padding: 0 }} onClick={() => copyFrom(lastOfType)}>
-            ↺ Copy last {sessionType} ({fmtDate(lastOfType.date)})
+          <button className="link-btn link-btn--teal" style={{ padding: 0 }} onClick={() => copyFrom(lastOfType)}>
+            Copy last {sessionType}
           </button>
         )}
       </div>
@@ -202,13 +194,13 @@ export default function AddPast({ history, onCancel, onSave }) {
               className="input"
               style={{ marginTop: 0 }}
               list="past-exercise-names"
-              placeholder="Exercise — e.g. Bench press, Running"
+              placeholder="Exercise"
               value={ex.name}
               onChange={(e) => patchEx(exI, { name: e.target.value })}
             />
             {ex.sets.map((s, setI) => (
               <div key={setI} className="set-row">
-                <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
+                <span className="set-x" style={{ width: 20 }}>{setI + 1}</span>
                 {mode === 'check' ? (
                   <button
                     className={'set-chk' + (s.done ? ' set-chk-on' : '')}
@@ -262,27 +254,27 @@ export default function AddPast({ history, onCancel, onSave }) {
                 className="link-btn"
                 onClick={() => patchEx(exI, { sets: [...ex.sets, emptySet()] })}
               >
-                + set
+                Add set
               </button>
               {ex.sets.length > 1 && (
                 <>
-                  <span className="links-row__dot">·</span>
+                  
                   <button
                     className="link-btn"
                     onClick={() => patchEx(exI, { sets: ex.sets.slice(0, -1) })}
                   >
-                    − set
+                    Remove set
                   </button>
                 </>
               )}
               {exercises.length > 1 && (
                 <>
-                  <span className="links-row__dot">·</span>
+                  
                   <button
                     className="link-btn"
                     onClick={() => setExercises((xs) => xs.filter((_, i) => i !== exI))}
                   >
-                    ✕ remove
+                    Delete
                   </button>
                 </>
               )}
@@ -298,7 +290,7 @@ export default function AddPast({ history, onCancel, onSave }) {
         <span>+ Add exercise</span>
       </button>
 
-      <div className="q-label">Duration (optional)</div>
+      <div className="q-label">Duration</div>
       <div className="set-row" style={{ marginTop: 0 }}>
         <input
           className="set-input"
@@ -311,7 +303,7 @@ export default function AddPast({ history, onCancel, onSave }) {
       </div>
 
       <div className="q-label q-label--row">
-        <span>Session effort</span>
+        <span>Effort (RPE)</span>
         <span className="q-label__value">{rpe}/10</span>
       </div>
       <input
@@ -325,7 +317,7 @@ export default function AddPast({ history, onCancel, onSave }) {
       />
       <input
         className="input"
-        placeholder="Notes (optional)"
+        placeholder="Notes"
         value={feedback}
         onChange={(e) => setFeedback(e.target.value)}
       />
@@ -333,9 +325,8 @@ export default function AddPast({ history, onCancel, onSave }) {
       {error && <div className="err-box">{error}</div>}
 
       <button className="big-btn" onClick={save}>
-        Save to {date ? fmtDate(date) : 'log'}
+        Save
       </button>
-      <div style={{ height: 24 }} />
     </div>
   );
 }

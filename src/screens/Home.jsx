@@ -3,10 +3,11 @@ import { fmtDate } from '../utils/helpers';
 import { weekStats, deloadSignal } from '../utils/stats';
 import { getAccount } from '../utils/account';
 import QuickCardioSheet from '../components/QuickCardioSheet';
+import Icon from '../components/Icon';
 
 const WEEK_MS = 7 * 86400000;
 
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onHistory, onSettings, onProgress, onRecords, onCoach, onQuickCardio, onAddPast }) {
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onQuickCardio, onOpenSession }) {
   // first name from the redeemed invite — absent on pre-account installs
   const name = getAccount()?.name?.split(' ')[0];
   // Run / ride / walk, logged straight to history — apart from
@@ -24,17 +25,6 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
     <div className="screen screen--fade-in">
       <header className="header">
         <div className="brand-sm">COACH</div>
-        <div className="header__actions">
-          <button className="ghost-btn" onClick={onSettings}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
-            </svg>
-          </button>
-          <button className="ghost-btn" onClick={onProgress}>Stats</button>
-          <button className="ghost-btn" aria-label="Records" onClick={onRecords}>🏆</button>
-          <button className="ghost-btn" onClick={onHistory}>Log</button>
-        </div>
       </header>
 
       <div className="hero">
@@ -51,18 +41,11 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
               ? `Nice work, ${name}.`
               : 'Session done.'
             : inProgress
-            ? 'Session in progress'
+            ? `${todayPlan.plan.sessionType} in progress`
             : name
-            ? `Ready when you are, ${name}.`
-            : 'Ready when you are.'}
+            ? `Ready, ${name}?`
+            : 'Ready?'}
         </h1>
-        <p className="subtitle">
-          {doneToday
-            ? `${todayPlan.plan.sessionType} logged. Recovery feeds tomorrow's plan.`
-            : inProgress
-            ? `${todayPlan.plan.sessionType} — pick up where you left off.`
-            : '60-second check-in. The plan, the weights, the timing — handled.'}
-        </p>
       </div>
 
       {history.length > 0 && (
@@ -74,7 +57,7 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
             </div>
           </div>
           <div className="stat-tile">
-            <div className="stat-tile__label">Week streak (≥3)</div>
+            <div className="stat-tile__label">Streak</div>
             <div className="stat-tile__value">
               {streak} <span className="stat-tile__unit">wks</span>
             </div>
@@ -91,42 +74,21 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
           {doneToday ? 'Plan another session' : 'Start check-in'}
         </button>
       )}
-      <div className="links-row">
+
+      {/* one row of shortcuts: skip the check-in, or log cardio directly */}
+      <div className="shortcut-row">
         {!inProgress && (
-          <>
-            <button className="link-btn" onClick={onQuickStart}>
-              ⚡ Quick start
-            </button>
-            <span className="links-row__dot">·</span>
-          </>
+          <button className="shortcut shortcut--accent" onClick={onQuickStart}>
+            <span className="shortcut__icon"><Icon name="bolt" size={20} /></span>
+            Quick start
+          </button>
         )}
-        <button className="link-btn" onClick={onCoach}>
-          🗨 Ask coach
-        </button>
-      </div>
-
-      <div className="links-row" style={{ marginTop: 4 }}>
-        <button className="link-btn" onClick={() => setQuickCardio('run')}>
-          🏃 Run
-        </button>
-        <span className="links-row__dot">·</span>
-        <button className="link-btn" onClick={() => setQuickCardio('cycle')}>
-          🚴 Ride
-        </button>
-        <span className="links-row__dot">·</span>
-        <button className="link-btn" onClick={() => setQuickCardio('walk')}>
-          🚶 Walk
-        </button>
-        <span className="links-row__dot">·</span>
-        <button className="link-btn" onClick={() => setQuickCardio('hike')}>
-          🥾 Hike
-        </button>
-      </div>
-
-      <div className="links-row" style={{ marginTop: 4 }}>
-        <button className="link-btn" onClick={onAddPast}>
-          ＋ Log a past workout
-        </button>
+        {[['run', '🏃', 'Run'], ['cycle', '🚴', 'Ride'], ['walk', '🚶', 'Walk'], ['hike', '🥾', 'Hike']].map(([kind, emoji, label]) => (
+          <button key={kind} className="shortcut" aria-label={label} onClick={() => setQuickCardio(kind)}>
+            <span className="shortcut__icon" aria-hidden="true">{emoji}</span>
+            {label}
+          </button>
+        ))}
       </div>
 
       {quickCardio && (
@@ -140,33 +102,26 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
       {deload && (
         <div className="card card--animate deload-card">
           <div className="card__label" style={{ color: 'var(--amber)' }}>
-            ⚠ Deload suggested
+            Deload suggested
           </div>
           <p className="body">{deload.reason}</p>
-          <p className="mono card__detail">
-            The coach factors this into every plan it builds this week.
-          </p>
         </div>
       )}
 
       {last && (
-        <div className="card card--animate">
-          <div className="card__label">Last session</div>
+        <div className="card card--animate card--tappable" onClick={() => onOpenSession(last)}>
           <div className="row-between">
-            <span className="mono">{fmtDate(last.date)}</span>
-            <span className="mono" style={{ color: 'var(--amber)' }}>
-              {last.plan.sessionType}
+            <span>
+              <span className="ex-name">{last.plan.sessionType}</span>
+              <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--muted)' }}>{fmtDate(last.date)}</span>
             </span>
+            {last.fin && (
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--amber)' }}>RPE {last.fin.rpe}</span>
+            )}
           </div>
-          {last.fin && (
-            <div className="mono card__detail">
-              Session RPE {last.fin.rpe}/10
-              {last.fin.pain ? ` · pain: ${last.fin.pain}` : ''}
-            </div>
-          )}
           {last.debrief && (
-            <p className="body" style={{ marginTop: 10, color: 'var(--text-body)' }}>
-              🗨 {last.debrief}
+            <p className="body clamp" style={{ '--lines': 3, marginTop: 6, color: 'var(--muted)' }}>
+              {last.debrief}
             </p>
           )}
         </div>
@@ -175,43 +130,45 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
       {showMonthly && (
         <div className="card card--animate">
           <div className="card__label" style={{ color: 'var(--amber)' }}>
-            📆 Monthly report —{' '}
+            Monthly report ·{' '}
             {new Date(monthlyReport.month + '-15').toLocaleDateString(undefined, {
               month: 'long',
             })}
           </div>
-          <div className="mono card__detail" style={{ marginTop: 0 }}>
+          <div className="card__detail" style={{ marginTop: 0 }}>
             {monthlyReport.sum?.count} sessions · {monthlyReport.sum?.volume?.toLocaleString()}kg lifted
-            {monthlyReport.sum?.progressions && monthlyReport.sum.progressions !== 'none'
-              ? ` · up: ${monthlyReport.sum.progressions}`
-              : ''}
           </div>
-          <p className="body" style={{ marginTop: 8 }}>{monthlyReport.text}</p>
+          <Clamped text={monthlyReport.text} />
         </div>
       )}
 
       {showReview && (
         <div className="card card--animate">
           <div className="card__label">Weekly review</div>
-          <div className="mono card__detail" style={{ marginTop: 0 }}>
-            {weeklyReview.count} sessions
-            {weeklyReview.progressions && weeklyReview.progressions !== 'none'
-              ? ` · up: ${weeklyReview.progressions}`
-              : ''}
-          </div>
-          <p className="body" style={{ marginTop: 8 }}>{weeklyReview.text}</p>
+          <Clamped text={weeklyReview.text} />
         </div>
       )}
 
-      {syncInfo && (
-        <div className="foot-note mono">
-          {syncInfo.state === 'syncing'
-            ? '☁ syncing…'
-            : syncInfo.state === 'ok'
-            ? `☁ synced ${new Date(syncInfo.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · ${syncInfo.sessions} sessions in cloud`
-            : `☁ sync error — ${syncInfo.message}`}
+      {/* sync status lives in Settings; Home only speaks up when it fails */}
+      {syncInfo?.state === 'error' && (
+        <div className="foot-note" style={{ color: 'var(--red)' }}>
+          Sync error — {syncInfo.message}
         </div>
       )}
     </div>
+  );
+}
+
+// Long coach text clamped to four lines; tap to read the rest.
+function Clamped({ text }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <p
+      className={`body clamp${open ? ' clamp--open' : ''}`}
+      style={{ marginTop: 8 }}
+      onClick={() => setOpen(!open)}
+    >
+      {text}
+    </p>
   );
 }

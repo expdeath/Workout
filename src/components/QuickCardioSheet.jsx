@@ -29,10 +29,7 @@ export default function QuickCardioSheet({ kind, onClose, onSave }) {
 
   return (
     <ActionSheet title={meta.label} onClose={onClose}>
-      <p className="action-sheet__note">
-        Saved straight to your log — no check-in, no AI plan.
-      </p>
-      <div style={{ marginTop: 14 }}>
+      <div style={{ marginTop: 6 }}>
         <Seg
           options={[
             ['0', 'Today'],
@@ -60,7 +57,7 @@ export default function QuickCardioSheet({ kind, onClose, onSave }) {
           value={dist}
           onChange={(e) => setDist(cleanDist(e.target.value))}
         />
-        <span className="set-x">km (optional)</span>
+        <span className="set-x">km</span>
       </div>
       <div className="q-label q-label--row" style={{ marginTop: 18 }}>
         <span>Effort</span>

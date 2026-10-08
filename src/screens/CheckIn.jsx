@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import Pill from '../components/Pill';
 import Seg from '../components/Seg';
 import ReadinessBar from '../components/ReadinessBar';
+import Header from '../components/Header';
+import Icon from '../components/Icon';
 import { quickReadiness } from '../utils/helpers';
 import { storeTodaysHealth } from '../utils/healthIngest';
 
-export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onCancel, onSubmit }) {
+export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmit }) {
   // Auto-open the extras when the Watch Shortcut pre-filled health data
   const [autoFilled, setAutoFilled] = useState(!!ci.health);
   const [showMore, setShowMore] = useState(!!ci.health);
@@ -23,15 +25,7 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onCancel}>Cancel</button>
-        <div className="brand-sm">CHECK-IN</div>
-        <div />
-      </header>
-
-      <p className="subtitle" style={{ marginTop: 0 }}>
-        Pre-set for a normal day. Only tap what's different — then build.
-      </p>
+      <Header title="Check-in" onBack={onCancel} />
 
       <div className="q-label q-label--row">
         <span>Energy</span>
@@ -47,7 +41,7 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
         onChange={(e) => set({ energy: Number(e.target.value) })}
       />
 
-      <div className="q-label">Sleep last night</div>
+      <div className="q-label">Sleep</div>
       <Seg
         options={[
           ['Great', 'Great'],
@@ -71,13 +65,13 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
       {ci.soreness !== 'None' && (
         <input
           className="input"
-          placeholder="Where? e.g. chest, quads"
+          placeholder="Where?"
           value={ci.soreAreas}
           onChange={(e) => set({ soreAreas: e.target.value })}
         />
       )}
 
-      <div className="q-label">Gym time (walk not included)</div>
+      <div className="q-label">Gym time</div>
       <Seg
         options={[
           ['30', '30m'],
@@ -90,10 +84,8 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
       />
 
       <button className="more-toggle" onClick={() => setShowMore(!showMore)}>
-        <span>
-          {showMore ? '− Hide more details' : '+ More details — back, vibe, health data'}
-        </span>
-        <span className={'chevron' + (showMore ? ' chevron--open' : '')}>⌄</span>
+        <span>{showMore ? 'Fewer details' : 'More details'}</span>
+        <span className={'chevron' + (showMore ? ' chevron--open' : '')}><Icon name="down" size={18} /></span>
       </button>
 
       {showMore && (
@@ -104,9 +96,7 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
             style={{ marginBottom: 0 }}
             onClick={() => set({ backTight: !ci.backTight })}
           >
-            {ci.backTight
-              ? '✓ Lower back tight today — coach will adapt'
-              : 'Lower back tight today?'}
+            {ci.backTight ? '✓ Lower back tight' : 'Lower back tight?'}
           </Pill>
 
           {muscleGap && (
@@ -116,12 +106,12 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
               onClick={() => set({ prioritizeMuscle: ci.prioritizeMuscle ? '' : muscleGap.group })}
             >
               {ci.prioritizeMuscle
-                ? `✓ Prioritizing ${muscleGap.group} today`
-                : `${muscleGap.group} hasn't been trained in ${muscleGap.lastDaysAgo} days — add ${muscleFixTip} today?`}
+                ? `✓ Prioritizing ${muscleGap.group.toLowerCase()}`
+                : `Prioritize ${muscleGap.group.toLowerCase()}? ${muscleGap.lastDaysAgo} days since last trained`}
             </Pill>
           )}
 
-          <div className="q-label" style={{ marginTop: 18 }}>Today's vibe</div>
+          <div className="q-label" style={{ marginTop: 18 }}>Focus</div>
           <div className="seg-group seg-group--wrap">
             {[
               ['', "Coach's call"],
@@ -141,57 +131,49 @@ export default function CheckIn({ ci, setCi, error, muscleGap, muscleFixTip, onC
             ))}
           </div>
 
-          <div className="q-label" style={{ marginTop: 18 }}>Health data</div>
-          {autoFilled && ci.health ? (
-            <p className="mono" style={{ fontSize: 12, color: 'var(--teal)', margin: '0 0 8px' }}>
-              ⌚ Watch data loaded — the coach will read it
-            </p>
-          ) : (
-            <Pill on={false} style={{ marginBottom: 8 }} onClick={pasteHealth}>
-              ⌚ Paste Watch data from clipboard
-            </Pill>
+          <div className="q-label q-label--row" style={{ marginTop: 18, alignItems: 'center' }}>
+            <span>Health data</span>
+            <button className="chip" onClick={pasteHealth}>Paste</button>
+          </div>
+          {autoFilled && ci.health && (
+            <p style={{ fontSize: 13, color: 'var(--teal)', margin: '0 0 8px' }}>Loaded from Watch</p>
           )}
           <textarea
             className="input textarea"
-            style={{ marginTop: 0 }}
-            placeholder={
-              'Paste anything — sleep, HRV, resting HR, steps.\ne.g. Sleep 6h40m · HRV 48 · RHR 58'
-            }
+            style={{ marginTop: 0, minHeight: 72 }}
+            placeholder="Sleep, HRV, resting HR…"
             value={ci.health}
             onChange={(e) => set({ health: e.target.value })}
           />
-          <div className="q-label" style={{ marginTop: 18 }}>Body weight today (optional)</div>
+          <div className="q-label" style={{ marginTop: 18 }}>Body weight</div>
           <input
             className="input"
             inputMode="decimal"
-            placeholder="kg — one number a day, charted in Stats"
+            placeholder="kg"
             value={ci.bodyKg || ''}
             onChange={(e) => set({ bodyKg: e.target.value.replace(/[^\d.]/g, '').slice(0, 6) })}
             style={{ marginTop: 6 }}
           />
           <input
             className="input"
-            placeholder="Anything else? (injury, plans — optional)"
+            placeholder="Anything else?"
             value={ci.notes}
             onChange={(e) => set({ notes: e.target.value })}
           />
-          <p className="foot-note" style={{ marginTop: 10 }}>
-            Tip: paste today's Apple Health numbers — the coach reads them.
-          </p>
         </div>
       )}
 
       <div style={{ marginTop: 24 }}>
         <ReadinessBar
           value={quickReadiness(ci)}
-          label="Quick readiness estimate"
+          label="Readiness"
         />
       </div>
 
       {error && <div className="err-box">{error}</div>}
 
       <button className="big-btn" onClick={onSubmit}>
-        Build today's session
+        Build session
       </button>
       <div style={{ height: 24 }} />
     </div>

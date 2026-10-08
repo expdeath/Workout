@@ -26,8 +26,7 @@ export default function Login({ error: bootError, onSignedIn }) {
       <div className="center-fill" style={{ padding: 24, textAlign: 'center' }}>
         <div className="brand">COACH</div>
         <p className="body" style={{ marginTop: 10, color: 'var(--muted)' }}>
-          Your AI training coach. This is a private beta — sign in with the
-          Google account Abhi added for you.
+          Your AI training coach.
         </p>
         {error && (
           <p className="body" style={{ marginTop: 14, color: 'var(--amber)' }}>
@@ -43,7 +42,7 @@ export default function Login({ error: bootError, onSignedIn }) {
           {busy ? 'Signing in…' : 'Sign in with Google'}
         </button>
         <p className="body" style={{ marginTop: 16, fontSize: 12.5, color: 'var(--dim)' }}>
-          Not on the list yet? Ask Abhi to add your Google email.
+          Private beta — ask Abhi for an invite.
         </p>
       </div>
     </div>

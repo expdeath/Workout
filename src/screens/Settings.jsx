@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import Header from '../components/Header';
+import Icon from '../components/Icon';
 import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
@@ -22,14 +24,14 @@ function Section({ title, status, statusColor, open, onToggle, children }) {
             </div>
           )}
         </div>
-        <span className={'chevron' + (open ? ' chevron--open' : '')}>⌄</span>
+        <span className={'chevron' + (open ? ' chevron--open' : '')}><Icon name="down" size={18} /></span>
       </button>
       {open && <div className="section__body">{children}</div>}
     </div>
   );
 }
 
-export default function Settings({ onBack, onClearHistory, onDataImported, onSynced, sessionCount }) {
+export default function Settings({ onClearHistory, onDataImported, onSynced, sessionCount }) {
   const [key, setKey] = useState(getApiKey());
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -241,45 +243,37 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
 
   // ── Collapsed status lines ──
   const coachStatus = getApiKey()
-    ? `Shared API key set${getAISettings().profile ? ' · custom profile set' : ''}`
+    ? 'Ready'
     : account?.admin
     ? 'No API key yet — add one to start'
     : 'No API key yet — ask Abhi to add one';
   const lastSync = getLastSync();
   const syncStatus =
     lastSync?.status === 'ok'
-      ? `☁ live in the cloud · GitHub backup ${new Date(lastSync.at).toLocaleString()}`
+      ? `Backed up ${new Date(lastSync.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}`
       : lastSync?.status === 'error'
-      ? `☁ live in the cloud · GitHub backup failed: ${lastSync.message}`
+      ? `Backup failed: ${lastSync.message}`
       : sync.repo && sync.token
-      ? '☁ live in the cloud · GitHub backup not run yet'
-      : '☁ live in the cloud · add a GitHub token for backups';
+      ? 'Synced · backup pending'
+      : 'Synced · no GitHub backup';
   const watchReceived = todaysHealth();
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onBack}>Home</button>
-        <div className="brand-sm">SETTINGS</div>
-        <div />
-      </header>
+      <Header title="Settings" />
 
       {account && (
         <Section
           title="Account"
-          status={`Signed in as ${account.name || account.email}`}
-          statusColor="var(--teal)"
+          status={account.email || account.name}
           open={open.account}
           onToggle={() => toggle('account')}
         >
-          <p className="body" style={{ marginTop: 0, color: 'var(--muted)' }}>
-            Hey {account.name} — you're on the COACH private beta. Found a bug,
-            or something felt off mid-workout? Tell Abhi here:
-          </p>
+          <div className="q-label" style={{ marginTop: 0 }}>Send feedback to Abhi</div>
           <textarea
             className="input textarea"
-            style={{ marginTop: 8, minHeight: 80 }}
-            placeholder="What worked, what didn't, what you'd change…"
+            style={{ marginTop: 0, minHeight: 80 }}
+            placeholder="Bugs, ideas, anything…"
             value={feedback}
             onChange={(e) => setFeedback(e.target.value.slice(0, 2000))}
           />
@@ -304,10 +298,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
           </button>
           <p className="body" style={{ marginTop: 6, fontSize: 12.5, color: 'var(--dim)' }}>
-            Signed in with Google as {account.email}. Signing out clears this
-            device (exercise photos/clips included — they only live here).
-            Your training log is safe in the cloud and comes back when you
-            sign in again.
+            Signing out clears this device, including exercise photos. Your log stays in the cloud.
           </p>
         </Section>
       )}
@@ -339,7 +330,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
               </button>
             </div>
             <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
-              Get a free key →{' '}
+              Shared by everyone on COACH. Free at{' '}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
@@ -347,25 +338,16 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
                 className="link"
               >
                 aistudio.google.com/apikey
-              </a>{' '}
-              → "Create API key". One key for everyone on COACH — saved in
-              the cloud, readable only by invited accounts, and only ever
-              sent to Google's Gemini API.
+              </a>
             </p>
           </>
-        ) : (
-          <p className="body" style={{ marginTop: 0, fontSize: 12.5, color: 'var(--muted)' }}>
-            {getApiKey()
-              ? 'The AI coach runs on the shared key Abhi set up — nothing to configure.'
-              : "The AI coach needs a key — Abhi hasn't added the shared one yet."}
-          </p>
-        )}
+        ) : null}
 
-        <div className="q-label">About you</div>
+        <div className="q-label" style={account?.admin ? undefined : { marginTop: 0 }}>About you</div>
         <textarea
           className="input textarea"
           style={{ marginTop: 6, minHeight: 80 }}
-          placeholder="e.g. Desk job, long sitting. Goals: fat loss + muscle. Lower back gets tight — prefer supported/machine variations. Walk 12 min each way to the gym. Train after 4PM, 4-5x/week, 45-75 min."
+          placeholder="e.g. Desk job, lower back gets tight"
           value={ai.profile}
           onChange={(e) => setAi({ ...ai, profile: e.target.value.slice(0, 1500) })}
         />
@@ -373,27 +355,23 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         <textarea
           className="input textarea"
           style={{ marginTop: 6, minHeight: 60 }}
-          placeholder={'e.g.\nBench Press 80kg\n4 sessions a week\nRun a 10k in autumn'}
+          placeholder={'e.g.\nBench Press 80kg\n4 sessions a week'}
           value={ai.goals}
           onChange={(e) => setAi({ ...ai, goals: e.target.value.slice(0, 600) })}
         />
-        <p className="body" style={{ marginTop: 6, fontSize: 12.5, color: 'var(--muted)' }}>
-          The coach plans toward these; lift and frequency goals get progress
-          bars in Stats.
-        </p>
-        <div className="q-label">Gym equipment & limits</div>
+        <div className="q-label">Equipment</div>
         <textarea
           className="input textarea"
           style={{ marginTop: 6, minHeight: 60 }}
-          placeholder={'What your gym has (or lacks) — the coach never prescribes what you can\'t do.\ne.g. no cable tower · dumbbells up to 40kg · no squat rack · has stairmaster'}
+          placeholder="e.g. no cable tower, dumbbells to 40kg"
           value={ai.equipment}
           onChange={(e) => setAi({ ...ai, equipment: e.target.value.slice(0, 600) })}
         />
-        <div className="q-label">Your base routine</div>
+        <div className="q-label">Base routine</div>
         <textarea
           className="input textarea"
-          style={{ marginTop: 6, minHeight: 120 }}
-          placeholder="Leave empty to use the built-in Push/Pull/Legs routine, or paste your own — exercises, sets × reps, alternatives, warm-ups."
+          style={{ marginTop: 6, minHeight: 80 }}
+          placeholder="Empty = built-in Push/Pull/Legs"
           value={ai.routine}
           onChange={(e) => setAi({ ...ai, routine: e.target.value.slice(0, 4000) })}
         />
@@ -408,12 +386,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
         open={open.sync}
         onToggle={() => toggle('sync')}
       >
-        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          Your training log lives in the cloud and syncs live to every device
-          you sign in on. A full backup copy also goes to your private GitHub
-          repo (coach-backup.json + a readable log) whenever it changes —
-          at most every 10 minutes, and at least daily.
-        </p>
+        <div className="q-label" style={{ marginTop: 0 }}>GitHub backup</div>
         <input
           className="input"
           type="text"
@@ -457,18 +430,14 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             {syncMsg}
           </p>
         )}
-        <p className="body" style={{ marginTop: 12, color: 'var(--muted)', fontSize: 13 }}>
-          Token setup (once): github.com → Settings → Developer settings →
-          Fine-grained tokens → Generate. Repository access: only your data
-          repo. Permissions: Contents → Read and write. Paste the token here —
-          it's saved to your account (so all your devices can back up) and
-          only ever sent to api.github.com.
+        <p className="body" style={{ marginTop: 10, color: 'var(--muted)', fontSize: 13 }}>
+          Fine-grained token, your data repo only, Contents: read &amp; write.
         </p>
 
         <div className="q-label">Your data</div>
         {sessionCount != null && (
-          <p className="mono" style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
-            {sessionCount} sessions · {eventCount ?? '…'} events logged
+          <p style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 10 }}>
+            {sessionCount} sessions · {eventCount ?? '…'} events
           </p>
         )}
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -477,14 +446,14 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
             onClick={handleExport}
             style={{ marginTop: 0, padding: 12, fontSize: 14 }}
           >
-            Export backup
+            Export
           </button>
           <button
             className="big-btn"
             onClick={() => fileRef.current?.click()}
             style={{ marginTop: 0, padding: 12, fontSize: 14 }}
           >
-            Import backup
+            Import
           </button>
           <button
             className="big-btn"
@@ -517,16 +486,12 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
 
       <Section
         title="Plates & Bar"
-        status={`${parseFloat(gym.barKg) || DEFAULT_BAR_KG}kg bar · plates ${
+        status={`${parseFloat(gym.barKg) || DEFAULT_BAR_KG}kg bar · ${
           (parsePlates(gym.plates) || DEFAULT_PLATES).join('/')
         }`}
         open={open.gym}
         onToggle={() => toggle('gym')}
       >
-        <p className="body" style={{ marginBottom: 12, color: 'var(--muted)' }}>
-          Powers the ⚖ plates button during a workout — tap it on any
-          exercise to see exactly what to load per side.
-        </p>
         <div className="q-label" style={{ marginTop: 0 }}>Bar weight (kg)</div>
         <input
           className="input"
@@ -535,7 +500,7 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
           onChange={(e) => setGym({ ...gym, barKg: e.target.value.replace(/[^\d.]/g, '') })}
           style={{ marginTop: 6 }}
         />
-        <div className="q-label">Available plates (kg, per pair)</div>
+        <div className="q-label">Plates (kg, per pair)</div>
         <input
           className="input"
           placeholder={DEFAULT_PLATES.join(', ')}
@@ -553,41 +518,31 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
       </Section>
 
       <Section
-        title="⌚ Apple Watch"
-        status={watchReceived ? 'Received today' : 'Nothing received today yet'}
+        title="Apple Watch"
+        status={watchReceived ? 'Received today' : 'Nothing today yet'}
         statusColor={watchReceived ? 'var(--teal)' : undefined}
         open={open.watch}
         onToggle={() => toggle('watch')}
       >
-        {watchReceived ? (
+        {watchReceived && (
           <p className="body" style={{ color: 'var(--teal)' }}>
-            ⌚ Today: {fmtWatchData(watchReceived) || watchReceived}
-          </p>
-        ) : (
-          <p className="body" style={{ color: 'var(--muted)' }}>
-            ⌚ Nothing received today yet — run the Gym Check-in shortcut.
+            Today: {fmtWatchData(watchReceived) || watchReceived}
           </p>
         )}
         {(() => {
           const inbox = getLastInbox();
           return inbox ? (
-            <p className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 6 }}>
-              📥 Last delivery: {inbox.files} file{inbox.files > 1 ? 's' : ''},{' '}
-              {new Date(inbox.at).toLocaleString()}
+            <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
+              Last delivery {new Date(inbox.at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
             </p>
           ) : null;
         })()}
-        <p className="body" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 8 }}>
-          A Shortcut on your phone reads Health data (sleep, HRV, VO₂max,
-          calories…) and uploads it to your data repo; the app collects it
-          on every sync and pre-fills your check-in.
+        <p className="body" style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>
+          A Shortcut uploads your Health data; it pre-fills each check-in.
         </p>
 
         <details style={{ marginTop: 12 }}>
-          <summary
-            className="mono"
-            style={{ fontSize: 12.5, color: 'var(--dim)', cursor: 'pointer' }}
-          >
+          <summary style={{ fontSize: 13, color: 'var(--dim)', cursor: 'pointer' }}>
             Install or reinstall the shortcut
           </summary>
           {sync.repo && sync.token ? (
@@ -671,14 +626,10 @@ export default function Settings({ onBack, onClearHistory, onDataImported, onSyn
 
       <Section title="About" open={open.about} onToggle={() => toggle('about')}>
         <p className="body" style={{ color: 'var(--muted)' }}>
-          COACH is a personal workout planner powered by Google Gemini AI. It
-          builds daily sessions from your check-in, training history, and
-          recovery data. Your log is stored in Google Cloud Firestore under
-          your Google sign-in, with a backup copy in your private GitHub repo.
+          COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.
         </p>
       </Section>
 
-      <div style={{ height: 24 }} />
     </div>
   );
 }

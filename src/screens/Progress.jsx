@@ -1,16 +1,15 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { LineChart, BarChart, TrainingHeatmap } from '../components/Charts';
+import Header from '../components/Header';
 import {
   exerciseSeries,
   weeklyBuckets,
   weekStats,
-  prRecords,
   sessionVolume,
   muscleBalance,
   goalProgress,
 } from '../utils/stats';
 import { getAllHealth } from '../db/db';
-import { fmtDate } from '../utils/helpers';
 import { getAISettings } from '../utils/storage';
 import { calorieStats, latestBodyWeightKg } from '../utils/calories';
 
@@ -20,14 +19,10 @@ const shortDate = (iso) =>
     month: 'numeric',
   });
 
-export default function Progress({ history, onBack }) {
+export default function Progress({ history }) {
   const series = useMemo(() => exerciseSeries(history), [history]);
   const weeks = useMemo(() => weeklyBuckets(history, 8), [history]);
   const { thisWeek, streak } = useMemo(() => weekStats(history), [history]);
-  const records = useMemo(
-    () => prRecords(history).filter((r) => r.weight).slice(0, 10),
-    [history]
-  );
   const [exIdx, setExIdx] = useState(0);
   const [exMetric, setExMetric] = useState('w'); // w = best set weight | e = est. 1RM
   const [weekMode, setWeekMode] = useState('volume'); // volume | sessions
@@ -69,28 +64,28 @@ export default function Progress({ history, onBack }) {
       points: recPoints('hrv'),
       unit: 'ms',
       color: 'var(--chart-teal)',
-      desc: 'HRV (ms), daily from Watch. Higher and stable is good — dips flag poor recovery.',
+      desc: 'Higher and steady is good.',
     },
     rhr: {
       label: 'Resting HR',
       points: recPoints('rhr'),
       unit: '',
       color: 'var(--chart-amber)',
-      desc: 'Resting heart rate (bpm). Lower and stable is good — a climb suggests fatigue or illness.',
+      desc: 'Lower and steady is good.',
     },
     sleep: {
       label: 'Sleep',
       points: recPoints('sleepH'),
       unit: 'h',
       color: 'var(--chart-teal)',
-      desc: 'Sleep (hours). Under ~6h the coach eases off intensity.',
+      desc: 'Under ~6h, the coach eases off.',
     },
     weight: {
       label: 'Body wt',
       points: recPoints('weightKg'),
       unit: 'kg',
       color: 'var(--chart-amber)',
-      desc: 'Body weight (kg), from check-ins. Trend matters, not the daily noise.',
+      desc: 'Watch the trend, not the day.',
     },
   };
 
@@ -104,18 +99,12 @@ export default function Progress({ history, onBack }) {
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onBack}>Home</button>
-        <div className="brand-sm">PROGRESS</div>
-        <div />
-      </header>
+      <Header title="Progress" />
 
       {history.length < 2 && recModes.length === 0 ? (
         <div className="center-fill">
           <p className="body" style={{ color: 'var(--muted)', textAlign: 'center' }}>
-            Charts unlock after a couple of logged sessions.
-            <br />
-            Keep training — the picture builds itself.
+            Log two sessions to unlock charts.
           </p>
         </div>
       ) : (
@@ -128,11 +117,11 @@ export default function Progress({ history, onBack }) {
               <div className="stat-tile__value">{thisWeek} <span className="stat-tile__unit">sessions</span></div>
             </div>
             <div className="stat-tile">
-              <div className="stat-tile__label">Week streak (≥3)</div>
+              <div className="stat-tile__label">Streak</div>
               <div className="stat-tile__value">{streak} <span className="stat-tile__unit">wks</span></div>
             </div>
             <div className="stat-tile">
-              <div className="stat-tile__label">🔥 This week</div>
+              <div className="stat-tile__label">Burned</div>
               <div className="stat-tile__value">{calories.thisWeek.toLocaleString()} <span className="stat-tile__unit">kcal</span></div>
             </div>
           </div>
@@ -140,9 +129,6 @@ export default function Progress({ history, onBack }) {
           <div className="card">
             <div className="card__label">Training days</div>
             <TrainingHeatmap days={heatDays} />
-            <p className="mono chart-table" style={{ display: 'block' }}>
-              Last 16 weeks, Monday-top. Deeper teal = bigger session.
-            </p>
           </div>
 
           {chartable.length > 0 && sel && (() => {
@@ -157,7 +143,7 @@ export default function Progress({ history, onBack }) {
             <div className="card">
               <div className="row-between" style={{ alignItems: 'center', marginBottom: 10 }}>
                 <div className="card__label" style={{ marginBottom: 0 }}>
-                  {metric === 'e' ? 'Estimated 1RM per session (kg)' : 'Best set weight per session (kg)'}
+                  Lift trend
                 </div>
                 {showE1 && (
                   <div style={{ display: 'flex', gap: 6 }}>
@@ -188,20 +174,6 @@ export default function Progress({ history, onBack }) {
                 ))}
               </div>
               <LineChart points={points} unit="kg" />
-              <div className="mono chart-table">
-                {(metric === 'e' ? e1Points : sel.points).slice(-4).reverse().map((p) => (
-                  <div key={p.date} className="row-between">
-                    <span>{fmtDate(p.date)}</span>
-                    <span>{metric === 'e' ? p.e : p.w}kg</span>
-                  </div>
-                ))}
-              </div>
-              {metric === 'e' && (
-                <p className="mono chart-table" style={{ display: 'block' }}>
-                  Estimated one-rep max (Epley) from the best set each session —
-                  strength, independent of the rep range you trained.
-                </p>
-              )}
             </div>
             );
           })()}
@@ -235,36 +207,11 @@ export default function Progress({ history, onBack }) {
                 color="var(--chart-amber)"
               />
             )}
-            <p className="mono chart-table" style={{ display: 'block' }}>
-              {weekMode === 'volume'
-                ? 'Total kg lifted per week, last 8 weeks.'
-                : 'Sessions logged per week, last 8 weeks.'}
-            </p>
           </div>
-
-          {records.length > 0 && (
-            <div className="card">
-              <div className="card__label">🏆 Records</div>
-              <div className="mono chart-table" style={{ marginTop: 0, paddingTop: 0, borderTop: 'none' }}>
-                {records.map((r) => (
-                  <div key={r.name} className="row-between">
-                    <span style={{ color: 'var(--text-body)' }}>{r.name}</span>
-                    <span>
-                      {r.weight.w}kg × {r.weight.reps || '?'}
-                      {r.e1rm ? ` · e1RM ${r.e1rm.v}kg` : ''}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="mono chart-table" style={{ display: 'block' }}>
-                All-time heaviest set per exercise, with estimated 1RM (Epley).
-              </p>
-            </div>
-          )}
 
           {balance.length > 0 && (
             <div className="card">
-              <div className="card__label">Muscle balance — last 14 days</div>
+              <div className="card__label">Muscle balance · 14 days</div>
               {(() => {
                 const max = Math.max(...balance.map((b) => b.sets), 1);
                 return balance.map((b) => {
@@ -285,11 +232,6 @@ export default function Progress({ history, onBack }) {
                   );
                 });
               })()}
-              {balance.some((b) => b.lastDaysAgo != null && b.lastDaysAgo >= 10) && (
-                <p className="mono chart-table" style={{ display: 'block' }}>
-                  ⚠ amber = not trained in 10+ days. The coach sees this too.
-                </p>
-              )}
             </div>
           )}
 
@@ -316,9 +258,6 @@ export default function Progress({ history, onBack }) {
                   )}
                 </div>
               ))}
-              <p className="mono chart-table" style={{ display: 'block' }}>
-                Edit goals in Settings → AI Coach. Lifts track your all-time best set.
-              </p>
             </div>
           )}
           </>
@@ -345,20 +284,16 @@ export default function Progress({ history, onBack }) {
                 unit={REC[activeRec].unit}
                 color={REC[activeRec].color}
               />
-              <p className="mono chart-table" style={{ display: 'block' }}>
-                {REC[activeRec].desc}
-              </p>
+              <p className="card__detail">{REC[activeRec].desc}</p>
             </div>
           )}
 
           {recModes.length === 0 && (
             <div className="foot-note">
-              Recovery charts (HRV, resting HR) appear after two days of Watch
-              data — run the Gym Check-in shortcut daily.
+              Recovery charts appear after two days of Health data.
             </div>
           )}
 
-          <div style={{ height: 24 }} />
         </>
       )}
     </div>

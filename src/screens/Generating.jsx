@@ -20,9 +20,9 @@ export default function Generating({ readiness, statusMsg }) {
     <div className="center-fill screen--fade-in">
       <div className="brand pulse">COACH</div>
       <div style={{ marginTop: 28, width: '100%', maxWidth: 320 }}>
-        <ReadinessBar value={readiness} label="Readiness (initial estimate)" />
+        <ReadinessBar value={readiness} label="Readiness" />
       </div>
-      <div className="mono generating-msg">
+      <div className="generating-msg">
         {statusMsg || MESSAGES[msg]}
       </div>
     </div>

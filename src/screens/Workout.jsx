@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReadinessBar from '../components/ReadinessBar';
 import ActionSheet from '../components/ActionSheet';
-import { fmtDate, fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
+import Icon from '../components/Icon';
+import { fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '../utils/helpers';
 import { lastPerformance, suggestNextWeight, recoveryCaution, logMode } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
 import { getAllHealth, getMedia, putMedia, deleteMedia } from '../db/db';
@@ -26,9 +27,9 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
   // per-exercise ⋯ menu, shown as a bottom action sheet:
   // null | { exI, mode: 'menu' | 'swap' | 'remove' }
   const [sheet, setSheet] = useState(null);
-  // "discard the whole session?" confirm — 'top' (header ✕) or
-  // 'bottom' (link under Finish), so it opens next to where you tapped
+  // "discard the whole session?" confirm, opened from the header ✕ ('top')
   const [confirmCancel, setConfirmCancel] = useState(null);
+  const [whyOpen, setWhyOpen] = useState(false);
 
   const cancelConfirm = (
     <div className="remove-confirm" style={{ marginTop: 10 }}>
@@ -276,55 +277,61 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onBack}>Home</button>
-        <div className="header__actions">
-          <button className="ghost-btn" onClick={onCoach}>🗨 Coach</button>
-          <span className="mono sets-counter">
-            {doneSets}/{totalSets} sets
-          </span>
+      <header className="header" style={{ paddingBottom: 0 }}>
+        <button className="icon-btn icon-btn--back" aria-label="Home" onClick={onBack}>
+          <Icon name="back" size={24} />
+        </button>
+        <span className={'sets-counter' + (totalSets && doneSets === totalSets ? ' sets-counter--done' : '')}>
+          {doneSets}/{totalSets} sets
+        </span>
+        <span style={{ display: 'flex' }}>
+          <button className="icon-btn" aria-label="Ask the coach" onClick={onCoach}>
+            <Icon name="chat" size={21} />
+          </button>
           <button
-            className="ghost-btn ghost-btn--danger"
+            className="icon-btn"
             aria-label="Cancel this session"
             onClick={() => setConfirmCancel(confirmCancel === 'top' ? null : 'top')}
           >
-            ✕
+            <Icon name="x" size={21} />
           </button>
-        </div>
+        </span>
       </header>
 
       {confirmCancel === 'top' && cancelConfirm}
 
-      <div className="hero">
-        <div className="eyebrow">
-          {fmtDate(t.date)} · est. {p.estTimeMin} min door-to-door
-        </div>
+      <div className="hero" style={{ marginTop: 4 }}>
         <h1 className="h1 h1--accent">{p.sessionType.toUpperCase()}</h1>
-        {p.title && <p className="subtitle">{p.title}</p>}
+        <p className="subtitle" style={{ marginTop: 2 }}>
+          {[p.title, p.estTimeMin ? `~${p.estTimeMin} min` : ''].filter(Boolean).join(' · ')}
+        </p>
       </div>
 
-      <ReadinessBar value={p.recoveryScore} label="Coach recovery score" />
+      <ReadinessBar value={p.recoveryScore} label="Recovery" />
 
-      <div className="card" style={{ marginTop: 16 }}>
-        <div className="card__label">Why this session</div>
-        <p className="body">{p.reasoning}</p>
+      {/* why + warm-up in one quiet card; the reasoning folds to 2 lines */}
+      <div className="card" style={{ marginTop: 14 }}>
+        {p.reasoning && (
+          <p
+            className={'body clamp' + (whyOpen ? ' clamp--open' : '')}
+            style={{ '--lines': 2 }}
+            onClick={() => setWhyOpen(!whyOpen)}
+          >
+            {p.reasoning}
+          </p>
+        )}
         {p.concerns ? (
-          <p className="body body--warn" style={{ marginTop: 8 }}>
-            ⚠ {p.concerns}
+          <p className="body body--warn" style={{ marginTop: 6, display: 'flex', gap: 6 }}>
+            <Icon name="alert" size={16} style={{ flexShrink: 0, marginTop: 3 }} /> {p.concerns}
           </p>
         ) : null}
+        {p.warmup?.length > 0 && (
+          <p className="body" style={{ marginTop: p.reasoning ? 6 : 0 }}>
+            <span style={{ color: 'var(--muted)', fontWeight: 600, marginRight: 8 }}>Warm-up</span>
+            {p.warmup.join(' · ')}
+          </p>
+        )}
       </div>
-
-      {p.warmup?.length > 0 && (
-        <div className="card card--animate">
-          <div className="card__label">Warm-up</div>
-          {p.warmup.map((w, i) => (
-            <p key={i} className="body">
-              · {w}
-            </p>
-          ))}
-        </div>
-      )}
 
       {(() => {
         // Per-exercise context: how it's logged (kg×reps / min·km /
@@ -360,43 +367,54 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
           const { ex, exI, mode, lastPerf, suggest, plateTarget } = m;
           const plateInfo =
             platesFor === exI ? plateBreakdown(plateTarget, barKg, plates) : null;
+          const tryWeight = suggest
+            ? `${suggest}kg`
+            : mode === 'strength' && ex.suggestedWeight
+            ? ex.suggestedWeight
+            : null;
           return (
             <div key={`h${exI}`}>
-              <div className="row-between">
+              <div className="row-between" style={{ alignItems: 'center' }}>
                 <div className="ex-name" style={{ display: 'flex', alignItems: 'center' }}>
                   {dotColor ? dot(dotColor) : null}
                   {ex.name}
                 </div>
-                <div className="mono ex-meta">
-                  RPE {ex.rpe} · rest {ex.rest}
-                  <button
-                    className="menu-btn"
-                    aria-label={`Options for ${ex.name}`}
-                    onClick={() => setSheet({ exI, mode: 'menu' })}
-                  >
-                    ⋯
-                  </button>
+                <button
+                  className="icon-btn"
+                  style={{ width: 32, height: 28 }}
+                  aria-label={`Options for ${ex.name}`}
+                  onClick={() => setSheet({ exI, mode: 'menu' })}
+                >
+                  <Icon name="more" size={20} />
+                </button>
+              </div>
+              {/* one line of prescription, one line of guidance — the rest is in ⋯ */}
+              <div className="ex-prescription">
+                {[`${ex.sets} × ${ex.reps}`, ex.rpe ? `RPE ${ex.rpe}` : '', ex.rest ? `${ex.rest} rest` : '']
+                  .filter(Boolean)
+                  .join(' · ')}
+              </div>
+              {(tryWeight || lastPerf) && (
+                <div className="ex-guide">
+                  {tryWeight && (
+                    <span className="ex-guide__try">
+                      Try {tryWeight}{suggest && lastPerf ? ' ↑' : ''}
+                    </span>
+                  )}
+                  {lastPerf && <span className="ex-guide__last">Last {lastPerf.sets.map(fmtSet).join(', ')}</span>}
+                  {plateTarget ? (
+                    <button
+                      className={'plate-btn' + (platesFor === exI ? ' plate-btn--on' : '')}
+                      aria-label={`Plate breakdown for ${plateTarget}kg`}
+                      onClick={() => setPlatesFor(platesFor === exI ? null : exI)}
+                    >
+                      <Icon name="weight" size={16} />
+                    </button>
+                  ) : null}
                 </div>
-              </div>
-              <div className="mono ex-prescription">
-                {ex.sets} × {ex.reps}
-                {suggest
-                  ? ` · try ${suggest}kg`
-                  : mode === 'strength' && ex.suggestedWeight
-                  ? ` · try ${ex.suggestedWeight}`
-                  : ''}
-                {plateTarget ? (
-                  <button
-                    className={'plate-btn' + (platesFor === exI ? ' plate-btn--on' : '')}
-                    aria-label={`Plate breakdown for ${plateTarget}kg`}
-                    onClick={() => setPlatesFor(platesFor === exI ? null : exI)}
-                  >
-                    ⚖ plates
-                  </button>
-                ) : null}
-              </div>
+              )}
               {plateInfo && (
-                <div className="mono plate-line">
+                <div className="plate-line">
                   {plateInfo.perSide.length
                     ? `${plateTarget}kg → ${plateInfo.bar}kg bar + ${plateInfo.perSide.join(' + ')} per side`
                     : `${plateTarget}kg → bar only (${plateInfo.bar}kg${
@@ -407,31 +425,22 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     : ''}
                 </div>
               )}
-              {lastPerf && (
-                <div className="mono" style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>
-                  last time ({fmtDate(lastPerf.date)}):{' '}
-                  {lastPerf.sets.map(fmtSet).join(' · ')}
-                  {suggest ? ' — all reps hit, go up' : ''}
-                </div>
-              )}
               {!paired && ex.superset && (
-                <div className="mono superset-badge">
-                  ⇋ superset {ex.superset}
-                </div>
+                <div className="superset-badge">Superset {ex.superset}</div>
               )}
-              {ex.notes && <p className="body ex-notes">{ex.notes}</p>}
+              {ex.notes && <p className="body ex-notes clamp" style={{ '--lines': 2 }}>{ex.notes}</p>}
               {editingCue === exI ? (
                 <div>
                   <textarea
                     className="input textarea"
                     style={{ minHeight: 60, marginTop: 8 }}
-                    placeholder="Note to self — sticks to this exercise forever. e.g. seat height 4 · tuck elbows, left shoulder"
+                    placeholder="Note to self, e.g. seat height 4"
                     value={cueDraft}
                     onChange={(e) => setCueDraft(e.target.value)}
                   />
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
                     <button className="chip chip-on" onClick={() => saveCue(ex.name)}>
-                      Save note
+                      Save
                     </button>
                     <button
                       className="chip"
@@ -440,19 +449,19 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                         fileRef.current?.click();
                       }}
                     >
-                      📷 {media[cueKey(ex.name)] ? 'Replace' : 'Add'} photo/clip
+                      {media[cueKey(ex.name)] ? 'Replace' : 'Add'} photo
                     </button>
                     {media[cueKey(ex.name)] && (
                       <button className="chip" onClick={() => removeMedia(ex.name)}>
-                        ✕ Remove media
+                        Remove photo
                       </button>
                     )}
                     <button className="chip" onClick={() => setEditingCue(null)}>
                       Cancel
                     </button>
                   </div>
-                  <p className="mono" style={{ fontSize: 11.5, color: 'var(--dim)', marginTop: 6 }}>
-                    Photos/clips stay on this device — they don't sync.
+                  <p style={{ fontSize: 12, color: 'var(--dim)', marginTop: 6 }}>
+                    Photos stay on this device.
                   </p>
                 </div>
               ) : cues[cueKey(ex.name)] ? (
@@ -505,7 +514,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                   style={{ flex: 1, fontSize: 13.5 }}
                   onClick={() => toggleSet(exI, setI, set)}
                 >
-                  {ex.reps}{set.done ? ' — done' : ' — tap to tick off'}
+                  {ex.reps}
                 </span>
               ) : mode === 'cardio' ? (
                 <>
@@ -548,8 +557,11 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                 </>
               )}
               {mode !== 'check' && (
+                // the effort tag only appears once the set is ticked — no
+                // "rate" on every untouched row (its space stays reserved)
                 <button
                   className={'set-eff' + (set.effort ? ` set-eff--${set.effort}` : '')}
+                  style={set.done || set.effort ? undefined : { visibility: 'hidden' }}
                   aria-label={`Effort for set ${setI + 1}: ${set.effort || 'not rated'}`}
                   onClick={() =>
                     updateSet(
@@ -590,8 +602,8 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
             }
             cards.push(
               <div key={`ss-${exI}`} className="ex-card card--animate">
-                <div className="mono superset-badge" style={{ marginTop: 0, marginBottom: 8 }}>
-                  ⇋ superset {ex.superset} — one set of each, top to bottom
+                <div className="superset-badge" style={{ marginTop: 0, marginBottom: 6, fontWeight: 600 }}>
+                  Superset {ex.superset}
                 </div>
                 {renderHeader(a, 'var(--teal)', true)}
                 <div style={{ height: 12 }} />
@@ -618,26 +630,20 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
       {p.cardio && (
         <div className="card card--animate">
           <div className="card__label">Cardio</div>
-          <p className="body">
-            {p.cardio.desc} — {p.cardio.duration}
-          </p>
+          <p className="body">{[p.cardio.desc, p.cardio.duration].filter(Boolean).join(' · ')}</p>
         </div>
       )}
 
       {p.cooldown?.length > 0 && (
         <div className="card card--animate">
           <div className="card__label">Cool-down</div>
-          {p.cooldown.map((c, i) => (
-            <p key={i} className="body">
-              · {c}
-            </p>
-          ))}
+          <p className="body">{p.cooldown.join(' · ')}</p>
         </div>
       )}
 
       {!harder && (
         <button className="harder-btn" onClick={openHarder}>
-          ⚡ Feeling strong? Make it harder
+          Make it harder
         </button>
       )}
 
@@ -645,12 +651,8 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
         <div className="card card--animate">
           <div className="row-between">
             <div className="card__label">Push harder</div>
-            <button
-              className="ghost-btn"
-              style={{ padding: 0 }}
-              onClick={() => setHarder(null)}
-            >
-              close
+            <button className="icon-btn" style={{ height: 28 }} aria-label="Close" onClick={() => setHarder(null)}>
+              <Icon name="x" size={18} />
             </button>
           </div>
 
@@ -658,7 +660,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
 
           {harder.loading && (
             <p className="body" style={{ color: 'var(--muted)' }}>
-              Coach is picking your upgrades…
+              Picking upgrades…
             </p>
           )}
 
@@ -689,7 +691,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
 
           {!harder.loading && !harder.error && !(harder.options || []).length && (
             <p className="body" style={{ color: 'var(--muted)' }}>
-              No sensible upgrades today — finish strong instead.
+              Nothing to add today — finish strong.
             </p>
           )}
         </div>
@@ -699,13 +701,6 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
         Finish session
       </button>
 
-      {confirmCancel === 'bottom' ? (
-        cancelConfirm
-      ) : (
-        <button className="cancel-session-btn" onClick={() => setConfirmCancel('bottom')}>
-          Cancel this session
-        </button>
-      )}
       <div style={{ height: timer ? 84 : 24 }} />
 
       {sheet && (() => {
@@ -725,7 +720,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                       swapExercise(sheet.exI);
                     }}
                   >
-                    ⇄ Swap to {ex.alt}
+                    <Icon name="swap" /> Swap to {ex.alt}
                   </button>
                 )}
                 <button
@@ -735,7 +730,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     setSheet({ ...sheet, mode: 'swap' });
                   }}
                 >
-                  ⇄ Did something else…
+                  <Icon name="note" /> Did something else…
                 </button>
                 <a
                   className="action-sheet__item"
@@ -747,7 +742,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                   rel="noopener noreferrer"
                   onClick={() => setSheet(null)}
                 >
-                  ▶ Watch how-to video
+                  <Icon name="play" /> How-to video
                 </a>
                 <button
                   className="action-sheet__item"
@@ -756,7 +751,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     adjustSets?.(sheet.exI, +1);
                   }}
                 >
-                  ＋ Add set
+                  <Icon name="plus" /> Add set
                 </button>
                 <button
                   className="action-sheet__item"
@@ -766,7 +761,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     adjustSets?.(sheet.exI, -1);
                   }}
                 >
-                  − Remove set
+                  <Icon name="minus" /> Remove set
                 </button>
                 <button
                   className="action-sheet__item"
@@ -776,23 +771,20 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     setSheet(null);
                   }}
                 >
-                  ✎ {cues[cueKey(ex.name)] ? 'Edit note to self' : 'Note to self'}
+                  <Icon name="note" /> {cues[cueKey(ex.name)] ? 'Edit note' : 'Note or photo'}
                 </button>
                 <button
                   className="action-sheet__item action-sheet__item--danger"
                   onClick={() => setSheet({ ...sheet, mode: 'remove' })}
                 >
-                  ✕ Remove exercise
+                  <Icon name="trash" /> Remove exercise
                 </button>
               </>
             )}
 
             {sheet.mode === 'swap' && (
               <>
-                <p className="action-sheet__note">
-                  Log what you actually did instead — it replaces {ex.name} for
-                  today, and one tap swaps it back.
-                </p>
+                <p className="action-sheet__note">What did you do instead?</p>
                 <input
                   className="input"
                   placeholder="e.g. Running"
@@ -806,7 +798,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                   disabled={!swapDraft.trim()}
                   onClick={() => saveSwap(sheet.exI)}
                 >
-                  ⇄ Swap it in
+                  Swap it in
                 </button>
               </>
             )}
@@ -814,7 +806,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
             {sheet.mode === 'remove' && (
               <>
                 <p className="action-sheet__note">
-                  Skip {ex.name} today?
+                  Skip it today?
                   {rows.some(setLogged) ? ' Logged sets will be lost.' : ''}
                 </p>
                 <button
@@ -824,7 +816,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
                     removeExercise?.(sheet.exI);
                   }}
                 >
-                  ✕ Remove exercise
+                  Remove exercise
                 </button>
               </>
             )}
@@ -859,11 +851,11 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
             width: `${Math.max(0, Math.min(100, (remaining / timer.total) * 100))}%`,
           }} />
           <div className="rest-bar__content">
-            <span className="mono rest-bar__time">
+            <span className="rest-bar__time">
               {remaining <= 0 ? 'GO' : fmtClock(remaining)}
             </span>
             <span className="rest-bar__label">
-              {remaining <= 0 ? `next set — ${timer.exName}` : `rest · ${timer.exName}`}
+              {remaining <= 0 ? `Next set · ${timer.exName}` : timer.exName}
             </span>
             <button className="ghost-btn" onClick={() => { setTimer(null); releaseWake(); }}>
               Skip

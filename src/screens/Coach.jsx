@@ -1,4 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
+import Icon from '../components/Icon';
+
+const STARTERS = [
+  'Shoulder feels off — what do I swap?',
+  'Too tired for legs. Alternatives?',
+  'How heavy should warm-up sets be?',
+];
 import { askCoach } from '../api/gemini';
 import { getAllHealth } from '../db/db';
 import { todayStr } from '../utils/helpers';
@@ -67,37 +74,26 @@ export default function Coach({ history, todayPlan, onClose }) {
       <div className="chat-sheet-backdrop" onClick={onClose} />
       <div className="chat-sheet">
         <div className="chat-sheet__head">
-          <div className="brand-sm" style={{ fontSize: 16, letterSpacing: '0.25em' }}>
-            COACH CHAT
-          </div>
-          <button
-            className="ghost-btn"
-            aria-label="Close chat"
-            style={{ fontSize: 18, padding: 4 }}
-            onClick={onClose}
-          >
-            ✕
+          <div className="screen-header__title" style={{ fontSize: 26 }}>Coach</div>
+          <button className="icon-btn" aria-label="Close chat" onClick={onClose}>
+            <Icon name="x" size={22} />
           </button>
         </div>
 
         <div className="chat-scroll">
-          {messages.length === 0 && (
-            <p className="body" style={{ color: 'var(--muted)', marginTop: 8 }}>
-              Ask anything, anytime — the coach knows today's plan, your
-              recent sessions, and your Watch data.
-              <br /><br />
-              <span className="mono" style={{ fontSize: 13 }}>
-                "shoulder feels off, what do I swap?" · "too tired for legs,
-                alternatives?" · "how heavy should warm-up sets be?"
-              </span>
-            </p>
-          )}
+          {/* tap a starter instead of reading a paragraph of examples */}
+          {messages.length === 0 &&
+            STARTERS.map((q) => (
+              <button key={q} className="chat-starter" onClick={() => setInput(q)}>
+                {q}
+              </button>
+            ))}
           {messages.map((m, i) => (
             <div key={i} className={'chat-bubble' + (m.role === 'user' ? ' chat-bubble--user' : '')}>
               {m.text}
             </div>
           ))}
-          {busy && <div className="chat-bubble mono pulse">…</div>}
+          {busy && <div className="chat-bubble pulse">…</div>}
           {error && <div className="err-box">{error}</div>}
           <div ref={endRef} />
         </div>

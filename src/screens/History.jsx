@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import ActionSheet from '../components/ActionSheet';
+import Header from '../components/Header';
+import Icon from '../components/Icon';
 import { fmtDate, fmtSet, setLogged, cleanWeight, cleanReps, cleanTime, cleanDist } from '../utils/helpers';
 import { logMode } from '../utils/stats';
 
@@ -45,19 +47,12 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
 
   return (
     <div className="screen screen--slide-in">
-      <header className="header">
-        <button className="ghost-btn" onClick={onBack}>Home</button>
-        <div className="brand-sm">LOG</div>
-        <button className="ghost-btn" onClick={onAddPast}>+ Past</button>
-      </header>
+      <Header title="Log" trailing={{ icon: 'plus', label: 'Add past workout', onClick: onAddPast }} />
 
       {rev.length === 0 && (
         <div className="center-fill">
           <p className="body" style={{ color: 'var(--muted)', textAlign: 'center' }}>
             Nothing logged yet.
-            <br />
-            Your first session will show up here — and every one after it makes
-            the coach smarter.
           </p>
         </div>
       )}
@@ -71,54 +66,42 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
             className={'card card--animate' + (isEditing ? '' : ' card--tappable')}
             onClick={isEditing ? undefined : () => onOpen?.(h)}
           >
-            <div className="row-between">
-              <span className="ex-name" style={{ fontSize: 18 }}>
-                {view.plan.sessionType}
-                {!isEditing && (
-                  <span style={{ color: 'var(--dim)', fontSize: 14 }}> ›</span>
-                )}
+            <div className="row-between" style={{ alignItems: 'center' }}>
+              <span>
+                <span className="ex-name">{view.plan.sessionType}</span>
+                <span style={{ marginLeft: 8, fontSize: 13, color: 'var(--muted)' }}>{fmtDate(view.date)}</span>
               </span>
-              <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="mono" style={{ fontSize: 13, color: 'var(--muted)' }}>
-                  {fmtDate(view.date)}
-                </span>
-                {!isEditing && (
-                  <button
-                    className="menu-btn"
-                    aria-label="Session options"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSheet({ id: sid(h), mode: 'menu' });
-                    }}
-                  >
-                    ⋯
-                  </button>
-                )}
-              </span>
+              {!isEditing && (
+                <button
+                  className="icon-btn"
+                  style={{ width: 32, height: 28 }}
+                  aria-label="Session options"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSheet({ id: sid(h), mode: 'menu' });
+                  }}
+                >
+                  <Icon name="more" size={20} />
+                </button>
+              )}
             </div>
 
             {!isEditing && (
               <>
                 {(view.plan.exercises || []).map((ex, exI) => {
                   const sets = (view.log?.[exI] || []).filter(setLogged);
+                  // exercise left, sets right — one line each
                   return (
-                    <div
-                      key={exI}
-                      className="mono"
-                      style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}
-                    >
-                      {ex.name}:{' '}
-                      {sets.length ? sets.map(fmtSet).join('  ') : '—'}
+                    <div key={exI} className="sum-row">
+                      <span>{ex.name}</span>
+                      <span>{sets.length ? sets.map(fmtSet).join('  ') : '—'}</span>
                     </div>
                   );
                 })}
                 {view.fin && (
-                  <div
-                    className="mono"
-                    style={{ fontSize: 13, color: 'var(--amber)', marginTop: 8 }}
-                  >
-                    RPE {view.fin.rpe}/10
-                    {view.durationMin ? ` · ${view.durationMin}min` : ''}
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}>
+                    RPE {view.fin.rpe}
+                    {view.durationMin ? ` · ${view.durationMin} min` : ''}
                   </div>
                 )}
               </>
@@ -128,7 +111,7 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
               <>
                 {(draft.plan.exercises || []).map((ex, exI) => (
                   <div key={exI} style={{ marginTop: 10 }}>
-                    <div className="mono" style={{ fontSize: 13, color: 'var(--text-body)' }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-body)' }}>
                       {ex.name}
                     </div>
                     {(draft.log?.[exI] || []).map((s, setI) =>
@@ -136,7 +119,7 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
                         <div key={setI} className="set-row">
                           <span className="mono set-x" style={{ width: 20 }}>{setI + 1}</span>
                           <span className="set-x" style={{ fontSize: 13 }}>
-                            {s.done ? '✓ done' : '— skipped'}
+                            {s.done ? 'Done' : 'Skipped'}
                           </span>
                         </div>
                       ) : logMode(ex.name, draft.plan?.sessionType) === 'cardio' ? (
@@ -182,9 +165,7 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
                     )}
                   </div>
                 ))}
-                <div className="mono" style={{ fontSize: 13, marginTop: 12, color: 'var(--muted)' }}>
-                  Session RPE
-                </div>
+                <div className="q-label" style={{ margin: '14px 0 6px' }}>Session RPE</div>
                 <input
                   className="set-input"
                   inputMode="numeric"
@@ -234,21 +215,20 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
             {sheet.mode === 'menu' && (
               <>
                 <button className="action-sheet__item" onClick={() => startEdit(s)}>
-                  ✎ Edit sets &amp; notes
+                  <Icon name="note" /> Edit
                 </button>
                 <button
                   className="action-sheet__item action-sheet__item--danger"
                   onClick={() => setSheet({ ...sheet, mode: 'delete' })}
                 >
-                  ✕ Delete session
+                  <Icon name="trash" /> Delete
                 </button>
               </>
             )}
             {sheet.mode === 'delete' && (
               <>
                 <p className="action-sheet__note">
-                  Delete this session for good? It disappears from your log,
-                  stats, and the coach's memory.
+                  Delete for good? It's removed from your log, stats and the coach's memory.
                 </p>
                 <button
                   className="action-sheet__go action-sheet__go--danger"
@@ -257,14 +237,13 @@ export default function History({ history, onBack, onDelete, onUpdate, onOpen, o
                     onDelete(s);
                   }}
                 >
-                  ✕ Delete it
+                  Delete
                 </button>
               </>
             )}
           </ActionSheet>
         );
       })()}
-      <div style={{ height: 24 }} />
     </div>
   );
 }
