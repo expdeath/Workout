@@ -142,7 +142,8 @@ enum Dashboard {
         let tonnes = history.reduce(0) { $0 + Stats.sessionVolume($1) } / 1000
         return [
             Ladder(key: "sessions", icon: "calendar", unit: "sessions", value: history.count, steps: [10, 25, 50, 100, 250]),
-            Ladder(key: "streak", icon: "flame.fill", unit: "week streak", value: Stats.weekStats(history).streak, steps: [2, 4, 8, 12, 26]),
+            // the streak against your own weekly target — the same number the streak stat shows
+            Ladder(key: "streak", icon: "flame.fill", unit: "week streak", value: Stats.weekStats(history, target: weeklyTarget(LocalStore.shared.backup.aiSettings)).streak, steps: [2, 4, 8, 12, 26]),
             Ladder(key: "tonnes", icon: "scalemass.fill", unit: "t lifted", value: tonnes, steps: [5, 10, 25, 50, 100]),
             Ladder(key: "heaviest", icon: "medal.fill", unit: "kg lift", value: heaviest, steps: [40, 60, 80, 100, 140]),
         ]

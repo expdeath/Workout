@@ -15,6 +15,7 @@
 		0A33DDBBF2EB9A47113AE804 /* GoogleService-Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 603465482B7BC774B7E3E841 /* GoogleService-Info.plist */; };
 		0B38FD98E7970ED320841C3C /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAF1A9EC27C20987F3AB6476 /* RootView.swift */; };
 		0C883595F747078EEAF886D2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4857B65C34E9E4650D2DA9A /* Assets.xcassets */; };
+		10D393D95C0E2BD491ACF2B2 /* StreakMilestoneTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6DD7A334FBF8AC3939CB6EA3 /* StreakMilestoneTests.swift */; };
 		129324DAD2B3BE91B1EDFEAB /* ReadinessBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0B54535C1DC13160877BB4 /* ReadinessBar.swift */; };
 		15A1C80FD0F5593B5EFF7D92 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D902733D0D54899A36B5F1 /* Keychain.swift */; };
 		1C49CE717455595315A57C67 /* AppleSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40944D0779B1E2B037F2D638 /* AppleSignIn.swift */; };
@@ -150,6 +151,7 @@
 		696076EF089475919CCBF9F2 /* BarlowCondensed-SemiBold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-SemiBold.ttf"; sourceTree = "<group>"; };
 		6C62D9115D416D86EAE653A8 /* GeneratingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratingView.swift; sourceTree = "<group>"; };
 		6C8793CCF94729B7F6E2682D /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressView.swift; sourceTree = "<group>"; };
+		6DD7A334FBF8AC3939CB6EA3 /* StreakMilestoneTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreakMilestoneTests.swift; sourceTree = "<group>"; };
 		7722B7FB363CBE997AD0D121 /* WorkoutView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkoutView.swift; sourceTree = "<group>"; };
 		78637988DB1F3C7BF4A71B73 /* Prefs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Prefs.swift; sourceTree = "<group>"; };
 		7A8E1F79407B95F9876CC298 /* GitHubSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubSync.swift; sourceTree = "<group>"; };
@@ -403,6 +405,7 @@
 				F532E7DB967C7E61C02AEC8C /* LenientDecodingTests.swift */,
 				2E1EC881EABE0145F016502E /* ProTests.swift */,
 				37B5A5069CED84D6E719D757 /* StatsTests.swift */,
+				6DD7A334FBF8AC3939CB6EA3 /* StreakMilestoneTests.swift */,
 				BDC4B4E1361BB4841BE16531 /* WorkoutsTests.swift */,
 			);
 			path = CoachAppTests;
@@ -567,6 +570,7 @@
 				31DFBD66C7E446FE6E214BB9 /* LenientDecodingTests.swift in Sources */,
 				247CAA7D98C616EA3EA28814 /* ProTests.swift in Sources */,
 				3664BD3FA68CC56DE50BF7D9 /* StatsTests.swift in Sources */,
+				10D393D95C0E2BD491ACF2B2 /* StreakMilestoneTests.swift in Sources */,
 				9666D47A079900C4E90CBA2A /* WorkoutsTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
