@@ -29,11 +29,15 @@ next.
 | Progress screen (charts) | ✅ Done (Swift Charts) |
 | Settings screen | ✅ Done (export/import/CSV, backup, sign out, Apple Health) |
 | Coach chat sheet | ✅ Done (shared chat-<date> with the web) |
+| My workouts (own + trainer's, schedule, add-ons, build with coach from text/photo) | ✅ Done, unit-tested (shared `workout-<id>` state with the web) |
+| Search · Records share/export · Alerts & reports switches | ✅ Done (shared `prefs` state with the web) |
 | HealthKit | ✅ Built + unit-tested; needs a run on the real iPhone (Settings → Connect Apple Health) |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-70 unit tests (`CoachAppTests/`) and 5 UI tests (`CoachAppUITests/`), all
-passing on the iPhone 17 simulator (2026-10-07).
+81 unit tests (`CoachAppTests/`) and 5 UI tests (`CoachAppUITests/`), all
+passing on the iPhone 17 simulator (2026-10-09). `COACH_DEBUG_WORKOUTS=1`
+with the debug seed adds saved workouts; `COACH_DEBUG_SCREEN=workouts`
+opens My workouts.
 The unit tests pass (run on macOS on 2026-10-07 — see "Dev workflow"
 for why). The UI tests and the Firestore/Google sign-in flow haven't
 run since the move to Firestore: the simulator was unavailable (Xcode 27

@@ -23,6 +23,8 @@ struct CheckInView: View {
             VStack(alignment: .leading, spacing: 0) {
                 ScreenHeader(title: "Check-in", onBack: { appState.screen = .home })
 
+                savedWorkoutPicker
+
                 QLabel(text: "Energy", value: "\(appState.ci.energy)/10")
                 Slider(
                     value: Binding(get: { Double(appState.ci.energy) }, set: { appState.ci.energy = Int($0) }),
@@ -54,7 +56,7 @@ struct CheckInView: View {
                     ErrorBox(text: appState.error).padding(.top, 14)
                 }
 
-                Button("Build session") {
+                Button(pickedWorkout.map { "Start \($0.name)" } ?? "Build session") {
                     Task { await appState.generateWorkout(appState.ci) }
                 }
                 .buttonStyle(BigButtonStyle())
@@ -114,15 +116,17 @@ struct CheckInView: View {
                 .padding(.top, 10)
             }
 
-            QLabel(text: "Focus").padding(.top, -4)
-            SegGroup(
-                options: [
-                    ("", "Coach's call"), ("lift", "Lift"), ("cardio", "Cardio"),
-                    ("core", "Core"), ("stretch", "Stretch"), ("surprise", "🎲 Surprise me"),
-                ],
-                value: ci.wish,
-                columns: 3
-            )
+            if pickedWorkout == nil { // a saved workout sets its own focus
+                QLabel(text: "Focus").padding(.top, -4)
+                SegGroup(
+                    options: [
+                        ("", "Coach's call"), ("lift", "Lift"), ("cardio", "Cardio"),
+                        ("core", "Core"), ("stretch", "Stretch"), ("surprise", "🎲 Surprise me"),
+                    ],
+                    value: ci.wish,
+                    columns: 3
+                )
+            }
 
             QLabel(text: "Health data").padding(.top, -4)
             HStack {
@@ -168,6 +172,41 @@ struct CheckInView: View {
                 .padding(.top, 10)
         }
         .padding(.top, 4)
+    }
+
+    // MARK: Saved workouts
+
+    private var pickedWorkout: SavedWorkout? {
+        Workouts.list().first { !$0.isAddOn && $0.id == appState.ci.templateId }
+    }
+
+    /// Today's workout: the coach plans it, or one of the saved ones
+    /// (today's scheduled one pre-picked), plus today's add-ons.
+    @ViewBuilder private var savedWorkoutPicker: some View {
+        let all = Workouts.list()
+        let sessions = all.filter { !$0.isAddOn }
+        let addOns = all.filter(\.isAddOn)
+        let scheduled = Workouts.scheduledFor(Helpers.todayStr(), all).sessions.map(\.id)
+        HStack(alignment: .firstTextBaseline) {
+            Text("Today's workout").capsLabel()
+            Spacer()
+            Chip(title: all.isEmpty ? "+ Add your own" : "My workouts") { appState.openWorkouts(from: .checkIn) }
+        }
+        .padding(.bottom, 8)
+        let options = [("", "Coach plans it")] + sessions.map { ($0.id, $0.name + (scheduled.contains($0.id) ? " · today" : "")) }
+        SegGroup(options: options, value: ci.templateId, columns: min(options.count, 2))
+        if let w = pickedWorkout {
+            Text((w.source == "trainer" ? "\(w.trainer.isEmpty ? "Trainer" : w.trainer)'s workout · " : "")
+                 + (w.adapt ? "The coach adapts it to how you feel today." : "Kept exactly as written — the coach fills in weights and flags recovery."))
+                .font(Theme.meta(13)).foregroundStyle(Theme.muted).padding(.top, 8)
+        }
+        ForEach(addOns) { a in
+            let on = appState.ci.addOnIds.contains(a.id)
+            Pill(on: on, text: "\(on ? "✓" : "+") \(a.name) · \(Workouts.daysLabel(a).isEmpty ? "add-on" : Workouts.daysLabel(a))") {
+                if on { appState.ci.addOnIds.removeAll { $0 == a.id } } else { appState.ci.addOnIds.append(a.id) }
+            }
+            .padding(.top, 8)
+        }
     }
 
     // MARK: Helpers

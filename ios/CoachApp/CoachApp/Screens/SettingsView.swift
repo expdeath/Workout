@@ -10,6 +10,7 @@ struct SettingsView: View {
     @Environment(AppState.self) private var appState
 
     @State private var detail: String?
+    @State private var prefsTick = 0 // re-read Prefs after a switch flips
     @State private var target = Dashboard.weeklyTarget(LocalStore.shared.backup.aiSettings)
     // coach setup
     @State private var key = Cloud.shared.geminiKey
@@ -52,6 +53,7 @@ struct SettingsView: View {
 
                 group("Preferences", note: "Coach logic") {
                     SettingsRow(icon: "brain.head.profile", title: "AI Coach", subtitle: coachStatus) { detail = "coach" }
+                    SettingsRow(icon: "bell.badge", title: "Alerts & reports", subtitle: alertsStatus) { detail = "alerts" }
                     SettingsRow(icon: "target", tint: Theme.green, title: "Weekly target", subtitle: "Streak, consistency and the target bar") { detail = "target" } trailing: {
                         Text("\(Dashboard.weeklyTarget(LocalStore.shared.backup.aiSettings))/wk").capsLabel(Theme.amberText, size: 14)
                     }
@@ -144,7 +146,7 @@ struct SettingsView: View {
     }
 
     private static let titles = ["coach": "AI Coach", "target": "Weekly target", "watch": "Apple Health", "gym": "Plates & Bar",
-                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About"]
+                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About", "alerts": "Alerts & reports"]
 
     private func detailSheet(_ id: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -164,6 +166,7 @@ struct SettingsView: View {
                     case "sync": backupSection
                     case "data": dataSection
                     case "account": accountSection
+                    case "alerts": alertsSection
                     default:
                         Text("COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.")
                             .font(Theme.body(14)).foregroundStyle(Theme.muted)
@@ -435,6 +438,55 @@ struct SettingsView: View {
     // MARK: - Pieces
 
     /// The body of one settings sheet.
+    // MARK: - Alerts & reports (account state `prefs`, shared with the web app)
+
+    private static let prefRows: [(group: String, rows: [(key: String, title: String, sub: String)])] = [
+        ("Rest timer", [
+            ("restSound", "Sound", "A chime when the rest ends"),
+            ("restVibrate", "Vibration", "A buzz when the rest ends"),
+            ("restNotify", "Notification", "Alert when the phone is locked or you're in another app"),
+        ]),
+        ("During a workout", [
+            ("keepAwake", "Keep screen awake", "The screen stays on while you rest"),
+        ]),
+        ("AI reports", [
+            ("weeklyReview", "Weekly review", "Written every Sunday from your week"),
+            ("monthlyReport", "Monthly report", "Written in the first week of a new month"),
+            ("debrief", "Post-workout debrief", "Two sentences from the coach after each session"),
+        ]),
+    ]
+
+    private var alertsStatus: String {
+        _ = prefsTick
+        let on = Self.prefRows.flatMap(\.rows).filter { Prefs.isOn($0.key) }.count
+        return "\(on) of 7 on · rest timer, screen, AI reports"
+    }
+
+    private var alertsSection: some View {
+        section {
+            ForEach(Self.prefRows, id: \.group) { g in
+                QLabel(text: g.group)
+                ForEach(g.rows, id: \.key) { r in
+                    Toggle(isOn: Binding(
+                        get: { _ = prefsTick; return Prefs.isOn(r.key) },
+                        set: { on in
+                            Prefs.set(r.key, on)
+                            prefsTick += 1
+                            LocalStore.shared.logEvent(type: "pref_changed", data: ["key": .string(r.key), "on": .bool(on)])
+                        }
+                    )) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(r.title).font(Theme.body(15, weight: .medium))
+                            Text(r.sub).font(Theme.meta(12.5)).foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .tint(Theme.amber)
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+    }
+
     private func section(@ViewBuilder _ content: () -> some View) -> some View {
         VStack(alignment: .leading, spacing: 10) { content() }
     }

@@ -34,6 +34,10 @@ struct Backup: Codable, Equatable {
     var health: [HealthRow] = []
     var sessions: [Session] = []
     var events: [Event] = []
+    /// Saved workouts (state workout-<id>) and the Settings switches —
+    /// carried as-is; only written when there are any.
+    var workouts: [JSONValue] = []
+    var prefs: JSONValue? = nil
     /// Rows that didn't fit the models above, kept verbatim (and written
     /// back out) so a malformed row is never silently dropped — see
     /// LossyArray in RawPreserving.swift.
@@ -47,7 +51,7 @@ struct Backup: Codable, Equatable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case app, version, aiSettings, deletedIds, health, sessions, events
+        case app, version, aiSettings, deletedIds, health, sessions, events, workouts, prefs
     }
 
     init(app: String = "coach", version: Int = 4, aiSettings: AISettings = AISettings(), deletedIds: [DeletedId] = [], health: [HealthRow] = [], sessions: [Session] = [], events: [Event] = []) {
@@ -71,6 +75,8 @@ struct Backup: Codable, Equatable {
         sessions = s?.items ?? []
         events = e?.items ?? []
         unparsed = Unparsed(health: h?.unparsed ?? [], sessions: s?.unparsed ?? [], events: e?.unparsed ?? [])
+        workouts = c.lenient([JSONValue].self, .workouts) ?? []
+        prefs = c.lenient(JSONValue.self, .prefs)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -82,5 +88,7 @@ struct Backup: Codable, Equatable {
         try c.encode(health.map { try JSONValue.encoding($0) } + unparsed.health, forKey: .health)
         try c.encode(sessions.map { try JSONValue.encoding($0) } + unparsed.sessions, forKey: .sessions)
         try c.encode(events.map { try JSONValue.encoding($0) } + unparsed.events, forKey: .events)
+        if !workouts.isEmpty { try c.encode(workouts, forKey: .workouts) }
+        try c.encodeIfPresent(prefs, forKey: .prefs)
     }
 }

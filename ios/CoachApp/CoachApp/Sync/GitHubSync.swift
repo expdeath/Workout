@@ -75,9 +75,10 @@ enum GitHubSync {
         var files: Int
     }
 
-    /// Per-device diagnostic (like the web app's coach:last-inbox).
+    /// When the Watch inbox was last drained — account state `lastInbox`, shared with the web app.
     static func lastInbox() -> LastInboxInfo? {
-        Defaults.codable(LastInboxInfo.self, "last-inbox")
+        guard let v = Cloud.shared.stateValue("lastInbox"), let data = try? JSONEncoder().encode(v) else { return nil }
+        return try? JSONDecoder().decode(LastInboxInfo.self, from: data)
     }
 
     enum SyncError: LocalizedError {
@@ -290,7 +291,7 @@ enum GitHubSync {
             }
         }
         if ingested > 0 {
-            Defaults.setCodable(LastInboxInfo(at: Date().timeIntervalSince1970 * 1000, files: ingested), for: "last-inbox")
+            Cloud.shared.setState("lastInbox", try? JSONValue.encoding(LastInboxInfo(at: Date().timeIntervalSince1970 * 1000, files: ingested)))
         }
         return ingested
     }
@@ -343,6 +344,10 @@ enum GitHubSync {
     }
 
     private static func eventKey(_ e: Event) -> String { "\(e.iso)|\(e.type)" }
+    private static func workoutId(_ w: JSONValue) -> String {
+        if case .object(let o) = w, case .string(let id)? = o["id"] { return id }
+        return ""
+    }
 
     static func mergeBackups(_ local: Backup, _ remote: Backup?) -> Backup {
         guard let remote else { return normalizeBackup(local) }
@@ -407,6 +412,8 @@ enum GitHubSync {
         out.health = b.health.sorted { $0.date < $1.date }
         out.sessions = sessions.sorted { ($0.date + $0.id) < ($1.date + $1.id) }
         out.events = b.events.sorted { eventKey($0) < eventKey($1) }
+        out.workouts = b.workouts.sorted { workoutId($0) < workoutId($1) }
+        out.prefs = b.prefs
         return out
     }
 
@@ -453,6 +460,8 @@ enum GitHubSync {
         do {
             var b = LocalStore.shared.backup
             b.events = try await Cloud.shared.allEvents()
+            b.workouts = Workouts.rawAll()
+            b.prefs = Prefs.raw
             let backup = normalizeBackup(b)
             try await pushRemote(cfg, backup)
             await pushReadme(cfg, backup.sessions)

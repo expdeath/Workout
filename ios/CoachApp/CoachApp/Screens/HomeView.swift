@@ -7,7 +7,13 @@ struct HomeView: View {
     @Environment(AppState.self) private var appState
     @State private var quickCardioKind: String? = nil
     /// the readiness notice was dismissed on this day (yyyy-MM-dd)
-    @AppStorage("coach:noticeDismissed") private var noticeDismissed = ""
+    /// Dismissing today's recovery notice is account state (`noticeDismissed`,
+    /// shared with the web app), so every device hides it.
+    private var noticeDismissed: String {
+        _ = appState.stateTick
+        if case .string(let d)? = Cloud.shared.stateValue("noticeDismissed") { return d }
+        return ""
+    }
 
     private var doneToday: Bool { appState.todayPlan?.finished == true }
     private var inProgress: Bool { appState.todayPlan != nil && appState.todayPlan?.finished == false }
@@ -141,10 +147,16 @@ struct HomeView: View {
     private func focus(target: Int) -> some View {
         let t = appState.todayPlan
         VStack(alignment: .leading, spacing: 10) {
-            SectionHead(title: "Today's focus",
-                        trailing: t == nil ? "Not planned" : (t!.finished ? "Completed" : "Scheduled"),
-                        trailingColor: t?.finished == true ? Theme.green : (t == nil ? Theme.muted : Theme.amberText))
-            if let t { planCard(t) } else { emptyFocus }
+            // the session's status while there is one; otherwise the way to your saved workouts
+            if let t {
+                SectionHead(title: "Today's focus", trailing: t.finished ? "Completed" : "Scheduled",
+                            trailingColor: t.finished ? Theme.green : Theme.amberText)
+            } else {
+                SectionHead(title: "Today's focus", trailing: "My workouts") { appState.openWorkouts(from: .home) }
+            }
+            if let t { planCard(t) }
+            else if let w = scheduled.sessions.first { savedCard(w, more: scheduled.sessions.count - 1, addOns: scheduled.addOns) }
+            else { emptyFocus }
         }
     }
 
@@ -191,6 +203,49 @@ struct HomeView: View {
         }
     }
 
+    private var scheduled: (sessions: [SavedWorkout], addOns: [SavedWorkout]) {
+        _ = appState.stateTick
+        return Workouts.scheduledFor()
+    }
+
+    /// No plan yet, but the library has a workout on today's weekday.
+    private func savedCard(_ w: SavedWorkout, more: Int, addOns: [SavedWorkout]) -> some View {
+        CoachCard {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Scheduled today" + (w.source == "trainer" ? " · \(w.trainer.isEmpty ? "trainer" : w.trainer)'s workout" : ""))
+                        .capsLabel(Theme.amberText, size: 12)
+                    Text(w.name).font(Theme.head(26, weight: .bold)).textCase(.uppercase).tracking(0.5).foregroundStyle(Theme.text).lineLimit(2)
+                    Text("\(w.exercises.count) exercises · \(w.adapt ? "coach adapts it to today" : "kept as written")"
+                         + (addOns.isEmpty ? "" : " · + " + addOns.map(\.name).joined(separator: ", ")))
+                        .font(Theme.meta(13)).foregroundStyle(Theme.muted)
+                }
+                Spacer()
+                IconWell(icon: "list.bullet.clipboard")
+            }
+            ExerciseSummary(exercises: w.exercises, max: 4).padding(.vertical, 4)
+            HStack {
+                Button(more > 0 ? "\(more) more scheduled today" : "All my workouts") { appState.openWorkouts(from: .home) }
+                    .font(Theme.body(13.5)).foregroundStyle(Theme.amberText)
+                Spacer()
+                Button {
+                    Task { await appState.startSavedWorkout(w.id) }
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("Start")
+                        Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold))
+                    }
+                    .font(Theme.head(15, weight: .bold)).textCase(.uppercase).tracking(1)
+                    .foregroundStyle(Theme.text)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Theme.bgHigh)
+                    .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
     private var emptyFocus: some View {
         CoachCard {
             Text("No plan yet").font(Theme.head(24, weight: .bold)).textCase(.uppercase).tracking(0.5)
@@ -215,7 +270,7 @@ struct HomeView: View {
                 Text(r.note).font(Theme.body(14)).foregroundStyle(Theme.textBody).lineLimit(3)
             }
             Spacer(minLength: 0)
-            Button { noticeDismissed = Helpers.todayStr() } label: {
+            Button { Cloud.shared.setState("noticeDismissed", .string(Helpers.todayStr())); appState.stateTick += 1 } label: {
                 Image(systemName: "xmark").font(.system(size: 13, weight: .semibold)).foregroundStyle(Theme.muted)
                     .frame(width: 28, height: 28)
             }

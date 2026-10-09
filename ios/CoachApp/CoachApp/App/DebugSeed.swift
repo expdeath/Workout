@@ -19,6 +19,7 @@ enum DebugSeed {
         case "records": return .records
         case "progress": return .progress
         case "settings": return .settings
+        case "workouts": return .workouts
         default: return nil
         }
     }
@@ -48,6 +49,22 @@ enum DebugSeed {
         )
         yesterday.debrief = "Good pressing volume today — chest and shoulders both moved well. Next time, add a set to incline press since reps were easy across the board."
         LocalStore.shared.seed(session: yesterday)
+        // `COACH_DEBUG_WORKOUTS=1`: a trainer's workout scheduled today + a daily add-on
+        if ProcessInfo.processInfo.environment["COACH_DEBUG_WORKOUTS"] == "1" {
+            let wd = Calendar.current.component(.weekday, from: Date()) - 1
+            Workouts.save(SavedWorkout(name: "Upper A", source: "trainer", trainer: "Sam", days: [wd, (wd + 2) % 7], exercises: [
+                .init(name: "Flat Dumbbell Press", sets: 4, reps: "6-8"),
+                .init(name: "Barbell Row", sets: 3, reps: "8", weight: "60kg", rest: "2 min"),
+                .init(name: "Lateral Raise", sets: 3, reps: "12-15", rest: "60s"),
+            ]))
+            Workouts.save(SavedWorkout(name: "Lower B", source: "trainer", trainer: "Sam", adapt: true, days: [(wd + 1) % 7], exercises: [
+                .init(name: "Back Squat", sets: 4, reps: "6", weight: "85kg", rest: "3 min"),
+                .init(name: "Romanian Deadlift", sets: 3, reps: "8"),
+            ]))
+            Workouts.save(SavedWorkout(name: "Daily core", kind: "addon", exercises: [
+                .init(name: "Plank", sets: 3, reps: "45s", rest: "30s"), .init(name: "Dead Bug", sets: 2, reps: "10"),
+            ]))
+        }
         // an in-progress session for the Workout/Finish screens: every
         // logging mode (strength, a superset pair, cardio, tick-off)
         if startScreen == .workout || startScreen == .finish {

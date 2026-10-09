@@ -17,11 +17,12 @@ enum Screen: Equatable {
     case records
     case progress
     case settings
+    case workouts
 }
 
 /// App-wide sheets opened from the tab header.
 enum AppSheet: String, Identifiable {
-    case notifications, profile
+    case notifications, profile, search
     var id: String { rawValue }
 }
 
@@ -86,6 +87,15 @@ final class AppState {
     var weeklyReview: WeeklyReviewCache? = nil
     var monthlyReport: MonthlyReportCache? = nil
     var loginError = ""
+    /// Bumped when account state changes (another device saved a workout…),
+    /// so screens that read it straight from Cloud re-render.
+    var stateTick = 0
+    /// My workouts: where its back button returns to, and a workout to open straight away.
+    var workoutsFrom: Screen = .home
+    var workoutsOpenId: String? = nil
+    /// Search → Records: the exercise to select (changes each time).
+    var recordPick: RecordPick? = nil
+    struct RecordPick: Equatable { var name: String; var at = Date() }
 
     var ci = Checkin()
     var fin = FinishInfo()
@@ -250,7 +260,7 @@ final class AppState {
     private func cloudChanged(_ what: String) {
         switch what {
         case "sessions": loadActive()
-        case "state": loadStateFromCloud()
+        case "state": loadStateFromCloud(); stateTick += 1
         default: break
         }
     }
@@ -329,7 +339,34 @@ final class AppState {
     func buildDefaultCheckin() -> Checkin {
         var c = Checkin()
         c.health = todaysHealth()
+        // the saved-workout library: today's scheduled workout + add-ons
+        let today = Workouts.scheduledFor()
+        c.templateId = today.sessions.first?.id ?? ""
+        c.addOnIds = today.addOns.map(\.id)
         return c
+    }
+
+    // MARK: - My workouts
+
+    func openWorkouts(from: Screen? = nil, id: String? = nil) {
+        let f = from ?? screen
+        workoutsFrom = [.home, .history, .progress, .records, .settings, .checkIn].contains(f) ? f : .home
+        workoutsOpenId = id
+        screen = .workouts
+    }
+
+    /// Start a saved workout: the check-in, with it already picked.
+    func startSavedWorkout(_ id: String) async {
+        var c = await prepareCheckin()
+        c.templateId = id
+        ci = c
+        error = ""
+        screen = .checkIn
+    }
+
+    func openRecord(_ name: String) {
+        recordPick = RecordPick(name: name)
+        screen = .records
     }
 
     /// Today's health row (from the Watch-shortcut inbox, drained on
@@ -353,13 +390,29 @@ final class AppState {
             LocalStore.shared.mergeHealth(HealthRow(date: Helpers.todayStr(), weightKg: bodyKg))
         }
 
+        // a saved workout (yours or your trainer's) and today's add-ons
+        let template = Workouts.get(checkin.templateId)
+        let addOns = checkin.addOnIds.compactMap { Workouts.get($0) }
+
         do {
-            let plan = try await Gemini.generateWorkoutPlan(checkin: checkin, history: history) { [weak self] msg in
-                Task { @MainActor in self?.statusMsg = msg }
+            var plan: Plan
+            do {
+                plan = try await Gemini.generateWorkoutPlan(checkin: checkin, history: history, template: template) { [weak self] msg in
+                    Task { @MainActor in self?.statusMsg = msg }
+                }
+                if let template, !template.adapt { plan = Workouts.enforceExact(plan, template, history) }
+            } catch {
+                guard let template else { throw error }
+                // the coach is unreachable — a saved workout still runs, as written
+                LocalStore.shared.logEvent(type: "generation_failed", data: ["message": .string(error.localizedDescription), "fallback": .string("saved workout")])
+                plan = Workouts.templateToPlan(template, history)
+                plan.concerns = "Coach unavailable — weights are from your history."
             }
+            plan = Workouts.appendAddOns(plan, addOns, history)
             LocalStore.shared.logEvent(type: "plan_generated", data: [
                 "sessionType": .string(plan.sessionType), "title": .string(plan.title),
                 "estTimeMin": .number(Double(plan.estTimeMin)),
+                "workout": template.map { .string($0.id) } ?? .null, "addOns": .number(Double(addOns.count)),
             ])
             let log = plan.exercises.map { ex in Array(repeating: SetLog(), count: max(ex.sets, 1)) }
             let t = Session(
@@ -381,6 +434,7 @@ final class AppState {
     // MARK: - Weekly / monthly reports
 
     private func maybeWeeklyReview() async {
+        guard Prefs.isOn("weeklyReview") else { return } // switched off in Settings
         guard Calendar.current.component(.weekday, from: Date()) == 1 else { return } // Sundays only (1 = Sunday)
         let thisMonday = Stats.mondayOf(Helpers.todayStr())
         guard stateField("weeklyReview", "week") != thisMonday else { return } // already done this week
@@ -392,6 +446,7 @@ final class AppState {
     }
 
     private func maybeMonthlyReport() async {
+        guard Prefs.isOn("monthlyReport") else { return } // switched off in Settings
         let now = Date()
         let cal = Calendar.current
         guard cal.component(.day, from: now) <= 7 else { return } // first week of the month only
@@ -536,8 +591,8 @@ final class AppState {
         screen = .home
         Task { await runSync() }
 
-        // Background: coach debrief on the finished session
-        if let text = try? await Gemini.generateDebrief(t, prior) {
+        // Background: coach debrief on the finished session (unless switched off)
+        if Prefs.isOn("debrief"), let text = try? await Gemini.generateDebrief(t, prior) {
             // the session may have been edited (or deleted) while the AI
             // was writing — attach the debrief to the latest copy only
             guard var latest = LocalStore.shared.backup.sessions.first(where: { $0.id == t.id }) else { return }
@@ -599,6 +654,8 @@ final class AppState {
     func exportBackupFile() async throws -> URL {
         var b = LocalStore.shared.backup
         b.events = try await Cloud.shared.allEvents()
+        b.workouts = Workouts.rawAll()
+        b.prefs = Prefs.raw
         b.sessions.sort { ($0.date + $0.id) < ($1.date + $1.id) }
         b.health.sort { $0.date < $1.date }
         b.version = 4
@@ -640,6 +697,14 @@ final class AppState {
         if b.aiSettings.updatedAt > LocalStore.shared.backup.aiSettings.updatedAt {
             Cloud.shared.putAISettings(b.aiSettings)
         }
+        // saved workouts: add missing ones, newer copies win (replaceAll in src/db/db.js)
+        for raw in b.workouts {
+            guard case .object(let o) = raw, case .string(let id)? = o["id"], !id.isEmpty else { continue }
+            let mine: Double = { if case .object(let m)? = Cloud.shared.stateValue("workout-\(id)"), case .number(let u)? = m["updatedAt"] { return u }; return -1 }()
+            let theirs: Double = { if case .number(let u)? = o["updatedAt"] { return u }; return 0 }()
+            if theirs > mine { Cloud.shared.setState("workout-\(id)", raw) }
+        }
+        if let p = b.prefs, Prefs.raw == nil { Cloud.shared.setState("prefs", p) }
         LocalStore.shared.logEvent(type: "data_imported", data: ["sessions": .number(Double(b.sessions.count)), "events": .number(Double(b.events.count))])
         Task { await runSync(replaceRemote: true) } // restored backup becomes the GitHub copy too
         return "Restored \(b.sessions.count) sessions from backup\(skipped > 0 ? " (\(skipped) kept: newer or deleted here)" : "")."

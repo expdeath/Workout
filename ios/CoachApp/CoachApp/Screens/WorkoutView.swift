@@ -627,23 +627,25 @@ struct WorkoutView: View {
         stopTimer()
         let rest = RestTimer(endsAt: Date().addingTimeInterval(seconds), total: seconds, exName: exName)
         timer = rest
-        UIApplication.shared.isIdleTimerDisabled = true // screen stays on while resting
+        // Settings → Alerts & reports decides which of these happen
+        let sound = Prefs.isOn("restSound"), buzz = Prefs.isOn("restVibrate")
+        if Prefs.isOn("keepAwake") { UIApplication.shared.isIdleTimerDisabled = true } // screen stays on while resting
         // a real notification: fires even with the phone locked or in another app
         let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+        if Prefs.isOn("restNotify") { center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
             guard granted else { return }
             let content = UNMutableNotificationContent()
             content.title = "⏱ Rest over — GO"
             content.body = "Next set: \(exName)"
-            content.sound = .default
+            content.sound = sound ? .default : nil
             center.add(UNNotificationRequest(identifier: "rest-timer", content: content,
                                              trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)))
-        }
+        } }
         restTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            UINotificationFeedbackGenerator().notificationOccurred(.success)
-            AudioServicesPlaySystemSound(1005)
+            if buzz { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+            if sound { AudioServicesPlaySystemSound(1005) }
             try? await Task.sleep(nanoseconds: 4_000_000_000)
             guard !Task.isCancelled else { return }
             timer = nil

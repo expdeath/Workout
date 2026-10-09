@@ -15,6 +15,9 @@ struct Checkin: Codable, Equatable {
     var bodyKg: String = ""
     var notes: String = ""
     var prioritizeMuscle: String = ""
+    /// A saved workout picked for today (src/utils/workouts.js), and the add-ons ticked.
+    var templateId: String = ""
+    var addOnIds: [String] = []
 
     init(energy: Int = 7, sleep: String = "OK", soreness: String = "None", soreAreas: String = "", backTight: Bool = false, timeAvail: String = "60", wish: String = "", health: String? = nil, bodyKg: String = "", notes: String = "", prioritizeMuscle: String = "") {
         self.energy = energy; self.sleep = sleep; self.soreness = soreness; self.soreAreas = soreAreas
@@ -39,6 +42,8 @@ struct Checkin: Codable, Equatable {
         bodyKg = c.lenientString(.bodyKg) ?? ""
         notes = c.lenientString(.notes) ?? ""
         prioritizeMuscle = c.lenientString(.prioritizeMuscle) ?? ""
+        templateId = c.lenientString(.templateId) ?? ""
+        addOnIds = c.lenientStrings(.addOnIds) ?? []
     }
 }
 

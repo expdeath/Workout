@@ -266,7 +266,7 @@ enum Gemini {
         return "\(h.date) — \(h.plan.sessionType): \(exercises)\(outcome)"
     }
 
-    static func buildUserMessage(_ checkin: Checkin, _ history: [Session], _ healthLog: [HealthRow] = []) -> String {
+    static func buildUserMessage(_ checkin: Checkin, _ history: [Session], _ healthLog: [HealthRow] = [], template: SavedWorkout? = nil) -> String {
         let settings = LocalStore.shared.backup.aiSettings
         let recent = Array(history.suffix(6))
         let histText = recent.isEmpty
@@ -328,8 +328,27 @@ enum Gemini {
         }
         if !lastDebrief.isEmpty { out += "\nYOUR OWN COACHING NOTE AFTER THE LAST SESSION (follow through on it): \(lastDebrief)\n" }
 
-        out += "\nDecide the right session for today and build it. \(jsonSpec)"
+        out += "\n\(template.map(templateInstruction) ?? "Decide the right session for today and build it.") \(jsonSpec)"
         return out
+    }
+
+    /// The athlete picked one of their saved workouts (templateInstruction
+    /// in gemini.js). Keep-exact: the coach only fills weights and cues,
+    /// and Workouts.enforceExact holds it to that.
+    static func templateInstruction(_ w: SavedWorkout) -> String {
+        let brief = Workouts.brief(w)
+        if !w.adapt {
+            return """
+            TODAY THE ATHLETE IS DOING THEIR SAVED WORKOUT — \(brief)
+
+            Use EXACTLY these exercises, in this order, with these sets and reps — do not add, remove, reorder or swap anything (a trainer wrote it; respect it). Where a weight is given, keep it. Where none is given, fill suggestedWeight from PROGRESSION TARGETS / the training log. Add short form cues in notes only when useful. Set sessionType to the closest match and title to the workout's name. If today's recovery data or check-in is worrying, say so in "concerns" — but still keep the workout as written.
+            """
+        }
+        return """
+        TODAY THE ATHLETE WANTS TO DO THEIR SAVED WORKOUT, ADAPTED TO TODAY — \(brief)
+
+        Use it as the base and keep its intent and exercise choices. Adapt only where today's check-in, recovery data, soreness, pain or time make it sensible: fewer sets or lighter loads on a poor day, a safer swap for something that would aggravate soreness, trimming to fit the time. Fill suggestedWeight from the training log where none is given. In "reasoning", say plainly what you changed from the saved workout and why (or that you kept it as written).
+        """
     }
 
     // MARK: - Networking core
@@ -443,8 +462,8 @@ enum Gemini {
         return try Plan.fromAI(data)
     }
 
-    private static func callGemini(checkin: Checkin, history: [Session], model: String, healthLog: [HealthRow]) async throws -> Plan {
-        let userMsg = buildUserMessage(checkin, history, healthLog)
+    private static func callGemini(checkin: Checkin, history: [Session], model: String, healthLog: [HealthRow], template: SavedWorkout? = nil) async throws -> Plan {
+        let userMsg = buildUserMessage(checkin, history, healthLog, template: template)
         LocalStore.shared.logEvent(type: "ai_request", data: ["model": .string(model)])
         let started = Date()
 
@@ -722,7 +741,7 @@ enum Gemini {
 
     // MARK: - Public entry point: generate with model fallback + retry
 
-    static func generateWorkoutPlan(checkin: Checkin, history: [Session], onStatus: ((String) -> Void)? = nil) async throws -> Plan {
+    static func generateWorkoutPlan(checkin: Checkin, history: [Session], template: SavedWorkout? = nil, onStatus: ((String) -> Void)? = nil) async throws -> Plan {
         let healthLog = LocalStore.shared.backup.health
         // Errors from models we fell back past — surfaced with the final error so
         // a failing fallback (e.g. a retired model's 404) can't hide the real cause.
@@ -730,7 +749,7 @@ enum Gemini {
         for (mi, model) in models.enumerated() {
             do {
                 if mi > 0 { onStatus?("Trying \(model)…") }
-                return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog)
+                return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog, template: template)
             } catch let error as GeminiError {
                 if case .overloaded = error, mi < models.count - 1 {
                     failures.append("\(model): overloaded")
@@ -751,7 +770,7 @@ enum Gemini {
                         try? await Task.sleep(nanoseconds: 1_000_000_000)
                     }
                     do {
-                        return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog)
+                        return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog, template: template)
                     } catch let retryErr as GeminiError {
                         if case .overloaded = retryErr, mi < models.count - 1 { continue }
                         if case .rateLimited = retryErr { throw GeminiError.message("Rate limit hit twice. Wait a minute and try again.") }
@@ -770,5 +789,113 @@ enum Gemini {
             }
         }
         throw GeminiError.message("Couldn't build today's session. Check Settings for your API key, then try again.")
+    }
+
+    // MARK: - Saved workouts: built from a trainer's program, a photo of one, or a description
+
+    private static let workoutsSchema: [String: Any] = [
+        "type": "OBJECT",
+        "properties": [
+            "workouts": [
+                "type": "ARRAY",
+                "items": [
+                    "type": "OBJECT",
+                    "properties": [
+                        "name": ["type": "STRING"],
+                        "kind": ["type": "STRING", "enum": ["session", "addon"]],
+                        "days": ["type": "ARRAY", "items": ["type": "STRING", "enum": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]]],
+                        "notes": ["type": "STRING"],
+                        "exercises": [
+                            "type": "ARRAY",
+                            "items": [
+                                "type": "OBJECT",
+                                "properties": [
+                                    "name": ["type": "STRING"], "sets": ["type": "INTEGER"], "reps": ["type": "STRING"],
+                                    "weight": ["type": "STRING"], "rest": ["type": "STRING"], "notes": ["type": "STRING"],
+                                ],
+                                "required": ["name", "sets", "reps"],
+                            ],
+                        ],
+                    ],
+                    "required": ["name", "kind", "exercises"],
+                ],
+            ],
+            "message": ["type": "STRING"],
+        ],
+        "required": ["workouts"],
+    ]
+
+    /// Turns what the athlete gave — a trainer's program (text and/or a
+    /// JPEG photo of it) or a description — into saved-workout drafts to
+    /// review (buildWorkouts in gemini.js). Nothing is saved here.
+    static func buildWorkouts(text: String, imageJPEG: Data?, source: String, history: [Session]) async throws -> (workouts: [SavedWorkout], message: String) {
+        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.message("Add your Gemini API key in Settings first — the coach builds workouts with it.") }
+        let settings = LocalStore.shared.backup.aiSettings
+        var seen = Set<String>()
+        let known = history.flatMap { $0.plan.exercises.map { $0.name.trimmingCharacters(in: .whitespaces) } }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }.prefix(80)
+        let trainer = source == "trainer"
+        var msg = "Turn the athlete's input into saved workouts for their training app.\n\n"
+        msg += trainer
+            ? "This is a program the athlete's personal trainer wrote. Transcribe it faithfully: keep every exercise, set, rep, weight, rest and note exactly as written — never add, drop or 'improve' anything. If something is illegible or ambiguous, make the most likely reading and mention it in \"message\"."
+            : "If this is a written program, transcribe it faithfully. If it's a description of what they want (e.g. '20 minutes of core every day', 'upper body with dumbbells, 45 min'), design it: sensible exercises, sets, reps and rest for their goals, equipment and history."
+        msg += """
+
+
+        Rules:
+        - One workout per training day. A multi-day program (Day A/B/C, Monday/Wednesday…) becomes several workouts; put the weekdays in "days" ONLY when the input names them (or says "every day" → all seven).
+        - kind "addon" for a short routine meant to be added on top of sessions (core finisher, stretching, mobility, warm-up, "every day" habit); otherwise "session".
+        - name: short, e.g. "Upper A", "Leg day", "Daily core". Use the input's own day names when it has them.
+        - Exercise names: common English gym names. When the exercise is one of the athlete's KNOWN EXERCISES below, use that exact name so their progress links up. Expand abbreviations (DB → Dumbbell, BB → Barbell, RDL → Romanian Deadlift).
+        - reps: as written, e.g. "8-10", "12", "45s", "AMRAP". weight: as written, e.g. "20kg", "bodyweight", or "" if none. rest: e.g. "90s", "2 min", or "".
+        - notes: tempo, cues or instructions from the input, else "".
+        - "message": one short sentence for the athlete — what you built, plus anything you had to guess.
+
+        KNOWN EXERCISES: \(known.isEmpty ? "none yet" : known.joined(separator: ", "))
+
+        """
+        let equipment = settings.equipment.trimmingCharacters(in: .whitespacesAndNewlines)
+        let goals = settings.goals.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !equipment.isEmpty { msg += "EQUIPMENT & LIMITS: \(equipment)\n" }
+        if !goals.isEmpty { msg += "GOALS: \(goals)\n" }
+        msg += "\nATHLETE'S INPUT:\n\(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "(see the attached photo)" : text)"
+
+        var parts: [[String: Any]] = [["text": msg]]
+        if let imageJPEG { parts.append(["inline_data": ["mime_type": "image/jpeg", "data": imageJPEG.base64EncodedString()]]) }
+
+        var lastErr: Error = GeminiError.message("no models tried")
+        for model in models.prefix(2) {
+            var config: [String: Any] = ["maxOutputTokens": 6000, "temperature": trainer ? 0.2 : 0.6, "responseMimeType": "application/json", "responseSchema": workoutsSchema]
+            if supportsThinkingLevel(model) { config["thinkingConfig"] = ["thinkingLevel": "low"] }
+            do {
+                let (out, _, _) = try await post(model: model, systemInstruction: coachRules(), contents: [["role": "user", "parts": parts]], generationConfig: config, timeout: 60)
+                guard let data = out.data(using: .utf8), let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw GeminiError.message("The coach's reply couldn't be read — try again.")
+                }
+                let dayIdx = ["Sun": 0, "Mon": 1, "Tue": 2, "Wed": 3, "Thu": 4, "Fri": 5, "Sat": 6]
+                let workouts: [SavedWorkout] = ((obj["workouts"] as? [[String: Any]]) ?? []).compactMap { w in
+                    let ex: [SavedWorkout.Exercise] = ((w["exercises"] as? [[String: Any]]) ?? []).map { e in
+                        SavedWorkout.Exercise(
+                            name: e["name"] as? String ?? "", sets: min(max((e["sets"] as? Int) ?? Int((e["sets"] as? Double) ?? 3), 1), 10),
+                            reps: e["reps"] as? String ?? "", weight: e["weight"] as? String ?? "",
+                            rest: e["rest"] as? String ?? "", notes: e["notes"] as? String ?? ""
+                        )
+                    }
+                    guard !ex.isEmpty else { return nil }
+                    return SavedWorkout(
+                        name: w["name"] as? String ?? "Workout", kind: (w["kind"] as? String) == "addon" ? "addon" : "session",
+                        source: source, notes: w["notes"] as? String ?? "",
+                        days: ((w["days"] as? [String]) ?? []).compactMap { dayIdx[$0] }, exercises: ex
+                    )
+                }
+                let message = obj["message"] as? String ?? ""
+                guard !workouts.isEmpty else { throw GeminiError.message(message.isEmpty ? "The coach couldn't find a workout in that — add a bit more detail." : message) }
+                LocalStore.shared.logEvent(type: "ai_build_workouts", data: ["model": .string(model), "source": .string(source), "image": .bool(imageJPEG != nil), "workouts": .number(Double(workouts.count))])
+                return (workouts, message)
+            } catch {
+                lastErr = error
+            }
+        }
+        throw lastErr
     }
 }

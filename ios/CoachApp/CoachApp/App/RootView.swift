@@ -34,6 +34,8 @@ struct RootView: View {
                 RecordsView()
             case .progress:
                 ProgressScreen()
+            case .workouts:
+                WorkoutsView(openId: appState.workoutsOpenId).id(appState.workoutsOpenId ?? "list")
             }
         }
         .preferredColorScheme(.dark) // the web app is dark-only; match it
@@ -47,6 +49,7 @@ struct RootView: View {
             switch sheet {
             case .notifications: NotificationsView().environment(appState)
             case .profile: ProfileView().environment(appState)
+            case .search: SearchView().environment(appState)
             }
         }
     }

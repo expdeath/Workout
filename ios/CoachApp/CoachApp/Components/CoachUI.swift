@@ -60,6 +60,7 @@ struct TabHeader: View {
             Circle().fill(Theme.amber.opacity(0.5)).frame(width: 4, height: 4)
             Text(title).font(Theme.head(24, weight: .bold)).textCase(.uppercase).tracking(1).foregroundStyle(Theme.text)
             Spacer()
+            IconButton(icon: "magnifyingglass", label: "Search") { appState.sheet = .search }
             IconButton(icon: "bubble.left", label: "Ask the coach") { appState.chatOpen = true }
             ZStack(alignment: .topTrailing) {
                 IconButton(icon: "bell", label: appState.unreadNotifications > 0 ? "Notifications, \(appState.unreadNotifications) new" : "Notifications") {
