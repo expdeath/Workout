@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import Icon from '../components/Icon';
 import { TabHeader, SectionHead, SettingsRow, RowGroup, PanelSheet, Avatar, StatusPill, useShell } from '../components/Shell';
 import { weeklyTarget } from '../utils/dashboard';
-import { getApiKey, setApiKey, getAISettings, setAISettings } from '../utils/storage';
+import { getApiKey, setApiKey, canSetApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
 import { getAccount, signOut } from '../utils/account';
@@ -61,7 +61,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
     };
   });
   const handleCoachSave = () => {
-    if (account?.admin) setApiKey(key.trim());
+    setApiKey(key.trim()); // no-op for invited members (the owner's shared key)
     setAISettings({
       profile: ai.profile.trim(),
       routine: ai.routine.trim(),
@@ -242,7 +242,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   // ── Collapsed status lines ──
   const coachStatus = getApiKey()
     ? getAISettings().profile ? 'Ready · profile set' : 'Ready · add your profile'
-    : account?.admin
+    : canSetApiKey()
     ? 'No API key yet — add one to start'
     : 'No API key yet — ask Abhi to add one';
   const lastSync = getLastSync();
@@ -273,7 +273,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
               <StatusPill text={account.admin ? 'Admin' : 'Member'} color="var(--amber-text)" dot={false} />
-              <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>· Sync active</span>
+              <span style={{ fontSize: 12.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.email}</span>
             </span>
           </span>
           <span className="icon-well" style={{ borderRadius: '50%', color: 'var(--muted)' }}><Icon name="edit" size={18} /></span>
@@ -290,9 +290,9 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
         onToggle={() => toggle('coach')}
       >
 
-        {account?.admin ? (
+        {canSetApiKey() ? (
           <>
-            <div className="q-label" style={{ marginTop: 0 }}>Gemini API key (shared)</div>
+            <div className="q-label" style={{ marginTop: 0 }}>{account.selfServe ? 'Your Gemini API key' : 'Gemini API key (shared)'}</div>
             <div className="settings-key-row">
               <input
                 className="input"
@@ -311,7 +311,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
               </button>
             </div>
             <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
-              Shared by everyone on COACH. Free at{' '}
+              {account.selfServe ? 'Only your account uses it.' : 'Shared by everyone you invited.'} Free at{' '}
               <a
                 href="https://aistudio.google.com/apikey"
                 target="_blank"
@@ -324,7 +324,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
           </>
         ) : null}
 
-        <div className="q-label" style={account?.admin ? undefined : { marginTop: 0 }}>About you</div>
+        <div className="q-label" style={canSetApiKey() ? undefined : { marginTop: 0 }}>About you</div>
         <textarea
           className="input textarea"
           style={{ marginTop: 6, minHeight: 80 }}

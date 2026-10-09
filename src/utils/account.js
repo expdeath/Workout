@@ -1,8 +1,9 @@
-// ── Accounts: Google sign-in + an owner-managed allowlist ─────────
-// There is no signup. The owner adds a person's Google email to the
-// Firestore allowlist (allowlist/{email} → accountId); signing in with
-// that Google account opens their account on any device. Revoking =
-// deleting the allowlist entry.
+// ── Accounts: Google sign-in + the Firestore allowlist ───────────
+// allowlist/{email} → accountId. Anyone can sign in: a Google account's
+// first sign-in creates its own entry and empty account (selfServe; it
+// brings its own Gemini key). Entries the owner adds are "invited" and
+// share the owner's key. Signing in with that Google account opens the
+// same account on any device; blocked: true on an entry turns it off.
 
 import {
   currentUser,
@@ -27,7 +28,7 @@ export function getAccount() {
 /**
  * Boot: resolve the signed-in Google user and open their account.
  * Returns the account, or null when nobody is signed in. Throws
- * NotInvitedError (from cloud.js) for an email not on the allowlist.
+ * AccountBlockedError (from cloud.js) for an account the owner turned off.
  */
 export async function resumeSession() {
   await finishRedirectSignIn();

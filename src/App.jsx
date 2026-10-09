@@ -31,7 +31,7 @@ import {
   getAllHealth,
 } from './db/db';
 import { syncNow } from './db/sync';
-import { onCloudChange, cloudState, cloudSetState, cloudSignOut, NotInvitedError } from './db/cloud';
+import { onCloudChange, cloudState, cloudSetState, cloudSignOut, AccountBlockedError } from './db/cloud';
 
 import { resumeSession, getAccount } from './utils/account';
 
@@ -106,7 +106,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       // signed-in Google user → their account (live from Firestore);
-      // nobody signed in, or an email not on the allowlist → login gate
+      // nobody signed in, or an account the owner turned off → login gate
       try {
         if (!(await resumeSession())) {
           setScreen('login');
@@ -114,9 +114,9 @@ export default function App() {
         }
       } catch (e) {
         console.warn('[COACH] sign-in failed', e);
-        if (e instanceof NotInvitedError) await cloudSignOut();
+        if (e instanceof AccountBlockedError) await cloudSignOut();
         setLoginError(
-          e instanceof NotInvitedError
+          e instanceof AccountBlockedError
             ? e.message
             : "Couldn't open your account — check your connection and try again."
         );

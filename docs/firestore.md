@@ -14,9 +14,10 @@ moves to native HealthKit in the iOS app (the Shortcut → GitHub
 ## Schema
 
 ```
-allowlist/{email}                  { accountId, name, admin }      owner-managed only
-config/shared                      { geminiKey }                   read: any allow-listed user
+allowlist/{email}                  { accountId, name, admin, selfServe?, blocked?, createdAt? }
+config/shared                      { geminiKey }                   read: invited accounts only
 accounts/{accountId}               { name, backupMeta{app,version}, github{repo,token},
+                                     geminiKey (self-serve only),
                                      migratedFrom{repo,at,inboxFiles}, createdAt }
 accounts/{a}/sessions/{id}          one workout — same object as before
 accounts/{a}/health/{date}          one day of Watch data
@@ -28,7 +29,8 @@ accounts/{a}/state/{key}            today · weeklyReview · monthlyReport · ch
 accounts/{a}/feedback/{auto}        { text, name, at }
 ```
 
-Account ids: `abhi` (owner/admin), `karan`. Keshav and Jake never used the
+Account ids: `abhi` (owner/admin), `karan`, plus one per self-serve
+sign-up, whose id is its Firebase uid. Keshav and Jake never used the
 app; they were not migrated and their data repos are being deleted. Data is keyed by
 account, not by Firebase user id, so one person can sign in with more
 than one identity (e.g. Google now, Apple later) by adding a second
@@ -43,9 +45,23 @@ and an object with a key Firestore can't hold (`""`, `__…`) becomes
 `{ "__m": [{k, v}, …] }`. Lossless for any JSON value. Document ids
 escape `/` and `%`; the real key is always also inside the document.
 
+### Sign-up (added 2026-10-09)
+
+Any Google account can sign in. On first sign-in the client
+(`signUp` in `src/db/cloud.js` / `Cloud.swift`) writes, in one batch,
+`allowlist/{email}` = `{ accountId: uid, name, admin: false,
+selfServe: true, createdAt }` and `accounts/{uid}` = `{ name,
+createdAt }`; the rules accept exactly that shape and nothing else.
+Entries the owner adds by hand (no `selfServe`) are **invited**: they
+read the shared Gemini key. Self-serve accounts never see it — they
+save their own in `accounts/{id}.geminiKey` (Settings → AI Coach).
+To turn an account off, set `blocked: true` on its allowlist entry
+in the console (deleting the entry would just let it sign up again).
+
 ## Rules (`firestore.rules`)
 
-- Signed in + verified email + on the allowlist, or nothing.
+- Signed in + verified email + on the allowlist (self-made or owner-made)
+  and not blocked, or nothing.
 - Users read/write only their own account; the owner (`admin: true`)
   can read every account (as they could read every data repo).
 - **Deletion wins**: a session can't be written while a `deletedIds`
@@ -53,7 +69,9 @@ escape `/` and `%`; the real key is always also inside the document.
 - **Newer wins**: a session or `aiSettings` write with an older
   `updatedAt` than the stored copy is rejected (the old merge's
   `pickSession` / newest-settings rule).
-- Clients can't edit the allowlist or an account's name/metadata.
+- Clients can only create their own allowlist entry (never admin,
+  never another account's id) and never change it afterwards; they
+  can't edit an account's name/metadata.
 
 ## Migration (`scripts/migrate-to-firestore.js`)
 

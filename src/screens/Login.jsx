@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { signInWithGoogle } from '../db/cloud';
 
-// Sign-in gate. There is deliberately no signup: Google proves who you
-// are, and only emails the owner has added to the allowlist get in.
+// Sign-in gate. Any Google account gets in: the first sign-in creates
+// its account (src/db/cloud.js signUp), later ones reopen it.
 export default function Login({ error: bootError, onSignedIn }) {
   const [error, setError] = useState(bootError || '');
   const [busy, setBusy] = useState(false);
@@ -42,7 +42,7 @@ export default function Login({ error: bootError, onSignedIn }) {
           {busy ? 'Signing in…' : 'Sign in with Google'}
         </button>
         <p className="body" style={{ marginTop: 16, fontSize: 12.5, color: 'var(--dim)' }}>
-          Private beta — ask Abhi for an invite.
+          Any Google account works — new here? Your account is created on first sign-in.
         </p>
       </div>
     </div>

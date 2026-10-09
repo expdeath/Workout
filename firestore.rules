@@ -2,9 +2,12 @@ rules_version = '2';
 
 // COACH — who may read/write what. Schema: docs/firestore.md.
 //
-// Invite-only: signing in with Google proves an email; the allowlist
-// (managed by the owner via the console or scripts/migrate-to-firestore.js,
-// never by clients) maps that email to one account. The same guarantees
+// Open sign-up: signing in with Google proves an email; the allowlist
+// maps that email to one account. Owner-made entries (console /
+// scripts/migrate-to-firestore.js) are "invited" and share the owner's
+// Gemini key. Anyone else creates their own entry on first sign-in
+// (selfServe, accountId = their uid) and brings their own key. Setting
+// blocked: true on an entry (console) turns that account off. The same guarantees
 // the old GitHub merge gave (src/db/sync.js mergeBackups) hold here:
 //   - a deleted session can never be recreated (deletion wins)
 //   - a session / aiSettings write can't overwrite a newer copy
@@ -16,8 +19,12 @@ service cloud.firestore {
     }
     function email() { return request.auth.token.email.lower(); }
     function entryPath() { return /databases/$(database)/documents/allowlist/$(email()); }
-    function allowed() { return signedIn() && exists(entryPath()); }
     function entry() { return get(entryPath()).data; }
+    function allowed() {
+      return signedIn() && exists(entryPath()) && entry().get('blocked', false) != true;
+    }
+    // owner-made entries only — self-serve accounts never see the shared key
+    function invited() { return allowed() && entry().get('selfServe', false) != true; }
     function owns(acct) { return allowed() && entry().accountId == acct; }
     function isAdmin() { return allowed() && entry().get('admin', false) == true; }
     // the owner can read every account, as they could read every data repo
@@ -29,21 +36,31 @@ service cloud.firestore {
 
     match /allowlist/{mail} {
       allow read: if signedIn() && mail == email();
-      allow write: if false;
+      // first sign-in: your own email → a fresh account named by your uid,
+      // never admin; after that only the owner can change it
+      allow create: if signedIn() && mail == email()
+        && request.resource.data.keys().hasOnly(['accountId', 'name', 'admin', 'selfServe', 'createdAt'])
+        && request.resource.data.accountId == request.auth.uid
+        && request.resource.data.admin == false
+        && request.resource.data.selfServe == true;
+      allow update, delete: if false;
     }
 
-    // shared Gemini key (one key for every account, changed in one place)
+    // shared Gemini key (one key for the invited accounts, changed in one place)
     match /config/shared {
-      allow read: if allowed();
+      allow read: if invited();
       allow write: if isAdmin();
     }
 
     match /accounts/{acct} {
       allow read: if canRead(acct);
+      // sign-up makes the account doc alongside the allowlist entry
+      allow create: if signedIn() && acct == request.auth.uid
+        && request.resource.data.keys().hasOnly(['name', 'createdAt']);
       // name/backupMeta/migratedFrom are set by the migration; clients
-      // only maintain the GitHub backup settings
+      // only maintain the GitHub backup settings and their own Gemini key
       allow update: if owns(acct)
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['github']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['github', 'geminiKey']);
 
       match /sessions/{id} {
         allow read: if canRead(acct);

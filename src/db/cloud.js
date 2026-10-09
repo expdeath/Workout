@@ -1,6 +1,6 @@
 // ── Cloud Firestore: the live database ───────────────────────────
 // Every device signs in with Google; the allowlist maps the email to
-// one account, and that account's documents (schema: docs/firestore.md)
+// one account (a Google account's first sign-in creates its own), and that account's documents (schema: docs/firestore.md)
 // are mirrored into memory here and kept live with snapshot listeners.
 // The rest of the app reads that mirror synchronously (db.js,
 // storage.js, healthIngest.js keep their old function names) and
@@ -25,6 +25,7 @@ import {
   doc,
   collection,
   getDoc,
+  getDocFromServer,
   getDocs,
   setDoc,
   updateDoc,
@@ -70,7 +71,7 @@ const empty = () => ({
 });
 
 let mirror = empty();
-let current = null; // { accountId, name, admin, email, uid }
+let current = null; // { accountId, name, admin, selfServe, email, uid }
 let unsubs = [];
 const listeners = new Set();
 
@@ -90,11 +91,30 @@ function bg(promise, what) {
   return promise.catch((e) => console.warn(`[COACH] cloud write failed (${what})`, e));
 }
 
-export class NotInvitedError extends Error {
+export class AccountBlockedError extends Error {
   constructor(email) {
-    super(`${email} isn't on the COACH invite list. Ask Abhi to add it.`);
+    super(`${email} has been turned off on COACH. Ask Abhi if that's a mistake.`);
     this.email = email;
   }
+}
+
+/** First sign-in of an email the owner didn't add: it gets its own
+ *  empty account, keyed by the Firebase uid (the only shape the rules
+ *  accept — never admin, never another account). */
+async function signUp(user, email) {
+  const now = Date.now();
+  const entry = {
+    accountId: user.uid,
+    name: user.displayName || email.split('@')[0],
+    admin: false,
+    selfServe: true,
+    createdAt: now,
+  };
+  const b = writeBatch(db);
+  b.set(doc(db, 'allowlist', email), entry);
+  b.set(doc(db, 'accounts', user.uid), { name: entry.name, createdAt: now });
+  await b.commit();
+  return entry;
 }
 
 /**
@@ -105,10 +125,21 @@ export class NotInvitedError extends Error {
 export async function startSession(user) {
   stopSession();
   const email = (user.email || '').toLowerCase();
-  const entrySnap = await getDoc(doc(db, 'allowlist', email)).catch(() => null);
-  if (!entrySnap?.exists()) throw new NotInvitedError(email);
-  const entry = entrySnap.data();
-  current = { accountId: entry.accountId, name: entry.name || '', admin: !!entry.admin, email, uid: user.uid };
+  // throws offline (unless cached) → the login screen's "check your connection"
+  const entryRef = doc(db, 'allowlist', email);
+  let entrySnap = await getDoc(entryRef);
+  // the offline cache can remember "missing": only sign up on the server's word
+  if (!entrySnap.exists()) entrySnap = await getDocFromServer(entryRef);
+  const entry = entrySnap.exists() ? entrySnap.data() : await signUp(user, email);
+  if (entry.blocked) throw new AccountBlockedError(email);
+  current = {
+    accountId: entry.accountId,
+    name: entry.name || '',
+    admin: !!entry.admin,
+    selfServe: !!entry.selfServe,
+    email,
+    uid: user.uid,
+  };
   mirror = empty();
 
   const firsts = [];
@@ -135,7 +166,8 @@ export async function startSession(user) {
   const col = (name) => collection(db, acctPath(name));
 
   watch(doc(db, acctPath()), (s) => { mirror.account = s.exists() ? s.data() : null; }, 'account');
-  watch(doc(db, 'config/shared'), (s) => { mirror.shared = s.exists() ? s.data() : {}; }, 'shared');
+  // the shared key is for invited accounts; self-serve ones bring their own
+  if (!current.selfServe) watch(doc(db, 'config/shared'), (s) => { mirror.shared = s.exists() ? s.data() : {}; }, 'shared');
   watch(col('sessions'), (ch) => {
     const v = decodeValue(ch.doc.data());
     if (ch.type === 'removed') mirror.sessions.delete(v.id || ch.doc.id);
@@ -241,6 +273,14 @@ export function cloudSetSharedKey(geminiKey) {
   mirror.shared = { ...mirror.shared, geminiKey };
   notify('shared');
   return bg(setDoc(doc(db, 'config/shared'), { geminiKey }, { merge: true }), 'shared key');
+}
+
+/** Self-serve accounts: their own Gemini key, on accounts/{id}. */
+export function cloudSetOwnKey(geminiKey) {
+  if (!current) return Promise.resolve();
+  mirror.account = { ...(mirror.account || {}), geminiKey };
+  notify('account');
+  return bg(updateDoc(doc(db, acctPath()), { geminiKey }), 'own key');
 }
 
 export function cloudSendFeedback(text) {
