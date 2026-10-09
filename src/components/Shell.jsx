@@ -3,6 +3,7 @@ import Icon from './Icon';
 import { TABS } from './TabBar';
 import { ago } from '../utils/dashboard';
 import { getAccount } from '../utils/account';
+import { SearchBox } from './Search';
 
 // App-wide chrome shared by the five tab screens: the header (COACH •
 // TITLE, desktop nav, chat, notifications, profile), and the small
@@ -12,6 +13,10 @@ import { getAccount } from '../utils/account';
 export const ShellContext = createContext({
   screen: 'home',
   go: () => {},
+  openWorkouts: () => {},
+  openSession: () => {},
+  openRecord: () => {},
+  history: [],
   openChat: () => {},
   openSheet: () => {},
   unread: 0,
@@ -36,7 +41,9 @@ export function Avatar({ name, size = 32 }) {
 
 /** COACH • TITLE · (desktop: tab links) · chat · bell · avatar */
 export function TabHeader({ title }) {
-  const { screen, go, openChat, openSheet, unread, displayName } = useShell();
+  const { screen, go, openWorkouts, openChat, openSheet, unread, displayName } = useShell();
+  // desktop nav: the five tabs, with My workouts after Log
+  const links = [...TABS.slice(0, 2), { screen: 'workouts', label: 'Workouts' }, ...TABS.slice(2)];
   return (
     <header className="tab-header">
       <div className="tab-header__brand">
@@ -45,18 +52,22 @@ export function TabHeader({ title }) {
         <span className="tab-header__title">{title}</span>
       </div>
       <nav className="tab-header__nav" aria-label="Main">
-        {TABS.map((t) => (
+        {links.map((t) => (
           <button
             key={t.screen}
             className={'tab-header__link' + (screen === t.screen ? ' tab-header__link--on' : '')}
             aria-current={screen === t.screen ? 'page' : undefined}
-            onClick={() => go(t.screen)}
+            onClick={() => (t.screen === 'workouts' ? openWorkouts() : go(t.screen))}
           >
             {t.label}
           </button>
         ))}
       </nav>
+      <SearchBox />
       <div className="tab-header__actions">
+        <button className="icon-btn tab-header__search" aria-label="Search" onClick={() => openSheet('search')}>
+          <Icon name="search" size={22} />
+        </button>
         <button className="icon-btn" aria-label="Ask the coach" onClick={openChat}>
           <Icon name="chat" size={21} />
         </button>

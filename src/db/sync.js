@@ -11,7 +11,7 @@
 // can do both.
 
 import { exportAll, mergeHealth } from './db.js';
-import { cloudAccountDoc, cloudUpdateGithub, cloudSendFeedback, cloudSessions, cloudDeletedIds, currentAccount } from './cloud.js';
+import { cloudAccountDoc, cloudUpdateGithub, cloudSendFeedback, cloudSessions, cloudDeletedIds, currentAccount, cloudState, cloudSetState } from './cloud.js';
 import { normalizeBackup, mergeBackups } from './backupShape.js';
 import { sessionVolume, weekStats, parseHealthNumbers } from '../utils/stats.js';
 import { setLogged, fmtDate, todayStr } from '../utils/helpers.js';
@@ -216,11 +216,7 @@ function parseInboxFile(body) {
 }
 
 export function getLastInbox() {
-  try {
-    return JSON.parse(localStorage.getItem('coach:last-inbox')) || null;
-  } catch {
-    return null;
-  }
+  return cloudState('lastInbox', null);
 }
 
 /**
@@ -261,7 +257,7 @@ export async function consumeHealthInbox(cfg = getSyncConfig()) {
         : text;
       if (!asText) continue;
       if (date === todayStr()) {
-        storeTodaysHealth(asText); // localStorage prefill + health-store row
+        storeTodaysHealth(asText); // check-in prefill + health-store row
       } else {
         const n = parseHealthNumbers(asText);
         await mergeHealth({
@@ -290,10 +286,7 @@ export async function consumeHealthInbox(cfg = getSyncConfig()) {
     }
   }
   if (ingested) {
-    localStorage.setItem(
-      'coach:last-inbox',
-      JSON.stringify({ at: Date.now(), files: ingested })
-    );
+    cloudSetState('lastInbox', { at: Date.now(), files: ingested });
   }
   return ingested;
 }

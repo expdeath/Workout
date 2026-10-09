@@ -15,6 +15,7 @@ import {
   muscleGapNote,
 } from '../utils/stats.js';
 import { logEvent, getAllHealth } from '../db/db.js';
+import { workoutBrief } from '../utils/workouts.js';
 
 // ── Workout database ─────────────────────────────────────────────
 // A MENU, not a script: each day lists staples plus a rotation pool.
@@ -316,7 +317,22 @@ ${histText}
 ${daysSince !== null ? `Days since last logged session: ${daysSince}${daysSince >= 7 ? ' — RETURNING FROM BREAK, apply reduced-volume rules.' : ''}` : ''}
 ${lastDebrief ? `\nYOUR OWN COACHING NOTE AFTER THE LAST SESSION (follow through on it): ${lastDebrief}` : ''}
 
-Decide the right session for today and build it. ${JSON_SPEC}`;
+${checkin.template ? templateInstruction(checkin.template) : 'Decide the right session for today and build it.'} ${JSON_SPEC}`;
+}
+
+/** The athlete picked one of their saved workouts (their own or their
+ *  trainer's). Keep-exact mode: the coach only fills weights and cues,
+ *  and src/utils/workouts.js enforceExact() holds it to that. */
+function templateInstruction(w) {
+  const brief = workoutBrief(w);
+  if (!w.adapt) {
+    return `TODAY THE ATHLETE IS DOING THEIR SAVED WORKOUT — ${brief}
+
+Use EXACTLY these exercises, in this order, with these sets and reps — do not add, remove, reorder or swap anything (a trainer wrote it; respect it). Where a weight is given, keep it. Where none is given, fill suggestedWeight from PROGRESSION TARGETS / the training log. Add short form cues in notes only when useful. Set sessionType to the closest match and title to the workout's name. If today's recovery data or check-in is worrying, say so in "concerns" — but still keep the workout as written.`;
+  }
+  return `TODAY THE ATHLETE WANTS TO DO THEIR SAVED WORKOUT, ADAPTED TO TODAY — ${brief}
+
+Use it as the base and keep its intent and exercise choices. Adapt only where today's check-in, recovery data, soreness, pain or time make it sensible: fewer sets or lighter loads on a poor day, a safer swap for something that would aggravate soreness, trimming to fit the time. Fill suggestedWeight from the training log where none is given. In "reasoning", say plainly what you changed from the saved workout and why (or that you kept it as written).`;
 }
 
 /** System instruction for plan generation only: coaching rules + the
@@ -941,4 +957,135 @@ export async function generateWorkoutPlan(checkin, history, onStatus) {
       throw err;
     }
   }
+}
+
+
+// ── Saved workouts: build them from a trainer's program, a photo of
+//    one, or a plain description ───────────────────────────────────
+
+const WORKOUTS_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    workouts: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          name: { type: 'STRING' },
+          kind: { type: 'STRING', enum: ['session', 'addon'] },
+          days: { type: 'ARRAY', items: { type: 'STRING', enum: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'] } },
+          notes: { type: 'STRING' },
+          exercises: {
+            type: 'ARRAY',
+            items: {
+              type: 'OBJECT',
+              properties: {
+                name: { type: 'STRING' },
+                sets: { type: 'INTEGER' },
+                reps: { type: 'STRING' },
+                weight: { type: 'STRING' },
+                rest: { type: 'STRING' },
+                notes: { type: 'STRING' },
+              },
+              required: ['name', 'sets', 'reps'],
+            },
+          },
+        },
+        required: ['name', 'kind', 'exercises'],
+      },
+    },
+    message: { type: 'STRING' },
+  },
+  required: ['workouts'],
+};
+
+/**
+ * Turn what the athlete gave us — a trainer's written program (pasted
+ * text and/or a photo of it) or a description of what they want — into
+ * saved-workout drafts for them to review. Nothing is saved here.
+ * `image` = { mimeType, data (base64) }.
+ * → { workouts: [{ name, kind, days: [0-6], notes, exercises }], message }
+ */
+export async function buildWorkouts({ text = '', image = null, source = 'me', history = [] }) {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error('Add your Gemini API key in Settings first — the coach builds workouts with it.');
+  const settings = getAISettings();
+  const known = [...new Set(history.flatMap((s) => (s.plan?.exercises || []).map((e) => e?.name?.trim()).filter(Boolean)))].slice(0, 80);
+
+  const userMsg = `Turn the athlete's input into saved workouts for their training app.
+
+${source === 'trainer' ? "This is a program the athlete's personal trainer wrote. Transcribe it faithfully: keep every exercise, set, rep, weight, rest and note exactly as written — never add, drop or 'improve' anything. If something is illegible or ambiguous, make the most likely reading and mention it in \"message\"." : "If this is a written program, transcribe it faithfully. If it's a description of what they want (e.g. '20 minutes of core every day', 'upper body with dumbbells, 45 min'), design it: sensible exercises, sets, reps and rest for their goals, equipment and history."}
+
+Rules:
+- One workout per training day. A multi-day program (Day A/B/C, Monday/Wednesday…) becomes several workouts; put the weekdays in "days" ONLY when the input names them (or says "every day" → all seven).
+- kind "addon" for a short routine meant to be added on top of sessions (core finisher, stretching, mobility, warm-up, "every day" habit); otherwise "session".
+- name: short, e.g. "Upper A", "Leg day", "Daily core". Use the input's own day names when it has them.
+- Exercise names: common English gym names. When the exercise is one of the athlete's KNOWN EXERCISES below, use that exact name so their progress links up. Expand abbreviations (DB → Dumbbell, BB → Barbell, RDL → Romanian Deadlift).
+- reps: as written, e.g. "8-10", "12", "45s", "AMRAP". weight: as written, e.g. "20kg", "bodyweight", or "" if none. rest: e.g. "90s", "2 min", or "".
+- notes: tempo, cues or instructions from the input, else "".
+- "message": one short sentence for the athlete — what you built, plus anything you had to guess.
+
+KNOWN EXERCISES: ${known.join(', ') || 'none yet'}
+${(settings.equipment || '').trim() ? `EQUIPMENT & LIMITS: ${settings.equipment.trim()}` : ''}
+${(settings.goals || '').trim() ? `GOALS: ${settings.goals.trim()}` : ''}
+
+ATHLETE'S INPUT:
+${text.trim() || '(see the attached photo)'}`;
+
+  const parts = [{ text: userMsg }];
+  if (image) parts.push({ inline_data: { mime_type: image.mimeType, data: image.data } });
+
+  let lastErr;
+  for (const model of MODELS.slice(0, 2)) {
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+        method: 'POST',
+        signal: AbortSignal.timeout(60000),
+        headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: coachRules() }] },
+          contents: [{ role: 'user', parts }],
+          generationConfig: {
+            maxOutputTokens: 6000,
+            temperature: source === 'trainer' ? 0.2 : 0.6,
+            responseMimeType: 'application/json',
+            responseSchema: WORKOUTS_SCHEMA,
+            ...(supportsThinkingLevel(model) ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
+          },
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body?.error?.message ? `Gemini (${response.status}): ${body.error.message}` : `status ${response.status}`);
+      }
+      const data = await response.json();
+      const out = data.candidates?.[0]?.content?.parts?.filter((pt) => pt.text).map((pt) => pt.text).join('').trim();
+      if (!out) throw new Error('The coach returned nothing — try again.');
+      const parsed = JSON.parse(out);
+      const DAYS = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+      const workouts = (parsed.workouts || [])
+        .filter((w) => w?.exercises?.length)
+        .map((w) => ({
+          name: w.name || 'Workout',
+          kind: w.kind === 'addon' ? 'addon' : 'session',
+          days: (w.days || []).map((d) => DAYS[d]).filter((d) => d != null),
+          notes: w.notes || '',
+          exercises: w.exercises.map((e) => ({
+            name: e.name || '',
+            sets: Math.min(Math.max(parseInt(e.sets, 10) || 3, 1), 10),
+            reps: String(e.reps || ''),
+            weight: e.weight || '',
+            rest: e.rest || '',
+            notes: e.notes || '',
+          })),
+        }));
+      if (!workouts.length) throw new Error(parsed.message || "The coach couldn't find a workout in that — add a bit more detail.");
+      logEvent('ai_build_workouts', { model, source, image: !!image, latencyMs: Date.now() - startedAt, workouts: workouts.length });
+      return { workouts, message: parsed.message || '' };
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
 }

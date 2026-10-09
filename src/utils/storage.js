@@ -52,3 +52,23 @@ export function setAISettings(patch) {
 export function restoreAISettings(obj) {
   if (obj && typeof obj === 'object') cloudSetState('aiSettings', obj);
 }
+
+// ── Preferences (Settings → Alerts & reports) ──
+// All on by default — that's how the app behaved before they existed.
+const PREF_DEFAULTS = {
+  restSound: true, // beep when the rest timer ends
+  restVibrate: true, // …and buzz
+  restNotify: true, // …and notify when the app is in the background
+  keepAwake: true, // screen stays on during a workout
+  weeklyReview: true, // Sunday AI review
+  monthlyReport: true, // new-month AI report
+  debrief: true, // two-sentence AI debrief after each session
+};
+
+export function getPrefs() {
+  return { ...PREF_DEFAULTS, ...(cloudState('prefs', {}) || {}) };
+}
+
+export function setPref(key, value) {
+  cloudSetState('prefs', { ...(cloudState('prefs', {}) || {}), [key]: value });
+}

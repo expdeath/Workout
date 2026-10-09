@@ -6,8 +6,9 @@ import Header from '../components/Header';
 import Icon from '../components/Icon';
 import { quickReadiness } from '../utils/helpers';
 import { storeTodaysHealth } from '../utils/healthIngest';
+import { listWorkouts, scheduledFor, daysLabel } from '../utils/workouts';
 
-export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmit }) {
+export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmit, onManageWorkouts }) {
   // Auto-open the extras when the Watch Shortcut pre-filled health data
   const [autoFilled, setAutoFilled] = useState(!!ci.health);
   const [showMore, setShowMore] = useState(!!ci.health);
@@ -23,9 +24,51 @@ export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmi
     } catch { /* paste declined — type it instead */ }
   };
 
+  // the saved-workout library: pick one for today, plus today's add-ons
+  const all = listWorkouts();
+  const sessions = all.filter((w) => w.kind === 'session');
+  const addOns = all.filter((w) => w.kind === 'addon');
+  const today = scheduledFor(undefined, all);
+  const picked = sessions.find((w) => w.id === ci.templateId);
+  const addOnIds = ci.addOnIds || [];
+  const toggleAddOn = (id) => set({ addOnIds: addOnIds.includes(id) ? addOnIds.filter((x) => x !== id) : [...addOnIds, id] });
+
   return (
     <div className="screen screen--slide-in">
       <Header title="Check-in" onBack={onCancel} />
+
+      <div className="q-label q-label--row" style={{ marginTop: 0, alignItems: 'center' }}>
+        <span>Today's workout</span>
+        <button className="chip" onClick={onManageWorkouts}>{all.length ? 'My workouts' : '+ Add your own'}</button>
+      </div>
+      <div className="seg-group seg-group--wrap">
+        <button className={'seg-btn' + (!picked ? ' seg-on' : '')} onClick={() => set({ templateId: '' })}>
+          Coach plans it
+        </button>
+        {sessions.map((w) => (
+          <button key={w.id} className={'seg-btn' + (picked === w ? ' seg-on' : '')} onClick={() => set({ templateId: w.id })}>
+            {w.name}{today.sessions.includes(w) ? ' · today' : ''}
+          </button>
+        ))}
+      </div>
+      {picked && (
+        <p style={{ fontSize: 13, color: 'var(--muted)', margin: '8px 0 0' }}>
+          {picked.source === 'trainer' ? `${picked.trainer || 'Trainer'}'s workout · ` : ''}
+          {picked.adapt
+            ? 'The coach adapts it to how you feel today.'
+            : 'Kept exactly as written — the coach fills in weights and flags recovery.'}
+        </p>
+      )}
+      {addOns.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+          {addOns.map((a) => (
+            <Pill key={a.id} on={addOnIds.includes(a.id)} style={{ margin: 0 }} onClick={() => toggleAddOn(a.id)}>
+              {addOnIds.includes(a.id) ? '✓ ' : '+ '}{a.name}
+              <span style={{ opacity: 0.7, fontSize: 12 }}> · {daysLabel(a) || 'add-on'}</span>
+            </Pill>
+          ))}
+        </div>
+      )}
 
       <div className="q-label q-label--row">
         <span>Energy</span>
@@ -111,8 +154,8 @@ export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmi
             </Pill>
           )}
 
-          <div className="q-label" style={{ marginTop: 18 }}>Focus</div>
-          <div className="seg-group seg-group--wrap">
+          {!picked && <div className="q-label" style={{ marginTop: 18 }}>Focus</div>}
+          {!picked && <div className="seg-group seg-group--wrap">
             {[
               ['', "Coach's call"],
               ['lift', 'Lift'],
@@ -129,7 +172,7 @@ export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmi
                 {l}
               </button>
             ))}
-          </div>
+          </div>}
 
           <div className="q-label q-label--row" style={{ marginTop: 18, alignItems: 'center' }}>
             <span>Health data</span>
@@ -173,7 +216,7 @@ export default function CheckIn({ ci, setCi, error, muscleGap, onCancel, onSubmi
       {error && <div className="err-box">{error}</div>}
 
       <button className="big-btn" onClick={onSubmit}>
-        Build session
+        {picked ? `Start ${picked.name}` : 'Build session'}
       </button>
       <div style={{ height: 24 }} />
     </div>

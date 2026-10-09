@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Icon from '../components/Icon';
 import { TabHeader, SectionHead, SettingsRow, RowGroup, PanelSheet, Avatar, StatusPill, IconWell, PageHero, useShell, useDesktop } from '../components/Shell';
 import { weeklyTarget } from '../utils/dashboard';
-import { getApiKey, setApiKey, canSetApiKey, getAISettings, setAISettings } from '../utils/storage';
+import { getApiKey, setApiKey, canSetApiKey, getAISettings, setAISettings, getPrefs, setPref } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
 import { getAccount, signOut } from '../utils/account';
+import { cloudState } from '../db/cloud';
 import { todaysHealth } from '../utils/healthIngest';
 import { parseHealthNumbers, fmtHealthLine } from '../utils/stats';
 import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
@@ -66,6 +67,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
     data: false,
     gym: false,
     watch: false,
+    alerts: false,
     about: false,
   }));
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
@@ -221,6 +223,29 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   const [sendingFb, setSendingFb] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
   const [outMsg, setOutMsg] = useState(''); // why sign-out refused
+  // Alerts & reports switches (account state 'prefs')
+  const [prefs, setPrefs] = useState(getPrefs);
+  const flip = (key) => (e) => {
+    setPref(key, e.target.checked);
+    setPrefs({ ...prefs, [key]: e.target.checked });
+    logEvent('pref_changed', { key, on: e.target.checked });
+  };
+  const PREF_ROWS = [
+    ['Rest timer', [
+      ['restSound', 'Sound', 'Two beeps when the rest ends'],
+      ['restVibrate', 'Vibration', 'Buzz when the rest ends (phones that support it)'],
+      ['restNotify', 'Notification', 'Alert when you’ve switched to another app'],
+    ]],
+    ['During a workout', [
+      ['keepAwake', 'Keep screen awake', 'Stops the phone sleeping mid-rest, so the timer always fires'],
+    ]],
+    ['AI reports', [
+      ['weeklyReview', 'Weekly review', 'Written every Sunday from your week'],
+      ['monthlyReport', 'Monthly report', 'Written in the first week of a new month'],
+      ['debrief', 'Post-workout debrief', 'Two sentences from the coach after each session'],
+    ]],
+  ];
+  const prefsOn = PREF_ROWS.flatMap(([, rows]) => rows).filter(([k]) => prefs[k]).length;
 
   const handleSendFeedback = async () => {
     setSendingFb(true);
@@ -380,6 +405,30 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
         </button>
       </Section>
 
+      <Section
+        id="alerts"
+        title="Alerts & reports"
+        icon="notifications"
+        status={`${prefsOn} of 7 on · rest timer, screen, AI reports`}
+        open={open.alerts}
+        onToggle={() => toggle('alerts')}
+      >
+        {PREF_ROWS.map(([group, rows], gi) => (
+          <div key={group}>
+            <div className="q-label" style={gi ? undefined : { marginTop: 0 }}>{group}</div>
+            {rows.map(([key, title, sub]) => (
+              <label key={key} className="toggle-row">
+                <span>
+                  <span className="toggle-row__title">{title}</span>
+                  <span className="toggle-row__sub">{sub}</span>
+                </span>
+                <input type="checkbox" role="switch" className="switch" checked={!!prefs[key]} onChange={flip(key)} />
+              </label>
+            ))}
+          </div>
+        ))}
+      </Section>
+
       <SettingsRow
         icon="track_changes"
         tint="var(--green)"
@@ -479,7 +528,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
               </p>
               {(() => {
                 try {
-                  const d = JSON.parse(localStorage.getItem('coach:url-debug'));
+                  const d = cloudState('urlDebug', null);
                   if (!d) return null;
                   return (
                     <p className="mono" style={{ marginTop: 6, fontSize: 11.5, color: 'var(--dim)', wordBreak: 'break-all' }}>
@@ -702,6 +751,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   if (desktop) {
     const nav = [
       ['coach', 'AI Coach', 'psychology'],
+      ['alerts', 'Alerts & reports', 'notifications'],
       ['watch', 'Apple Watch', 'watch'],
       ['gym', 'Barbell & plates', 'scale'],
       ['sync', 'Cloud backup', 'cloud'],

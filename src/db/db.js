@@ -21,6 +21,7 @@ import {
   cloudAllEvents,
   cloudReplaceData,
   cloudState,
+  cloudStateKeys,
   cloudSetState,
 } from './cloud.js';
 import { normalizeBackup } from './backupShape.js';
@@ -157,6 +158,10 @@ export async function exportAll() {
     health: await getAllHealth(),
     aiSettings: cloudState('aiSettings', {}),
     deletedIds: getDeletedIds(),
+    // saved workouts + preferences: in the export file (not yet in the
+    // GitHub backup — the iOS app's backup format doesn't know them)
+    workouts: cloudStateKeys().filter((k) => k.startsWith('workout-')).map((k) => cloudState(k)).filter(Boolean),
+    prefs: cloudState('prefs', null),
   };
 }
 
@@ -168,6 +173,13 @@ export async function replaceAll(backup) {
   if (backup.aiSettings && (backup.aiSettings.updatedAt || 0) > (cur.updatedAt || 0)) {
     await cloudSetState('aiSettings', backup.aiSettings);
   }
+  // saved workouts: add missing ones, newer copies win
+  for (const w of Array.isArray(backup.workouts) ? backup.workouts : []) {
+    if (!w?.id) continue;
+    const have = cloudState(`workout-${w.id}`, null);
+    if (!have || (w.updatedAt || 0) > (have.updatedAt || 0)) cloudSetState(`workout-${w.id}`, w);
+  }
+  if (backup.prefs && !cloudState('prefs', null)) cloudSetState('prefs', backup.prefs);
 }
 
 /** Restore a backup, replacing current data. Throws on invalid shape. */

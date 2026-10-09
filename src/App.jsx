@@ -36,13 +36,16 @@ import { onCloudChange, cloudState, cloudSetState, cloudSignOut, AccountBlockedE
 import { resumeSession, getAccount } from './utils/account';
 
 import Login from './screens/Login';
+import Workouts from './screens/Workouts';
+import { SearchSheet } from './components/Search';
 import Home from './screens/Home';
 import Progress from './screens/Progress';
 import Coach from './screens/Coach';
 import TabBar, { TABS } from './components/TabBar';
 import { ShellContext, NotificationsSheet, ProfileSheet } from './components/Shell';
 import { notifications as buildNotifications, weeklyTarget } from './utils/dashboard';
-import { getAISettings, setAISettings } from './utils/storage';
+import { getAISettings, setAISettings, getPrefs } from './utils/storage';
+import { getWorkout, scheduledFor, enforceExact, templateToPlan, appendAddOns } from './utils/workouts';
 import CheckIn from './screens/CheckIn';
 import Generating from './screens/Generating';
 import Workout from './screens/Workout';
@@ -61,6 +64,9 @@ import Settings from './screens/Settings';
 
 export default function App() {
   const [screen, setScreen] = useState('loading');
+  // My workouts: where its back button returns to, and a workout to open straight away
+  const [workoutsFrom, setWorkoutsFrom] = useState('home');
+  const [workoutsOpen, setWorkoutsOpen] = useState(null);
   const [history, setHistory] = useState([]);
   const [todayPlan, setTodayPlan] = useState(null);
   // Coach chat is a bottom sheet reachable from any screen
@@ -74,6 +80,7 @@ export default function App() {
   const [nameOverride, setNameOverride] = useState('');
   // History → tapped session shown full-screen
   const [detailId, setDetailId] = useState(null);
+  const [recordPick, setRecordPick] = useState(null); // search → Records: { name, at }
   const [error, setError] = useState('');
   const [statusMsg, setStatusMsg] = useState('');
   const [syncInfo, setSyncInfo] = useState(null);
@@ -216,11 +223,11 @@ export default function App() {
       // Debug trail: record what the URL actually contained on arrival,
       // shown in Settings → Apple Watch card to diagnose the Shortcut
       if (window.location.search || window.location.hash) {
-        localStorage.setItem('coach:url-debug', JSON.stringify({
+        cloudSetState('urlDebug', {
           at: new Date().toISOString(),
           search: window.location.search.slice(0, 120),
           hash: window.location.hash.slice(0, 120),
-        }));
+        });
       }
       const ingested = ingestHealthFromUrl();
       if (!ingested) return;
@@ -264,6 +271,7 @@ export default function App() {
   // Default "normal day" check-in; grabs Watch data (stored or via the
   // clipboard — the button tap that got us here is the user gesture)
   async function buildDefaultCheckin() {
+    const today = scheduledFor();
     let health = todaysHealth();
     if (!health && navigator.clipboard?.readText) {
       try {
@@ -286,7 +294,24 @@ export default function App() {
       bodyKg: '',
       notes: '',
       prioritizeMuscle: '',
+      // the saved-workout library: today's scheduled workout + add-ons
+      templateId: today.sessions[0]?.id || '',
+      addOnIds: today.addOns.map((a) => a.id),
     };
+  }
+
+  // ── My workouts ──
+  function openWorkouts(from = screen, id = null) {
+    setWorkoutsFrom(TABS.some((t) => t.screen === from) || from === 'checkin' ? from : 'home');
+    setWorkoutsOpen(id);
+    setScreen('workouts');
+  }
+
+  /** Start a saved workout: the check-in, with it already picked. */
+  async function startSavedWorkout(id) {
+    setCi({ ...(await buildDefaultCheckin()), templateId: id });
+    setError('');
+    setScreen('checkin');
   }
 
   // ── AI call ──
@@ -303,13 +328,30 @@ export default function App() {
       mergeHealth({ date: todayStr(), weightKg: bodyKg }).catch(() => {});
     }
 
+    // a saved workout (yours or your trainer's) and today's add-ons
+    const template = getWorkout(checkin.templateId);
+    const addOns = (checkin.addOnIds || []).map(getWorkout).filter(Boolean);
+
     try {
-      const plan = await generateWorkoutPlan(checkin, history, setStatusMsg);
+      let plan;
+      try {
+        plan = await generateWorkoutPlan(template ? { ...checkin, template } : checkin, history, setStatusMsg);
+        if (template && !template.adapt) plan = enforceExact(plan, template, history);
+        else if (template) plan = { ...plan, fromWorkout: { id: template.id, name: template.name, source: template.source, trainer: template.trainer, adapt: true } };
+      } catch (e) {
+        if (!template) throw e;
+        // the coach is unreachable — a saved workout still runs, as written
+        logEvent('generation_failed', { message: e.message, fallback: 'saved workout' });
+        plan = { ...templateToPlan(template, history), concerns: "Coach unavailable — weights are from your history." };
+      }
+      plan = appendAddOns(plan, addOns, history);
       logEvent('plan_generated', {
         sessionType: plan.sessionType,
         title: plan.title,
         recoveryScore: plan.recoveryScore,
         estTimeMin: plan.estTimeMin,
+        workout: template?.id || null,
+        addOns: addOns.length,
       });
       const log = (plan.exercises || []).map((ex) =>
         Array.from({ length: Number(ex.sets) || 3 }, () => ({
@@ -341,6 +383,7 @@ export default function App() {
   // ── Weekly review: generated on Sundays, shown for the week after ──
   async function maybeWeeklyReview(hist) {
     try {
+      if (!getPrefs().weeklyReview) return; // switched off in Settings
       if (new Date().getDay() !== 0) return; // Sundays only
       const cur = cloudState('weeklyReview');
       if (cur?.week === mondayOf(todayStr())) return; // already done this week
@@ -365,6 +408,7 @@ export default function App() {
   //    summarizing the month that just ended ──
   async function maybeMonthlyReport(hist) {
     try {
+      if (!getPrefs().monthlyReport) return; // switched off in Settings
       const now = new Date();
       if (now.getDate() > 7) return; // first week of the month only
       const prev = new Date(now.getFullYear(), now.getMonth() - 1, 15);
@@ -559,8 +603,8 @@ export default function App() {
     setScreen('home');
     runSync(); // background — push today's session to the cloud
 
-    // Background: coach debrief on the finished session
-    generateDebrief(t, history)
+    // Background: coach debrief on the finished session (unless switched off)
+    if (getPrefs().debrief) generateDebrief(t, history)
       .then(async (text) => {
         // the session may have been edited (or deleted) while the AI was
         // writing — attach the debrief to the latest copy only
@@ -737,6 +781,16 @@ export default function App() {
   const shell = {
     screen,
     go: setScreen,
+    openWorkouts: (id = null) => openWorkouts(screen, id),
+    openSession: (s) => {
+      setDetailId(sid(s));
+      setScreen('historyDetail');
+    },
+    openRecord: (name) => {
+      setRecordPick({ name, at: Date.now() });
+      setScreen('records');
+    },
+    history,
     openChat: () => setChatOpen(true),
     openSheet: (s) => {
       if (s === 'notifications') {
@@ -754,7 +808,7 @@ export default function App() {
   return (
     <ShellContext.Provider value={shell}>
     <div className="app">
-      <div className={`frame${isTab ? ' frame--tabs frame--wide' : ''}`}>
+      <div className={`frame${isTab ? ' frame--tabs frame--wide' : ''}${screen === 'workouts' ? ' frame--wide' : ''}`}>
         {screen === 'home' && (
           <Home
             todayPlan={todayPlan}
@@ -774,6 +828,7 @@ export default function App() {
               generateWorkout({ ...checkin, notes: 'Quick start — assumed a normal day.' });
             }}
             onResume={() => setScreen('workout')}
+            onStartWorkout={startSavedWorkout}
             onQuickCardio={logQuickCardio}
             onAddPast={() => setScreen('addPast')}
             onOpenSession={(s) => {
@@ -799,6 +854,17 @@ export default function App() {
             muscleGap={muscleGap}
             onCancel={() => setScreen('home')}
             onSubmit={() => generateWorkout(ci)}
+            onManageWorkouts={() => openWorkouts('checkin')}
+          />
+        )}
+
+        {screen === 'workouts' && (
+          <Workouts
+            key={workoutsOpen || 'list'}
+            history={history}
+            openId={workoutsOpen}
+            onBack={() => setScreen(workoutsFrom)}
+            onStart={startSavedWorkout}
           />
         )}
 
@@ -811,7 +877,7 @@ export default function App() {
         )}
 
         {screen === 'records' && (
-          <Records history={history} onBack={() => setScreen('home')} />
+          <Records history={history} pick={recordPick} onBack={() => setScreen('home')} />
         )}
 
         {screen === 'workout' && todayPlan && (
@@ -900,6 +966,7 @@ export default function App() {
           }}
         />
       )}
+      {sheet === 'search' && <SearchSheet onClose={() => setSheet(null)} />}
       {sheet === 'profile' && (
         <ProfileSheet
           displayName={displayName}

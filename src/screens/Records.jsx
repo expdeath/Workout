@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { fmtDate, daysAgoStr } from '../utils/helpers';
 import { prRecords, exerciseSeries, weekStats, sessionVolume, muscleGroupOf } from '../utils/stats';
 import { getAISettings } from '../utils/storage';
@@ -11,18 +11,86 @@ import Icon from '../components/Icon';
  *  grid with progress, personal records (tap one for its est. 1RM
  *  trend) and the next benchmark in reach. The iOS RecordsView mirrors
  *  the phone layout; desktops get a PR table with a detail panel. */
-export default function Records({ history }) {
-  if (useDesktop()) return <RecordsDesktop history={history} />;
-  return <RecordsPhone history={history} />;
+export default function Records({ history, pick }) {
+  if (useDesktop()) return <RecordsDesktop history={history} pick={pick} />;
+  return <RecordsPhone history={history} pick={pick} />;
 }
 
-function RecordsPhone({ history }) {
+// ── Share / export ──
+
+const csvCell = (v) => (/[",\n]/.test(String(v ?? '')) ? `"${String(v).replace(/"/g, '""')}"` : String(v ?? ''));
+
+/** Every personal record as a spreadsheet. */
+function exportRecordsCsv(history) {
+  const rows = prRecords(history)
+    .filter((r) => r.weight)
+    .map((r) => [r.name, muscleGroupOf(r.name), r.weight.w, r.weight.reps || '', r.weight.date, r.e1rm?.v ?? '', r.e1rm?.date ?? '', r.count]);
+  const csv = [['Exercise', 'Muscle group', 'Best weight (kg)', 'Reps', 'Best set date', 'Est. 1RM (kg)', 'Est. 1RM date', 'Sets logged'], ...rows]
+    .map((r) => r.map(csvCell).join(','))
+    .join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+  a.download = `coach-records-${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+/** A short text summary through the system share sheet, or the clipboard. */
+async function shareRecords(history) {
+  const records = prRecords(history).filter((r) => r.weight).sort((a, b) => (b.e1rm?.v || b.weight.w) - (a.e1rm?.v || a.weight.w));
+  const earned = milestones(history).filter((m) => m.earned);
+  const text = [
+    `My training records — ${history.length} sessions, ${records.length} PRs, ${earned.length} milestones`,
+    ...records.slice(0, 6).map((r) => `• ${r.name}: ${r.weight.w} kg × ${r.weight.reps || '?'}${r.e1rm ? ` (est. 1RM ${r.e1rm.v} kg)` : ''}`),
+    earned.length ? `Latest milestone: ${earned[earned.length - 1].title}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'My training records', text });
+      return 'Shared';
+    } catch (e) {
+      if (e.name === 'AbortError') return '';
+    }
+  }
+  await navigator.clipboard.writeText(text);
+  return 'Copied to clipboard';
+}
+
+function ShareExport({ history, compact }) {
+  const [msg, setMsg] = useState('');
+  const flash = (m) => {
+    setMsg(m);
+    if (m) setTimeout(() => setMsg(''), 2500);
+  };
+  const cls = compact ? 'outline-btn' : 'small-btn';
+  return (
+    <>
+      {msg && <span className="caps" style={{ color: 'var(--green)', alignSelf: 'center' }}>{msg}</span>}
+      <button className={cls} style={compact ? undefined : { padding: '12px 18px' }} onClick={() => shareRecords(history).then(flash).catch(() => flash("Couldn't share"))}>
+        <Icon name="share" size={18} /> Share
+      </button>
+      <button className={cls} style={compact ? undefined : { padding: '12px 18px' }} onClick={() => { exportRecordsCsv(history); flash('Downloaded'); }}>
+        <Icon name="download" size={18} /> Export CSV
+      </button>
+    </>
+  );
+}
+
+function RecordsPhone({ history, pick }) {
   const records = prRecords(history)
     .filter((r) => r.weight)
     .sort((a, b) => (a.weight.date < b.weight.date ? 1 : -1));
   const series = exerciseSeries(history);
-  const [openEx, setOpenEx] = useState(null); // exercise name or null
-  const [showAll, setShowAll] = useState(false);
+  const [openEx, setOpenEx] = useState(pick?.name || null); // exercise name or null
+  const [showAll, setShowAll] = useState(!!pick);
+  useEffect(() => {
+    if (!pick) return;
+    setOpenEx(pick.name);
+    setShowAll(true);
+    setTimeout(() => document.querySelector('.pr-card--open')?.scrollIntoView({ block: 'center' }), 50);
+  }, [pick]);
   const totalVolume = history.reduce((a, s) => a + sessionVolume(s), 0);
   const { streak } = weekStats(history, weeklyTarget(getAISettings()));
   const all = milestones(history);
@@ -68,6 +136,10 @@ function RecordsPhone({ history }) {
         </div>
       </div>
 
+      <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+        <ShareExport history={history} compact />
+      </div>
+
       <SectionHead title="Key milestones" trailing={`${earned} of ${all.length} complete`} trailingColor="var(--muted)" />
       <div className="milestone-grid">
         {keyMilestones(history).map((m) => (
@@ -99,11 +171,11 @@ function RecordsPhone({ history }) {
         <p className="body" style={{ color: 'var(--muted)' }}>Log weighted sets to see records.</p>
       )}
       {(showAll ? records : records.slice(0, 6)).map((r) => {
-        const isOpen = openEx === r.name;
+        const isOpen = openEx?.toLowerCase() === r.name.toLowerCase();
         const isNew = r.weight.date >= newCutoff;
         const pts = series.find((e) => e.name === r.name)?.points || [];
         return (
-          <div key={r.name} className="pr-card" onClick={() => setOpenEx(isOpen ? null : r.name)}>
+          <div key={r.name} className={'pr-card' + (isOpen ? ' pr-card--open' : '')} onClick={() => setOpenEx(isOpen ? null : r.name)}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <IconWell icon={isNew ? 'star' : 'military_tech'} tint={isNew ? 'var(--amber-text)' : 'var(--muted)'} size={34} fill={isNew} />
               <div style={{ flex: 1, minWidth: 0 }}>
@@ -148,14 +220,21 @@ function RecordsPhone({ history }) {
 
 const tonnes = (kg) => (kg >= 10000 ? Math.round(kg / 1000) : (kg / 1000).toFixed(1));
 
-function RecordsDesktop({ history }) {
+function RecordsDesktop({ history, pick }) {
   const records = useMemo(
     () => prRecords(history).filter((r) => r.weight).sort((a, b) => (b.e1rm?.v || b.weight.w) - (a.e1rm?.v || a.weight.w)),
     [history]
   );
   const series = useMemo(() => exerciseSeries(history), [history]);
   const [group, setGroup] = useState('All');
-  const [picked, setPicked] = useState(null);
+  const [picked, setPicked] = useState(pick?.name || null);
+  // opened from search: select that lift and bring its row into view
+  useEffect(() => {
+    if (!pick) return;
+    setGroup('All');
+    setPicked(pick.name);
+    setTimeout(() => document.querySelector('.pr-row--on')?.scrollIntoView({ block: 'center' }), 50);
+  }, [pick]);
   const totalVolume = history.reduce((a, s) => a + sessionVolume(s), 0);
   const { streak } = weekStats(history, weeklyTarget(getAISettings()));
   const all = milestones(history);
@@ -167,7 +246,7 @@ function RecordsDesktop({ history }) {
 
   const groups = ['All', ...new Set(records.map((r) => muscleGroupOf(r.name)))];
   const shown = group === 'All' ? records : records.filter((r) => muscleGroupOf(r.name) === group);
-  const sel = shown.find((r) => r.name === picked) || shown[0];
+  const sel = shown.find((r) => r.name.toLowerCase() === picked?.toLowerCase()) || shown[0];
   const pts = sel ? series.find((e) => e.name === sel.name)?.points || [] : [];
   const e1 = pts.filter((p) => p.e != null);
   const trend = e1.length >= 2 ? e1.map((p) => ({ label: fmtDate(p.date), value: p.e })) : pts.map((p) => ({ label: fmtDate(p.date), value: p.w }));
@@ -179,7 +258,9 @@ function RecordsDesktop({ history }) {
         kicker="Honor roll"
         title="Records & milestones"
         sub={`${earned} milestone${earned === 1 ? '' : 's'} unlocked · ${records.length} personal record${records.length === 1 ? '' : 's'} on the board`}
-      />
+      >
+        <ShareExport history={history} />
+      </PageHero>
 
       <div className="kpi-grid">
         <KpiCard label="Personal records" icon="emoji_events" value={records.length} note={fresh ? `${fresh} in the last 30 days` : 'All time'} noteColor={fresh ? 'var(--green)' : 'var(--muted)'} />

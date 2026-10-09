@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { fmtDate, fmtSet, setLogged, todayStr } from '../utils/helpers';
 import { weekStats, sessionVolume, exerciseSeries, prRecords, logMode, lastPerformance } from '../utils/stats';
-import { getAISettings } from '../utils/storage';
+import { getAISettings, saveKey } from '../utils/storage';
+import { cloudState } from '../db/cloud';
+import { scheduledFor } from '../utils/workouts';
 import { getAllHealth } from '../db/db';
 import { calorieStats, latestBodyWeightKg } from '../utils/calories';
 import {
@@ -33,17 +35,13 @@ const LAUNCH = [
  *  quick launch, today's plan, notes); desktops get stat cards, today's
  *  plan as a table with recent workouts below it, and a right-hand rail
  *  (consistency, recovery, lift progression, records, devices). */
-export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onQuickCardio, onOpenSession, onAddPast }) {
-  const { displayName, go } = useShell();
+export default function Home({ todayPlan, history, syncInfo, weeklyReview, monthlyReport, onStart, onQuickStart, onResume, onStartWorkout, onQuickCardio, onOpenSession, onAddPast }) {
+  const { displayName, go, openWorkouts } = useShell();
+  const scheduled = scheduledFor();
   const [quickCardio, setQuickCardio] = useState(null); // null | 'run' | 'cycle' | 'walk' | 'hike'
   const [health, setHealth] = useState([]);
-  const [dismissed, setDismissed] = useState(() => {
-    try {
-      return localStorage.getItem('coach:noticeDismissed') === todayStr();
-    } catch {
-      return false;
-    }
-  });
+  // dismissing today's recovery notice is account state, so other devices hide it too
+  const [dismissed, setDismissed] = useState(() => cloudState('noticeDismissed', '') === todayStr());
   useEffect(() => {
     getAllHealth().then(setHealth).catch(() => {});
   }, [history]);
@@ -71,9 +69,7 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
 
   const dismiss = () => {
     setDismissed(true);
-    try {
-      localStorage.setItem('coach:noticeDismissed', todayStr());
-    } catch { /* private mode */ }
+    saveKey('noticeDismissed', todayStr());
   };
 
   // ── shared cards ──
@@ -90,14 +86,15 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
     </>
   );
 
+  // today's saved workout (yours or your trainer's), when one is scheduled
+  const savedCard = !todayPlan && scheduled.sessions[0] && (
+    <SavedWorkoutCard w={scheduled.sessions[0]} more={scheduled.sessions.length - 1} addOns={scheduled.addOns} onStart={() => onStartWorkout(scheduled.sessions[0].id)} onAll={() => openWorkouts()} />
+  );
+
   const focus = (
     <>
-      <SectionHead
-        title="Today's focus"
-        trailing={!todayPlan ? 'Not planned' : todayPlan.finished ? 'Completed' : 'Scheduled'}
-        trailingColor={todayPlan?.finished ? 'var(--green)' : todayPlan ? 'var(--amber-text)' : 'var(--muted)'}
-      />
-      {todayPlan ? <PlanCard t={todayPlan} history={history} onOpen={onResume} /> : (
+      <SectionHead title="Today's focus" trailing="My workouts" onTrailing={() => openWorkouts()} />
+      {todayPlan ? <PlanCard t={todayPlan} history={history} onOpen={onResume} /> : savedCard || (
         <div className="card" style={{ marginTop: 0 }}>
           <div className="hero-title" style={{ fontSize: 26 }}>No plan yet</div>
           <p className="body" style={{ color: 'var(--muted)', marginTop: 4 }}>
@@ -179,6 +176,9 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
             <h1 className="hero-title" style={{ marginTop: 6 }}>{title}</h1>
           </div>
           <div className="dash-hero__actions">
+            <button className="small-btn" style={{ padding: '12px 20px' }} onClick={() => openWorkouts()}>
+              <Icon name="edit_note" size={18} /> My workouts
+            </button>
             <button className="small-btn" style={{ padding: '12px 20px' }} onClick={onAddPast}>
               <Icon name="add" size={18} /> Quick log
             </button>
@@ -192,7 +192,7 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
           <div>
             {todayPlan ? (
               <PlanTable t={todayPlan} history={history} onOpen={onResume} />
-            ) : (
+            ) : savedCard || (
               <div className="card">
                 <span className="caps">Today's focus</span>
                 <div className="hero-title" style={{ fontSize: 30, marginTop: 4 }}>No plan yet</div>
@@ -224,6 +224,39 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
       {quickCardio && (
         <QuickCardioSheet kind={quickCardio} onClose={() => setQuickCardio(null)} onSave={onQuickCardio} />
       )}
+    </div>
+  );
+}
+
+/** No plan yet, but the library has a workout on today's weekday. */
+function SavedWorkoutCard({ w, more, addOns, onStart, onAll }) {
+  return (
+    <div className="card" style={{ marginTop: 0 }}>
+      <div className="row-between" style={{ alignItems: 'flex-start', gap: 12 }}>
+        <div style={{ minWidth: 0 }}>
+          <span className="caps" style={{ color: 'var(--amber-text)' }}>
+            Scheduled today{w.source === 'trainer' ? ` · ${w.trainer || 'trainer'}'s workout` : ''}
+          </span>
+          <div className="hero-title" style={{ fontSize: 26, marginTop: 4 }}>{w.name}</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
+            {w.exercises.length} exercises · {w.adapt ? 'coach adapts it to today' : 'kept as written'}
+            {addOns.length ? ` · + ${addOns.map((a) => a.name).join(', ')}` : ''}
+          </div>
+        </div>
+        <IconWell icon="edit_note" />
+      </div>
+      <div className="wk-ex" style={{ margin: '12px 0' }}>
+        {w.exercises.slice(0, 4).map((e, i) => (
+          <div key={i} className="wk-ex__row">
+            <span className="wk-ex__name">{e.name}</span>
+            <span className="caps wk-ex__dose">{e.sets} × {e.reps}{e.weight ? ` · ${e.weight}` : ''}</span>
+          </div>
+        ))}
+      </div>
+      <div className="row-between" style={{ alignItems: 'center' }}>
+        <button className="link-btn" onClick={onAll}>{more > 0 ? `${more} more scheduled today` : 'All my workouts'}</button>
+        <button className="small-btn" onClick={onStart}>Start <Icon name="arrow_forward" size={16} /></button>
+      </div>
     </div>
   );
 }

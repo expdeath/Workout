@@ -6,7 +6,7 @@ import { fmtSet, setLogged, plateBreakdown, parsePlates, DEFAULT_BAR_KG } from '
 import { lastPerformance, suggestNextWeight, recoveryCaution, logMode } from '../utils/stats';
 import { intensifyWorkout } from '../api/gemini';
 import { getAllHealth, getMedia, putMedia, deleteMedia } from '../db/db';
-import { getAISettings, setAISettings } from '../utils/storage';
+import { getAISettings, setAISettings, getPrefs } from '../utils/storage';
 
 // per-set effort tap cycles through these; '' means not rated
 const EFFORTS = ['', 'easy', 'good', 'grind'];
@@ -184,6 +184,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
   // keep the screen awake while a rest timer runs — the countdown and
   // buzz then always fire. Released as soon as the timer ends.
   const acquireWake = async () => {
+    if (!getPrefs().keepAwake) return; // Settings → Alerts & reports
     try {
       wakeRef.current = await navigator.wakeLock?.request('screen');
     } catch { /* low battery / unsupported — timer still works on-screen */ }
@@ -218,9 +219,10 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
   useEffect(() => {
     if (!timer || remaining > 0 || firedRef.current) return;
     firedRef.current = true;
+    const prefs = getPrefs();
     try {
-      navigator.vibrate?.([200, 100, 200]);
-      const ctx = audioRef.current;
+      if (prefs.restVibrate) navigator.vibrate?.([200, 100, 200]);
+      const ctx = prefs.restSound ? audioRef.current : null;
       if (ctx) {
         [0, 0.25].forEach((delay) => {
           const osc = ctx.createOscillator();
@@ -235,7 +237,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
       }
     } catch { /* audio is best-effort */ }
     // switched to another app? send a real notification
-    if (document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+    if (prefs.restNotify && document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
       navigator.serviceWorker?.ready
         .then((reg) => reg.showNotification('⏱ Rest over — GO', {
           body: `Next set: ${timer.exName}`,
@@ -268,7 +270,7 @@ export default function Workout({ t, history = [], updateSet, swapExercise, rena
     setTimer({ endsAt: Date.now() + secs * 1000, total: secs, exName: ex?.name });
     acquireWake();
     // one-time ask, from this tap's user gesture (installed app only)
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+    if (getPrefs().restNotify && typeof Notification !== 'undefined' && Notification.permission === 'default') {
       Notification.requestPermission().catch(() => {});
     }
   };
