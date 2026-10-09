@@ -165,6 +165,12 @@ enum Workouts {
         )
     }
 
+    /// { id, name, source, trainer, adapt } — which saved workout a plan came from.
+    static func fromWorkout(_ w: SavedWorkout, adapt: Bool) -> JSONValue {
+        .object(["id": .string(w.id), "name": .string(w.name), "source": .string(w.source),
+                 "trainer": .string(w.trainer), "adapt": .bool(adapt)])
+    }
+
     private static func guessType(_ w: SavedWorkout) -> String {
         let n = (w.name + " " + w.exercises.map(\.name).joined(separator: " ")).lowercased()
         func has(_ p: String) -> Bool { n.range(of: p, options: .regularExpression) != nil }
@@ -181,11 +187,14 @@ enum Workouts {
     /// Without the AI (no key, offline, coach failed): exactly as written.
     static func templateToPlan(_ w: SavedWorkout, _ history: [Session]) -> Plan {
         let ex = w.exercises.map { planExercise($0, history) }
-        return Plan(
+        let est = Int((Double(ex.reduce(0) { $0 + $1.sets }) * 2.5).rounded())
+        var plan = Plan(
             sessionType: guessType(w), title: w.name, recoveryScore: nil,
             reasoning: w.source == "trainer" ? "\(w.trainer.isEmpty ? "Your trainer" : w.trainer)'s workout, as written." : "Your saved workout, as written.",
-            exercises: ex, estTimeMin: max(Int((Double(ex.reduce(0) { $0 + $1.sets }) * 2.5).rounded()), 30)
+            exercises: ex, estTimeMin: est == 0 ? 30 : est
         )
+        plan.fromWorkout = fromWorkout(w, adapt: w.adapt)
+        return plan
     }
 
     /// Keep-exact mode: the coach may only add weights, cues and warnings.
@@ -202,6 +211,7 @@ enum Workouts {
             base.alt = c.alt
             return base
         }
+        out.fromWorkout = fromWorkout(w, adapt: false)
         return out
     }
 

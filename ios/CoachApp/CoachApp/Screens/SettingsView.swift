@@ -290,7 +290,11 @@ struct SettingsView: View {
                 }
                 .font(Theme.body(13.5)).tint(Theme.amberText)
             }
-            if Cloud.shared.canSetGeminiKey {
+            if Cloud.shared.proActive {
+                Text("You're on COACH Pro — no key needed; the coach runs on COACH's server.")
+                    .font(Theme.meta(12.5)).foregroundStyle(Theme.muted)
+            }
+            if Cloud.shared.canSetGeminiKey && !Cloud.shared.proActive {
                 QLabel(text: account?.selfServe == true ? "Your Gemini API key" : "Gemini API key (shared)")
                 HStack {
                     Group {
@@ -313,7 +317,7 @@ struct SettingsView: View {
             area($ai.routine, "Empty = built-in Push/Pull/Legs", max: 4000, minLines: 3)
             Button(saved ? "✓ Saved" : "Save coach setup") {
                 let newKey = key.trimmingCharacters(in: .whitespaces)
-                if Cloud.shared.canSetGeminiKey, newKey != Cloud.shared.geminiKey {
+                if Cloud.shared.canSetGeminiKey, !Cloud.shared.proActive, newKey != Cloud.shared.geminiKey {
                     if account?.selfServe == true { Cloud.shared.setOwnGeminiKey(newKey) }
                     else { Cloud.shared.setSharedGeminiKey(newKey) }
                     LocalStore.shared.logEvent(type: "api_key_saved")
@@ -407,6 +411,10 @@ struct SettingsView: View {
             if let text {
                 Text("Today: \(Stats.fmtHealthLine(Stats.parseHealthNumbers(text)).isEmpty ? text : Stats.fmtHealthLine(Stats.parseHealthNumbers(text)))")
                     .font(Theme.body(14)).foregroundStyle(Theme.green)
+            }
+            if let inbox = GitHubSync.lastInbox() {
+                Text("Last delivery \(Date(timeIntervalSince1970: inbox.at / 1000).formatted(date: .abbreviated, time: .shortened))")
+                    .font(Theme.meta(13)).foregroundStyle(Theme.muted)
             }
             if !HealthKitSync.isAvailable {
                 Text("Apple Health isn't available on this device.").font(Theme.body(13)).foregroundStyle(Theme.muted)

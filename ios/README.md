@@ -34,8 +34,9 @@ next.
 | HealthKit | ✅ Built + unit-tested; needs a run on the real iPhone (Settings → Connect Apple Health) |
 | App Store / TestFlight distribution | Deliberately deferred — see "Distribution" below |
 
-81 unit tests (`CoachAppTests/`) and 5 UI tests (`CoachAppUITests/`), all
-passing on the iPhone 17 simulator (2026-10-09). `COACH_DEBUG_WORKOUTS=1`
+93 unit tests (`CoachAppTests/`) and 5 UI tests (`CoachAppUITests/`), all
+passing on the iPhone 17 Pro simulator (2026-10-10). `ParityTests` pins the
+behaviour that must match the web and Android apps. `COACH_DEBUG_WORKOUTS=1`
 with the debug seed adds saved workouts; `COACH_DEBUG_SCREEN=workouts`
 opens My workouts.
 The unit tests pass (run on macOS on 2026-10-07 — see "Dev workflow"

@@ -48,6 +48,7 @@ struct WorkoutView: View {
     @State private var viewer: MediaStore.Item?
     @State private var pickFor: String? // exercise name awaiting a photo/clip
     @State private var pickedItem: PhotosPickerItem?
+    @State private var mediaError: String?
 
     private static let efforts = ["", "easy", "good", "grind"]
 
@@ -133,6 +134,9 @@ struct WorkoutView: View {
             Task { await savePicked(item, for: name) }
         }
         .onDisappear { stopTimer() }
+        .alert(mediaError ?? "", isPresented: Binding(get: { mediaError != nil }, set: { if !$0 { mediaError = nil } })) {
+            Button("OK", role: .cancel) {}
+        }
     }
 
     private func header(_ t: Session) -> some View {
@@ -426,6 +430,12 @@ struct WorkoutView: View {
         let key = cueKey(name)
         if item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) }),
            let movie = try? await item.loadTransferable(type: PickedMovie.self) {
+            let size = (try? FileManager.default.attributesOfItem(atPath: movie.url.path)[.size] as? Int) ?? 0
+            if size > 60 * 1024 * 1024 {
+                try? FileManager.default.removeItem(at: movie.url)
+                mediaError = "That file is over 60MB — record a shorter clip."
+                return
+            }
             try? MediaStore.put(key, movieAt: movie.url)
             try? FileManager.default.removeItem(at: movie.url)
         } else if let data = try? await item.loadTransferable(type: Data.self),

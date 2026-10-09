@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import FirebaseAuth
 import AuthenticationServices
 
@@ -105,6 +106,7 @@ final class AppState {
     var muscleGap: (group: String, lastDaysAgo: Int)? { Stats.biggestMuscleGap(history) }
 
     private var lastSyncAt: Date = .distantPast
+    private var periodicSync: Task<Void, Never>?
     private var syncTask: Task<Void, Never>?
 
     init() {
@@ -227,9 +229,19 @@ final class AppState {
         loadStateFromCloud()
         pruneOldHealthText()
         LocalStore.shared.logEvent(type: "app_open", data: ["sessions": .number(Double(history.count))])
+        HealthIngest.reparseRows() // parser upgrades backfill old rows
         Task {
             await HealthKitSync.shared.sync() // today + any missing days of the last week
             await runSync()
+        }
+        // and every 5 minutes while the app stays open (throttled like a foreground return)
+        periodicSync?.cancel()
+        periodicSync = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 5 * 60 * 1_000_000_000)
+                guard let self, !Task.isCancelled else { return }
+                if UIApplication.shared.applicationState == .active, Cloud.shared.account != nil { self.maybeSyncOnForeground() }
+            }
         }
         Task { await maybeWeeklyReview() }
         Task { await maybeMonthlyReport() }
@@ -381,6 +393,15 @@ final class AppState {
     /// for today first, so the check-in is pre-filled with them.
     func prepareCheckin() async -> Checkin {
         await HealthKitSync.shared.sync(days: 1)
+        // nothing for today yet: Watch data copied to the clipboard fills it in
+        // (as on the web). Only read when the clipboard holds numbers — the
+        // pattern check doesn't trigger iOS's paste prompt.
+        if (todaysHealth() ?? "").isEmpty, UIPasteboard.general.hasStrings,
+           let found = try? await UIPasteboard.general.detectedPatterns(for: [\.number]), found.contains(\UIPasteboard.DetectedValues.number),
+           HealthIngest.looksLikeHealthData(UIPasteboard.general.string) {
+            let t = HealthIngest.storeToday(UIPasteboard.general.string ?? "")
+            LocalStore.shared.logEvent(type: "health_pasted_auto", data: ["chars": .number(Double(t.count))])
+        }
         return buildDefaultCheckin()
     }
 
@@ -451,6 +472,7 @@ final class AppState {
                     Task { @MainActor in self?.statusMsg = msg }
                 }
                 if let template, !template.adapt { plan = Workouts.enforceExact(plan, template, history) }
+                else if let template { plan.fromWorkout = Workouts.fromWorkout(template, adapt: true) }
             } catch {
                 guard let template else { throw error }
                 // the coach is unreachable — a saved workout still runs, as written
@@ -464,7 +486,7 @@ final class AppState {
                 "estTimeMin": .number(Double(plan.estTimeMin)),
                 "workout": template.map { .string($0.id) } ?? .null, "addOns": .number(Double(addOns.count)),
             ])
-            let log = plan.exercises.map { ex in Array(repeating: SetLog(), count: max(ex.sets, 1)) }
+            let log = plan.exercises.map { ex in Array(repeating: SetLog(), count: ex.sets > 0 ? ex.sets : 3) }
             let t = Session(
                 id: "\(Helpers.todayStr())#\(Int(Date().timeIntervalSince1970 * 1000))",
                 date: Helpers.todayStr(), startedAt: Date().timeIntervalSince1970 * 1000,
@@ -589,7 +611,7 @@ final class AppState {
         case "add":
             guard let ex = opt.exercise, !ex.name.isEmpty else { return false }
             t.plan.exercises.append(ex)
-            t.log.append(Array(repeating: SetLog(), count: max(ex.sets, 1)))
+            t.log.append(Array(repeating: SetLog(), count: ex.sets > 0 ? ex.sets : 3))
         case "extraSet":
             guard let i = findIndex(opt.target) else { return false }
             t.plan.exercises[i].sets = max(t.plan.exercises[i].sets, t.log[i].count) + 1
@@ -598,7 +620,7 @@ final class AppState {
             guard let ex = opt.exercise, !ex.name.isEmpty, let i = findIndex(opt.target) else { return false }
             t.plan.exercises[i] = ex
             let kept = t.log[i].filter { $0.isLogged }
-            let n = max(ex.sets, kept.count)
+            let n = max(ex.sets > 0 ? ex.sets : 3, kept.count)
             t.log[i] = kept + Array(repeating: SetLog(), count: n - kept.count)
         default:
             return false

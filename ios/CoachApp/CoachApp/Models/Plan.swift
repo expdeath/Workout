@@ -18,6 +18,9 @@ struct Plan: Codable, Equatable {
     var cooldown: [String] = []
     var estTimeMin: Int = 0
     var concerns: String = ""
+    /// The saved workout this plan was built from — { id, name, source,
+    /// trainer, adapt } (workouts.js), carried for every app's history.
+    var fromWorkout: JSONValue? = nil
 
     struct Exercise: Codable, Equatable {
         var name: String = ""
@@ -86,6 +89,7 @@ struct Plan: Codable, Equatable {
         cooldown = c.lenientStrings(.cooldown) ?? []
         estTimeMin = c.lenientInt(.estTimeMin) ?? 60
         concerns = c.lenientString(.concerns) ?? ""
+        if case .object? = c.lenient(JSONValue.self, .fromWorkout) { fromWorkout = c.lenient(JSONValue.self, .fromWorkout) }
     }
 
     enum AIResponseError: Error, Equatable {

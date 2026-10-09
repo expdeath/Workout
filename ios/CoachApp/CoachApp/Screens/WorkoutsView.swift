@@ -164,6 +164,9 @@ struct WorkoutsView: View {
         }
         .buttonStyle(BigButtonStyle())
         .disabled(drafts.isEmpty)
+        Button("Start over") { mode = .build }
+            .font(Theme.body(14, weight: .medium)).foregroundStyle(Theme.muted)
+            .frame(maxWidth: .infinity)
         Text("You can change anything later — open a workout and edit it.").font(Theme.meta(12.5)).foregroundStyle(Theme.dim)
     }
 }

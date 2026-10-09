@@ -498,11 +498,16 @@ enum Gemini {
         if supportsThinkingLevel(model) { config["thinkingConfig"] = ["thinkingLevel": "low"] }
 
         do {
-            let (text, _, _) = try await post(
-                model: model, systemInstruction: planSystem(),
-                contents: [["role": "user", "parts": [["text": userMsg]]]],
-                generationConfig: config, timeout: 60
-            )
+            let text: String
+            do {
+                text = try await post(
+                    model: model, systemInstruction: planSystem(),
+                    contents: [["role": "user", "parts": [["text": userMsg]]]],
+                    generationConfig: config, timeout: 60
+                ).text
+            } catch let e as URLError where e.code == .timedOut {
+                throw GeminiError.message("Request timed out after 60 seconds. The AI might be overloaded — try again.")
+            }
             LocalStore.shared.logEvent(type: "ai_response", data: ["model": .string(model), "chars": .number(Double(text.count)), "raw": .string(text)])
             let plan = try repairAndDecodePlan(text)
             return sanitizePlan(plan, history, checkin)
