@@ -94,6 +94,10 @@ export function normalizeBackup(b) {
     events: (b.events || [])
       .map(({ id, ...e }) => e)
       .sort((a, x) => (eventKey(a) < eventKey(x) ? -1 : 1)),
+    // saved workouts + Settings switches (state workout-<id> / prefs);
+    // only present when there are any — the iOS Backup model matches
+    ...(b.workouts?.length ? { workouts: [...b.workouts].sort((a, x) => String(a.id).localeCompare(String(x.id))) } : {}),
+    ...(b.prefs ? { prefs: b.prefs } : {}),
   };
 }
 

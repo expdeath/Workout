@@ -158,8 +158,8 @@ export async function exportAll() {
     health: await getAllHealth(),
     aiSettings: cloudState('aiSettings', {}),
     deletedIds: getDeletedIds(),
-    // saved workouts + preferences: in the export file (not yet in the
-    // GitHub backup — the iOS app's backup format doesn't know them)
+    // saved workouts + preferences (kept by normalizeBackup, so they're
+    // in the GitHub backup too — the iOS Backup model carries them)
     workouts: cloudStateKeys().filter((k) => k.startsWith('workout-')).map((k) => cloudState(k)).filter(Boolean),
     prefs: cloudState('prefs', null),
   };

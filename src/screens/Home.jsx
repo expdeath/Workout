@@ -93,7 +93,16 @@ export default function Home({ todayPlan, history, syncInfo, weeklyReview, month
 
   const focus = (
     <>
-      <SectionHead title="Today's focus" trailing="My workouts" onTrailing={() => openWorkouts()} />
+      {/* the session's status while there is one; otherwise the way to your saved workouts */}
+      {todayPlan ? (
+        <SectionHead
+          title="Today's focus"
+          trailing={todayPlan.finished ? 'Completed' : 'Scheduled'}
+          trailingColor={todayPlan.finished ? 'var(--green)' : 'var(--amber-text)'}
+        />
+      ) : (
+        <SectionHead title="Today's focus" trailing="My workouts" onTrailing={() => openWorkouts()} />
+      )}
       {todayPlan ? <PlanCard t={todayPlan} history={history} onOpen={onResume} /> : savedCard || (
         <div className="card" style={{ marginTop: 0 }}>
           <div className="hero-title" style={{ fontSize: 26 }}>No plan yet</div>
