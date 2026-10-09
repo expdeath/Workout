@@ -139,6 +139,7 @@ fun WorkoutsScreen(app: AppState, openId: String?) {
                         drafts = emptyList()
                         mode = "list"
                     }
+                    TextButtonC("Start over", Theme.muted, Theme.body(14f, FontWeight.Medium), modifier = Modifier.align(Alignment.CenterHorizontally)) { mode = "build" }
                     T("You can change anything later — open a workout and edit it.", Theme.meta(12.5f), Theme.dim)
                 }
                 else -> {

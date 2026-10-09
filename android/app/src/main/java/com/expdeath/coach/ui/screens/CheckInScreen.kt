@@ -26,13 +26,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.expdeath.coach.app.AppState
 import com.expdeath.coach.app.Screen
-import com.expdeath.coach.models.HealthRow
 import com.expdeath.coach.models.JSONValue
 import com.expdeath.coach.models.Workouts
 import com.expdeath.coach.persistence.LocalStore
 import com.expdeath.coach.stats.Helpers
-import com.expdeath.coach.stats.nowMs
-import com.expdeath.coach.sync.Cloud
+import com.expdeath.coach.sync.HealthIngest
 import com.expdeath.coach.ui.BigButton
 import com.expdeath.coach.ui.CapsText
 import com.expdeath.coach.ui.Chevron
@@ -72,9 +70,8 @@ fun CheckInScreen(app: AppState) {
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val text = cm.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(ctx)?.toString()?.trim()
         if (text.isNullOrEmpty()) return
-        val t = text.take(2000)
-        Cloud.setState("healthText-${Helpers.todayStr()}", JSONValue.Str(t))
-        LocalStore.mergeHealth(HealthRow(Helpers.todayStr(), raw = t.take(300), receivedAt = nowMs()))
+        // today's text + every number it carries on today's row (storeTodaysHealth)
+        val t = HealthIngest.storeToday(text)
         LocalStore.logEvent("health_pasted", mapOf("chars" to JSONValue.Num(t.length.toDouble())))
         app.ci = app.ci.copy(health = t)
         autoFilled = true

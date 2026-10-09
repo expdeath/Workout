@@ -36,6 +36,7 @@ import com.expdeath.coach.stats.safe
 import com.expdeath.coach.sync.Cloud
 import com.expdeath.coach.sync.GitHubSync
 import com.expdeath.coach.sync.HealthConnectSync
+import com.expdeath.coach.sync.HealthIngest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -99,6 +100,7 @@ class AppState(private val debugStart: Screen? = null) {
     val muscleGap: Stats.MuscleGap? get() = Stats.biggestMuscleGap(history)
 
     private var lastSyncAt = 0L
+    private var periodicSync: Job? = null
     private var syncJob: Job? = null
 
     init {
@@ -201,9 +203,18 @@ class AppState(private val debugStart: Screen? = null) {
         loadStateFromCloud()
         pruneOldHealthText()
         LocalStore.logEvent("app_open", mapOf("sessions" to JSONValue.Num(history.size.toDouble())))
+        HealthIngest.reparseRows() // parser upgrades backfill old rows
         scope.launch {
             HealthConnectSync.sync() // today + any missing days of the last week
             runSync()
+        }
+        // and every 5 minutes while the app stays open (throttled like a foreground return)
+        periodicSync?.cancel()
+        periodicSync = scope.launch {
+            while (true) {
+                delay(5 * 60_000L)
+                if (MainActivity.inForeground && Cloud.account != null) maybeSyncOnForeground()
+            }
         }
         scope.launch { maybeWeeklyReview() }
         scope.launch { maybeMonthlyReport() }
@@ -321,6 +332,18 @@ class AppState(private val debugStart: Screen? = null) {
      *  today first, so the check-in is pre-filled with them. */
     suspend fun prepareCheckin(): Checkin {
         HealthConnectSync.sync(1)
+        // nothing for today yet: Watch data copied to the clipboard fills it in
+        // (the button tap that got us here is the user gesture, as on the web)
+        if (todaysHealth().isNullOrEmpty()) {
+            val clip = try {
+                val cm = CoachApplication.context.getSystemService(android.content.ClipboardManager::class.java)
+                cm?.primaryClip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(CoachApplication.context)?.toString()
+            } catch (_: Exception) { null }
+            if (HealthIngest.looksLikeHealthData(clip)) {
+                val t = HealthIngest.storeToday(clip!!)
+                LocalStore.logEvent("health_pasted_auto", mapOf("chars" to JSONValue.Num(t.length.toDouble())))
+            }
+        }
         return buildDefaultCheckin()
     }
 
@@ -387,6 +410,7 @@ class AppState(private val debugStart: Screen? = null) {
             try {
                 plan = Gemini.generateWorkoutPlan(checkin, history, template) { msg -> scope.launch { statusMsg = msg } }
                 if (template != null && !template.adapt) plan = Workouts.enforceExact(plan, template, history)
+                else if (template != null) plan = plan.copy(fromWorkout = Workouts.fromWorkout(template, true))
             } catch (e: Exception) {
                 if (e is CancellationException || template == null) throw e
                 // the coach is unreachable — a saved workout still runs, as written
@@ -399,7 +423,7 @@ class AppState(private val debugStart: Screen? = null) {
                 "estTimeMin" to JSONValue.Num(plan.estTimeMin.toDouble()),
                 "workout" to (template?.let { JSONValue.Str(it.id) } ?: JSONValue.Null), "addOns" to JSONValue.Num(addOns.size.toDouble()),
             ))
-            val log = plan.exercises.map { ex -> List(maxOf(ex.sets, 1)) { SetLog() } }
+            val log = plan.exercises.map { ex -> List(if (ex.sets > 0) ex.sets else 3) { SetLog() } }
             val now = System.currentTimeMillis()
             val t = Session(
                 id = "${Helpers.todayStr()}#$now", date = Helpers.todayStr(), startedAt = now.toDouble(),
@@ -523,7 +547,7 @@ class AppState(private val debugStart: Screen? = null) {
         when (opt.kind) {
             "add" -> {
                 val ex = opt.exercise?.takeIf { it.name.isNotEmpty() } ?: return false
-                t = t.copy(plan = t.plan.copy(exercises = t.plan.exercises + ex), log = t.log + listOf(List(maxOf(ex.sets, 1)) { SetLog() }))
+                t = t.copy(plan = t.plan.copy(exercises = t.plan.exercises + ex), log = t.log + listOf(List(if (ex.sets > 0) ex.sets else 3) { SetLog() }))
             }
             "extraSet" -> {
                 val i = findIndex(opt.target) ?: return false
@@ -537,7 +561,7 @@ class AppState(private val debugStart: Screen? = null) {
                 val ex = opt.exercise?.takeIf { it.name.isNotEmpty() } ?: return false
                 val i = findIndex(opt.target) ?: return false
                 val kept = (t.log.safe(i) ?: emptyList()).filter { it.isLogged }
-                val n = maxOf(ex.sets, kept.size)
+                val n = maxOf(if (ex.sets > 0) ex.sets else 3, kept.size)
                 t = t.copy(
                     plan = t.plan.copy(exercises = t.plan.exercises.replace(i) { ex }),
                     log = t.log.replace(i) { kept + List(n - kept.size) { SetLog() } },

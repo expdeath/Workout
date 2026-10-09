@@ -302,7 +302,10 @@ private fun ColumnScope.CoachSection() {
         }
         if (whatShared) for ((_, title, sub) in aiShared) T("$title — $sub", Theme.meta(12.5f), Theme.muted)
     }
-    if (Cloud.canSetGeminiKey) {
+    if (Cloud.proActive) {
+        T("You're on COACH Pro — no key needed; the coach runs on COACH's server.", Theme.meta(12.5f), Theme.muted)
+    }
+    if (Cloud.canSetGeminiKey && !Cloud.proActive) {
         QLabel(if (account?.selfServe == true) "Your Gemini API key" else "Gemini API key (shared)")
         SecretField(key, { key = it }, "AIzaSy…")
         T("${if (account?.selfServe == true) "Only your account uses it." else "Shared by everyone you invited."} Free at aistudio.google.com/apikey.", Theme.body(13f), Theme.muted)
@@ -318,7 +321,7 @@ private fun ColumnScope.CoachSection() {
     VGap(10.dp)
     BigButton(if (saved) "✓ Saved" else "Save coach setup") {
         val newKey = key.trim()
-        if (Cloud.canSetGeminiKey && newKey != Cloud.geminiKey) {
+        if (Cloud.canSetGeminiKey && !Cloud.proActive && newKey != Cloud.geminiKey) {
             if (account?.selfServe == true) Cloud.setOwnGeminiKey(newKey) else Cloud.setSharedGeminiKey(newKey)
             LocalStore.logEvent("api_key_saved")
         }
@@ -352,6 +355,10 @@ private fun ColumnScope.WatchSection(watchStatus: String, onChanged: () -> Unit)
     Cloud.stateValue("healthText-${Helpers.todayStr()}")?.string?.let { text ->
         val line = Stats.fmtHealthLine(Stats.parseHealthNumbers(text))
         T("Today: ${line.ifEmpty { text }}", Theme.body(14f), Theme.green)
+    }
+    GitHubSync.lastInbox()?.let { inbox ->
+        T("Last delivery " + DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT).withZone(ZoneId.systemDefault()).format(Instant.ofEpochMilli(inbox.at.toLong())),
+            Theme.meta(13f), Theme.muted)
     }
     when {
         HealthConnectSync.needsUpdate -> {

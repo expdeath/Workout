@@ -15,6 +15,9 @@ data class Plan(
     val cooldown: List<String> = emptyList(),
     val estTimeMin: Int = 0,
     val concerns: String = "",
+    /** The saved workout this plan was built from — { id, name, source,
+     *  trainer, adapt } (workouts.js), carried for every app's history. */
+    val fromWorkout: JSONValue? = null,
 ) {
     data class Exercise(
         val name: String = "",
@@ -68,6 +71,7 @@ data class Plan(
         put("exercises", JSONValue.Arr(exercises.map { it.toJson() }))
         putIfPresent("cardio", cardio?.toJson())
         put("cooldown", strings(cooldown)); put("estTimeMin", estTimeMin); put("concerns", concerns)
+        putIfPresent("fromWorkout", fromWorkout)
     }
 
     class AIResponseError(message: String) : Exception(message)
@@ -89,6 +93,7 @@ data class Plan(
                 cooldown = c.lenientStrings("cooldown") ?: emptyList(),
                 estTimeMin = c.lenientInt("estTimeMin") ?: 60,
                 concerns = c.lenientString("concerns") ?: "",
+                fromWorkout = c["fromWorkout"] as? JSONValue.Obj,
             )
         }
 

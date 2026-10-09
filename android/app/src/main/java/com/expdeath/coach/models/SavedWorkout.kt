@@ -178,6 +178,11 @@ object Workouts {
         )
     }
 
+    /** { id, name, source, trainer, adapt } — which saved workout a plan came from. */
+    fun fromWorkout(w: SavedWorkout, adapt: Boolean): JSONValue = jobj {
+        put("id", w.id); put("name", w.name); put("source", w.source); put("trainer", w.trainer); put("adapt", adapt)
+    }
+
     private fun guessType(w: SavedWorkout): String {
         val n = (w.name + " " + w.exercises.joinToString(" ") { it.name }).lowercase()
         fun has(p: String) = Regex(p).containsMatchIn(n)
@@ -197,7 +202,8 @@ object Workouts {
         return Plan(
             sessionType = guessType(w), title = w.name, recoveryScore = null,
             reasoning = if (w.source == "trainer") "${w.trainer.ifEmpty { "Your trainer" }}'s workout, as written." else "Your saved workout, as written.",
-            exercises = ex, estTimeMin = maxOf((ex.sumOf { it.sets } * 2.5).rounded().toInt(), 30),
+            exercises = ex, estTimeMin = (ex.sumOf { it.sets } * 2.5).rounded().toInt().takeIf { it != 0 } ?: 30,
+            fromWorkout = fromWorkout(w, w.adapt),
         )
     }
 
@@ -217,6 +223,7 @@ object Workouts {
                     alt = c.alt,
                 )
             },
+            fromWorkout = fromWorkout(w, false),
         )
     }
 

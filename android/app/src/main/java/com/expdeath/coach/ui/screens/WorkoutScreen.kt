@@ -156,6 +156,13 @@ fun WorkoutScreen(app: AppState) {
         val name = pickFor
         pickFor = null
         if (uri != null && name != null) {
+            val size = try {
+                ctx.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.SIZE), null, null, null)?.use { c -> if (c.moveToFirst()) c.getLong(0) else 0L } ?: 0L
+            } catch (_: Exception) { 0L }
+            if (size > 60L * 1024 * 1024) {
+                android.widget.Toast.makeText(ctx, "That file is over 60MB — record a shorter clip.", android.widget.Toast.LENGTH_LONG).show()
+                return@rememberLauncherForActivityResult
+            }
             val isVideo = ctx.contentResolver.getType(uri)?.startsWith("video") == true
             try { MediaStore.put(cueKey(name), uri, isVideo) } catch (_: Exception) {}
             mediaVersion += 1

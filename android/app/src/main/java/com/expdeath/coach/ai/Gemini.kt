@@ -466,7 +466,11 @@ Supersets: when time is tight or two accessories pair well (non-competing muscle
         )
         if (supportsThinkingLevel(model)) config["thinkingConfig"] = mapOf("thinkingLevel" to "low")
         try {
-            val text = post(model, planSystem(), userContent(userMsg), j(config), 60)
+            val text = try {
+                post(model, planSystem(), userContent(userMsg), j(config), 60)
+            } catch (e: java.io.InterruptedIOException) {
+                throw GeminiError.Message("Request timed out after 60 seconds. The AI might be overloaded — try again.")
+            }
             LocalStore.logEvent("ai_response", mapOf("model" to JSONValue.Str(model), "chars" to JSONValue.Num(text.length.toDouble()), "raw" to JSONValue.Str(text)))
             val plan = repairAndDecodePlan(text)
             return sanitizePlan(plan, history, checkin)
