@@ -119,7 +119,7 @@ struct SettingsView: View {
                     }
                     HStack(spacing: 6) {
                         StatusPill(text: account?.admin == true ? "Admin" : "Member", color: Theme.amberText, dot: false)
-                        Text("· Sync active").font(Theme.meta(12.5)).foregroundStyle(Theme.muted)
+                        Text(account?.email ?? "").font(Theme.meta(12.5)).foregroundStyle(Theme.muted).lineLimit(1).truncationMode(.middle)
                     }
                 }
                 Spacer()
@@ -187,7 +187,7 @@ struct SettingsView: View {
 
     private var coachStatus: String {
         Cloud.shared.geminiKey.isEmpty
-            ? (account?.admin == true ? "No API key yet — add one to start" : "No API key yet — ask Abhi")
+            ? (Cloud.shared.canSetGeminiKey ? "No API key yet — add one to start" : "No API key yet — ask Abhi")
             : (LocalStore.shared.backup.aiSettings.profile.isEmpty ? "Ready · add your profile" : "Ready · profile set")
     }
 
@@ -241,8 +241,8 @@ struct SettingsView: View {
 
     private var coachSection: some View {
         return section {
-            if account?.admin == true {
-                QLabel(text: "Gemini API key (shared)")
+            if Cloud.shared.canSetGeminiKey {
+                QLabel(text: account?.selfServe == true ? "Your Gemini API key" : "Gemini API key (shared)")
                 HStack {
                     Group {
                         if showKey { TextField("", text: $key, prompt: Text("AIzaSy…").foregroundStyle(Theme.dim)) }
@@ -251,7 +251,7 @@ struct SettingsView: View {
                     .textInputAutocapitalization(.never).autocorrectionDisabled().coachInput()
                     Button(showKey ? "Hide" : "Show") { showKey.toggle() }.font(Theme.meta(13)).foregroundStyle(Theme.muted)
                 }
-                Text("Shared by everyone on COACH. Free at aistudio.google.com/apikey.")
+                Text("\(account?.selfServe == true ? "Only your account uses it." : "Shared by everyone you invited.") Free at aistudio.google.com/apikey.")
                     .font(Theme.body(13)).foregroundStyle(Theme.muted)
             }
             QLabel(text: "About you")
@@ -263,8 +263,10 @@ struct SettingsView: View {
             QLabel(text: "Base routine")
             area($ai.routine, "Empty = built-in Push/Pull/Legs", max: 4000, minLines: 3)
             Button(saved ? "✓ Saved" : "Save coach setup") {
-                if account?.admin == true, key.trimmingCharacters(in: .whitespaces) != Cloud.shared.geminiKey {
-                    Cloud.shared.setSharedGeminiKey(key.trimmingCharacters(in: .whitespaces))
+                let newKey = key.trimmingCharacters(in: .whitespaces)
+                if Cloud.shared.canSetGeminiKey, newKey != Cloud.shared.geminiKey {
+                    if account?.selfServe == true { Cloud.shared.setOwnGeminiKey(newKey) }
+                    else { Cloud.shared.setSharedGeminiKey(newKey) }
                     LocalStore.shared.logEvent(type: "api_key_saved")
                 }
                 LocalStore.shared.updateAISettings { s in

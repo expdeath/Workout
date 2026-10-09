@@ -1,17 +1,18 @@
 import Foundation
 
-/// Accounts: Google sign-in + an owner-managed allowlist (port of
-/// src/utils/account.js). There's no signup — the owner adds a person's
-/// Google email to allowlist/{email} in Firestore; signing in with that
-/// Google account opens their account on any device, web or iOS.
-/// Revoking = deleting the allowlist entry.
+/// Accounts: Google sign-in + the Firestore allowlist (port of
+/// src/utils/account.js). Anyone can sign in: a Google account's first
+/// sign-in creates its own allowlist entry and empty account (selfServe;
+/// it brings its own Gemini key). Entries the owner adds are "invited"
+/// and share the owner's key. The same Google account opens the same
+/// account on any device, web or iOS; blocked: true turns one off.
 enum Account {
     /// The signed-in account, or nil.
     static func current() -> Cloud.AccountInfo? { Cloud.shared.account }
 
     /// Boot: the Google/Firebase user restored from the keychain → their
-    /// account. nil when nobody is signed in; throws CloudError.notInvited
-    /// for an email that isn't on the allowlist.
+    /// account. nil when nobody is signed in; throws CloudError.blocked
+    /// for an account the owner turned off.
     static func resume() async throws -> Cloud.AccountInfo? {
         guard let user = Cloud.shared.signedInUser else { return nil }
         return try await Cloud.shared.start(user: user)
@@ -24,7 +25,7 @@ enum Account {
         do {
             return try await Cloud.shared.start(user: user)
         } catch {
-            await Cloud.shared.signOut() // not invited → don't stay half signed in
+            await Cloud.shared.signOut() // blocked / couldn't open → don't stay half signed in
             throw error
         }
     }

@@ -119,13 +119,13 @@ final class AppState {
                 screen = .login
             }
         } catch {
-            if case Cloud.CloudError.notInvited = error { await Cloud.shared.signOut() }
+            if case Cloud.CloudError.blocked = error { await Cloud.shared.signOut() }
             loginError = Self.message(for: error)
             screen = .login
         }
     }
 
-    /// Login screen → Google → allowlist → account.
+    /// Login screen → Google → allowlist (sign-up on first visit) → account.
     @MainActor
     func signIn() async {
         loginError = ""

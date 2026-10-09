@@ -9,7 +9,7 @@ import GoogleSignIn
 /// src/db/cloud.js; schema + rules: docs/firestore.md).
 ///
 /// Signing in with Google proves an email; allowlist/{email} maps it to
-/// one account. That account's documents are mirrored into LocalStore by
+/// one account (a Google account's first sign-in creates its own). That account's documents are mirrored into LocalStore by
 /// snapshot listeners (so screens keep reading LocalStore synchronously),
 /// and every LocalStore mutation writes through here in the background —
 /// Firestore queues writes offline, so logging a set never waits on the
@@ -22,16 +22,18 @@ final class Cloud {
         var name: String
         var admin: Bool
         var email: String
+        /// Signed itself up (not added by the owner): uses its own Gemini key.
+        var selfServe = false
     }
 
     enum CloudError: LocalizedError {
-        case notInvited(String)
+        case blocked(String)
         case noPresenter
         case signInFailed(String)
 
         var errorDescription: String? {
             switch self {
-            case .notInvited(let email): return "\(email) isn't on the COACH invite list. Ask Abhi to add it."
+            case .blocked(let email): return "\(email) has been turned off on COACH. Ask Abhi if that's a mistake."
             case .noPresenter: return "Couldn't show the Google sign-in screen — try again."
             case .signInFailed(let m): return m
             }
@@ -41,7 +43,7 @@ final class Cloud {
     private(set) var account: AccountInfo?
     /// accounts/{id} — name, github { repo, token, lastBackup }, …
     private(set) var accountDoc: [String: JSONValue] = [:]
-    /// config/shared — { geminiKey }
+    /// config/shared — { geminiKey } (invited accounts only)
     private(set) var shared: [String: JSONValue] = [:]
     /// accounts/{id}/state/* other than aiSettings (today, weeklyReview, …)
     private(set) var state: [String: JSONValue] = [:]
@@ -71,10 +73,15 @@ final class Cloud {
         }
     }
 
+    /// Invited accounts share the owner's key; self-serve ones bring their own.
     var geminiKey: String {
-        if case .string(let k)? = shared["geminiKey"] { return k }
+        let source = account?.selfServe == true ? accountDoc : shared
+        if case .string(let k)? = source["geminiKey"] { return k }
         return ""
     }
+
+    /// The owner (shared key) or a self-serve account (its own) can change it.
+    var canSetGeminiKey: Bool { account?.admin == true || account?.selfServe == true }
 
     var github: [String: JSONValue] {
         if case .object(let g)? = accountDoc["github"] { return g }
@@ -137,29 +144,56 @@ final class Cloud {
 
     // ── Session: allowlist → account → live listeners ────────────
 
+    /// First sign-in of an email the owner didn't add: it gets its own
+    /// empty account, keyed by the Firebase uid (the only shape the rules
+    /// accept — never admin, never another account).
+    private func signUp(user: User, email: String) async throws -> [String: Any] {
+        let now = Int(Date().timeIntervalSince1970 * 1000)
+        let name = user.displayName ?? String(email.split(separator: "@").first ?? "")
+        let entry: [String: Any] = [
+            "accountId": user.uid, "name": name, "admin": false, "selfServe": true, "createdAt": now,
+        ]
+        let batch = db.batch()
+        batch.setData(entry, forDocument: db.collection("allowlist").document(email))
+        batch.setData(["name": name, "createdAt": now], forDocument: db.collection("accounts").document(user.uid))
+        try await batch.commit()
+        return entry
+    }
+
     /// Opens the user's account and resolves once every listener has
     /// delivered its first snapshot (from the offline cache when there's
     /// no network), so the app renders real data at once.
     func start(user: User) async throws -> AccountInfo {
         stop()
         let email = (user.email ?? "").lowercased()
-        let entry = try? await db.collection("allowlist").document(email).getDocument()
-        guard let entry, entry.exists, let data = entry.data(), let accountId = data["accountId"] as? String else {
-            throw CloudError.notInvited(email)
+        // throws offline (unless cached) → the login screen's "check your connection"
+        let ref = db.collection("allowlist").document(email)
+        var snap = try await ref.getDocument()
+        // the offline cache can remember "missing": only sign up on the server's word
+        if !snap.exists { snap = try await ref.getDocument(source: .server) }
+        var data = snap.data() ?? [:]
+        if !snap.exists { data = try await signUp(user: user, email: email) }
+        guard let accountId = data["accountId"] as? String else {
+            throw CloudError.signInFailed("Your account entry is damaged — ask Abhi.")
         }
+        if data["blocked"] as? Bool == true { throw CloudError.blocked(email) }
         let info = AccountInfo(
             accountId: accountId,
             name: data["name"] as? String ?? "",
             admin: data["admin"] as? Bool ?? false,
-            email: email
+            email: email,
+            selfServe: data["selfServe"] as? Bool ?? false
         )
         account = info
         LocalStore.shared.resetMirror()
 
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            let pending = PendingCount(6) { done.resume() }
+            let pending = PendingCount(info.selfServe ? 5 : 6) { done.resume() }
             watchDoc(path(), "account", pending) { [weak self] d in self?.accountDoc = d }
-            watchDoc("config/shared", "shared", pending) { [weak self] d in self?.shared = d }
+            // the shared key is for invited accounts; self-serve ones bring their own
+            if !info.selfServe {
+                watchDoc("config/shared", "shared", pending) { [weak self] d in self?.shared = d }
+            }
             watchCollection(path("sessions"), "sessions", pending) { changes in
                 LocalStore.shared.applyRemoteSessions(changes)
             }
@@ -336,6 +370,14 @@ final class Cloud {
         guard active, account?.admin == true else { return }
         let ref = db.document("config/shared")
         ref.setData(["geminiKey": key], merge: true, completion: logged("shared key"))
+    }
+
+    /// Self-serve accounts: their own Gemini key, on accounts/{id}.
+    func setOwnGeminiKey(_ key: String) {
+        accountDoc["geminiKey"] = .string(key)
+        onChange?("account")
+        guard active, account?.selfServe == true else { return }
+        db.document(path()).updateData(["geminiKey": key], completion: logged("own key"))
     }
 
     /// Awaited: the user is told it was sent.

@@ -1,8 +1,8 @@
 import SwiftUI
 
-/// Sign-in gate — ports src/screens/Login.jsx. There's deliberately no
-/// signup: Google proves who you are, and only emails the owner has
-/// added to the allowlist get in.
+/// Sign-in gate — ports src/screens/Login.jsx. Any Google account gets
+/// in: the first sign-in creates its account (Cloud.signUp), later ones
+/// reopen it.
 struct LoginView: View {
     @Environment(AppState.self) private var appState
     @State private var busy = false
@@ -44,7 +44,7 @@ struct LoginView: View {
             .opacity(busy ? 0.5 : 1)
             .padding(.horizontal, 24)
 
-            Text("Private beta — ask Abhi for an invite.")
+            Text("Any Google account works — new here? Your account is created on first sign-in.")
                 .font(Theme.body(13))
                 .foregroundStyle(Theme.dim)
                 .multilineTextAlignment(.center)
