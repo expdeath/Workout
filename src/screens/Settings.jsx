@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import Icon from '../components/Icon';
 import { TabHeader, SectionHead, SettingsRow, RowGroup, PanelSheet, Avatar, StatusPill, IconWell, PageHero, useShell, useDesktop } from '../components/Shell';
 import { weeklyTarget } from '../utils/dashboard';
-import { getApiKey, setApiKey, canSetApiKey, getAISettings, setAISettings, getPrefs, setPref } from '../utils/storage';
+import { getApiKey, setApiKey, canSetApiKey, getAISettings, setAISettings, getPrefs, setPref, hasAIConsent, setAIConsent } from '../utils/storage';
+import { AI_SHARED } from './AIConsent';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
-import { getAccount, signOut } from '../utils/account';
+import { getAccount, signOut, deleteAccount } from '../utils/account';
 import { cloudState } from '../db/cloud';
 import { todaysHealth } from '../utils/healthIngest';
 import { parseHealthNumbers, fmtHealthLine } from '../utils/stats';
@@ -223,6 +224,22 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   const [sendingFb, setSendingFb] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
   const [outMsg, setOutMsg] = useState(''); // why sign-out refused
+  const [aiOn, setAiOn] = useState(hasAIConsent);
+  // Delete account: a sheet that asks you to type DELETE
+  const [deleting, setDeleting] = useState(null); // null | { typed, busy, error }
+  const runDelete = async () => {
+    setDeleting({ ...deleting, busy: true, error: '' });
+    try {
+      await deleteAccount(); // reloads into the login screen
+    } catch (e) {
+      const msg = /popup/i.test(e.code || e.message || '')
+        ? 'Your browser blocked the sign-in window — allow pop-ups for this site and try again. Nothing was deleted.'
+        : e.code === 'auth/user-mismatch'
+        ? 'That was a different Google account — sign in as the one you want to delete.'
+        : e.message || "Couldn't delete — try again.";
+      setDeleting((d) => ({ ...d, busy: false, error: msg }));
+    }
+  };
   // Alerts & reports switches (account state 'prefs')
   const [prefs, setPrefs] = useState(getPrefs);
   const flip = (key) => (e) => {
@@ -285,7 +302,9 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   };
 
   // ── Collapsed status lines ──
-  const coachStatus = getApiKey()
+  const coachStatus = !aiOn
+    ? 'Off — nothing is sent to Google Gemini'
+    : getApiKey()
     ? getAISettings().profile ? 'Ready · profile set' : 'Ready · add your profile'
     : canSetApiKey()
     ? 'No API key yet — add one to start'
@@ -334,9 +353,37 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
         onToggle={() => toggle('coach')}
       >
 
+        <label className="toggle-row" style={{ paddingTop: 0 }}>
+          <span>
+            <span className="toggle-row__title">Use the AI coach (Google Gemini)</span>
+            <span className="toggle-row__sub">
+              {aiOn
+                ? 'Sends your workouts, check-ins, chats and Health data to Google Gemini to plan sessions.'
+                : 'Off — nothing goes to Gemini. You can still log workouts and run saved ones as written.'}
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            className="switch"
+            checked={aiOn}
+            onChange={(e) => {
+              setAIConsent(e.target.checked);
+              setAiOn(e.target.checked);
+              logEvent('ai_consent', { allowed: e.target.checked, from: 'settings' });
+            }}
+          />
+        </label>
+        {aiOn && (
+          <details className="consent__details">
+            <summary>What's shared</summary>
+            {AI_SHARED.map(([, title, sub]) => <p key={title}><b>{title}</b> — {sub}</p>)}
+          </details>
+        )}
+
         {canSetApiKey() ? (
           <>
-            <div className="q-label" style={{ marginTop: 0 }}>{account.selfServe ? 'Your Gemini API key' : 'Gemini API key (shared)'}</div>
+            <div className="q-label">{account.selfServe ? 'Your Gemini API key' : 'Gemini API key (shared)'}</div>
             <div className="settings-key-row">
               <input
                 className="input"
@@ -745,6 +792,29 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
       <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--dim)' }}>
         Signing out clears this device, including exercise photos. Your log stays in the cloud.
       </p>
+      <button className="link-btn link-btn--danger" style={{ marginTop: 14 }} onClick={() => setDeleting({ typed: '', busy: false, error: '' })}>
+        <Icon name="trash" size={15} /> Delete account
+      </button>
+      {deleting && (
+        <PanelSheet title="Delete account" onClose={() => !deleting.busy && setDeleting(null)}>
+          <p className="body">This permanently deletes your COACH account and everything in it:</p>
+          <ul className="body consent__small" style={{ paddingLeft: 18 }}>
+            <li>every logged session, set and personal record</li>
+            <li>Apple Health / Watch data, check-ins, coach chats and reports</li>
+            <li>saved workouts, settings, your Gemini key and GitHub token</li>
+            <li>your sign-in — signing in again starts a brand-new, empty account</li>
+          </ul>
+          <p className="body consent__small">
+            Your GitHub backup repository is yours and isn't touched — delete it on github.com if you want it gone too. You'll be asked to sign in once more to confirm it's you.
+          </p>
+          <div className="q-label">Type DELETE to confirm</div>
+          <input className="input" style={{ marginTop: 0 }} autoCapitalize="characters" value={deleting.typed} onChange={(e) => setDeleting({ ...deleting, typed: e.target.value })} />
+          {deleting.error && <div className="err-box">{deleting.error}</div>}
+          <button className="big-btn big-btn--danger" disabled={deleting.typed.trim() !== 'DELETE' || deleting.busy} onClick={runDelete}>
+            {deleting.busy ? 'Deleting…' : 'Delete my account'}
+          </button>
+        </PanelSheet>
+      )}
     </>
   );
 

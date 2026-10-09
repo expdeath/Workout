@@ -43,7 +43,10 @@ service cloud.firestore {
         && request.resource.data.accountId == request.auth.uid
         && request.resource.data.admin == false
         && request.resource.data.selfServe == true;
-      allow update, delete: if false;
+      allow update: if false;
+      // Settings → Delete account removes your own entry last (a blocked
+      // entry stays, so deleting can't be used to sign up again)
+      allow delete: if signedIn() && mail == email() && resource.data.get('blocked', false) != true;
     }
 
     // shared Gemini key (one key for the invited accounts, changed in one place)
@@ -61,6 +64,8 @@ service cloud.firestore {
       // only maintain the GitHub backup settings and their own Gemini key
       allow update: if owns(acct)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['github', 'geminiKey']);
+      // account deletion (everything below is deleted first)
+      allow delete: if owns(acct);
 
       match /sessions/{id} {
         allow read: if canRead(acct);
@@ -72,11 +77,13 @@ service cloud.firestore {
       match /deletedIds/{id} {
         allow read: if canRead(acct);
         allow create, update: if owns(acct);
+        allow delete: if owns(acct); // account deletion only — the apps never drop a marker
       }
 
       match /state/aiSettings {
         allow read: if canRead(acct);
-        allow write: if owns(acct) && notNewer();
+        allow create, update: if owns(acct) && notNewer();
+        allow delete: if owns(acct);
       }
 
       // health/{date}, events/{iso|type}, state/{today|weeklyReview|…}.
@@ -94,6 +101,7 @@ service cloud.firestore {
       match /feedback/{id} {
         allow create: if owns(acct);
         allow read: if canRead(acct);
+        allow delete: if owns(acct); // account deletion
       }
     }
   }

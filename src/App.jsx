@@ -37,6 +37,7 @@ import { resumeSession, getAccount } from './utils/account';
 
 import Login from './screens/Login';
 import Workouts from './screens/Workouts';
+import AIConsent from './screens/AIConsent';
 import { SearchSheet } from './components/Search';
 import Home from './screens/Home';
 import Progress from './screens/Progress';
@@ -44,7 +45,7 @@ import Coach from './screens/Coach';
 import TabBar, { TABS } from './components/TabBar';
 import { ShellContext, NotificationsSheet, ProfileSheet } from './components/Shell';
 import { notifications as buildNotifications, weeklyTarget } from './utils/dashboard';
-import { getAISettings, setAISettings, getPrefs } from './utils/storage';
+import { getAISettings, setAISettings, getPrefs, getAIConsent } from './utils/storage';
 import { getWorkout, scheduledFor, enforceExact, templateToPlan, appendAddOns } from './utils/workouts';
 import CheckIn from './screens/CheckIn';
 import Generating from './screens/Generating';
@@ -149,12 +150,10 @@ export default function App() {
       maybeWeeklyReview(h); // background — Sunday review generation
       maybeMonthlyReport(h); // background — new-month report generation
 
-      // If no API key, go to settings first
-      if (!getApiKey()) {
-        setScreen('settings');
-      } else {
-        setScreen('home');
-      }
+      // asked once per account before anything goes to Gemini; then, with
+      // no API key yet, Settings first
+      if (getAIConsent() === null) setScreen('aiConsent');
+      else setScreen(getApiKey() ? 'home' : 'settings');
     })();
   }, []);
 
@@ -857,6 +856,8 @@ export default function App() {
             onManageWorkouts={() => openWorkouts('checkin')}
           />
         )}
+
+        {screen === 'aiConsent' && <AIConsent onDone={() => setScreen(getApiKey() ? 'home' : 'settings')} />}
 
         {screen === 'workouts' && (
           <Workouts

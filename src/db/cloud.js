@@ -13,6 +13,10 @@ import {
   getAuth,
   onAuthStateChanged,
   GoogleAuthProvider,
+  OAuthProvider,
+  reauthenticateWithPopup,
+  deleteUser,
+  updateProfile,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
@@ -383,6 +387,26 @@ export function currentUser() {
   });
 }
 
+/** Sign in with Apple — off until the Apple Developer Program is set up
+ *  (an Apple Services ID + key in the Firebase console, Apple provider on);
+ *  docs/app-store.md has the steps. Same accounts as the iOS app. */
+export const APPLE_SIGN_IN = false;
+
+const appleProvider = () => {
+  const p = new OAuthProvider('apple.com');
+  p.addScope('email');
+  p.addScope('name');
+  return p;
+};
+
+export async function signInWithApple() {
+  const res = await signInWithPopup(auth, appleProvider());
+  // Apple sends the name only on the very first sign-in — keep it
+  const name = res._tokenResponse?.fullName || res._tokenResponse?.displayName;
+  if (!res.user.displayName && name) await updateProfile(res.user, { displayName: name }).catch(() => {});
+  return res.user;
+}
+
 export async function signInWithGoogle() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
@@ -409,6 +433,38 @@ export async function cloudFlushWrites(ms = 8000) {
     waitForPendingWrites(db).then(() => true, () => false),
     new Promise((r) => setTimeout(() => r(false), ms)),
   ]);
+}
+
+/**
+ * Settings → Delete account. Proves it's really you first (Firebase only
+ * deletes a sign-in made moments ago — so call this straight from the
+ * button tap, or the browser blocks the popup), then deletes every
+ * document of the account, the account itself, your allowlist entry and
+ * finally the sign-in. Your GitHub backup repo is yours and is left alone.
+ */
+export async function cloudDeleteAccount() {
+  const user = auth.currentUser;
+  if (!user || !current) throw new Error('Not signed in.');
+  const viaApple = user.providerData.some((p) => p.providerId === 'apple.com');
+  const google = new GoogleAuthProvider();
+  google.setCustomParameters({ login_hint: user.email || '' });
+  await reauthenticateWithPopup(user, viaApple ? appleProvider() : google);
+
+  const { accountId, email } = current;
+  const ops = [];
+  for (const name of ['sessions', 'health', 'deletedIds', 'events', 'state', 'feedback']) {
+    const qs = await getDocs(collection(db, 'accounts', accountId, name));
+    qs.docs.forEach((d) => ops.push((b) => b.delete(d.ref)));
+  }
+  await inBatches(ops);
+  await deleteDoc(doc(db, 'accounts', accountId));
+  await deleteDoc(doc(db, 'allowlist', email)); // last: the rules check it until here
+  stopSession();
+  await deleteUser(user);
+  try {
+    await terminate(db);
+    await clearIndexedDbPersistence(db);
+  } catch { /* already cleared */ }
 }
 
 /** Sign out and drop this device's offline copy of the account. */

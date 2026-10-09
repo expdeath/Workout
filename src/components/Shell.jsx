@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import Icon from './Icon';
 import { TABS } from './TabBar';
 import { ago } from '../utils/dashboard';
@@ -233,9 +234,11 @@ export function SettingsRow({ icon, tint, title, subtitle, value, onClick }) {
   );
 }
 
-/** Tall bottom sheet with a title and a close button. */
+/** Tall bottom sheet with a title and a close button (desktop: a
+ *  right-hand drawer). Rendered at the top of the page, so a sheet opened
+ *  from inside a sticky column isn't trapped under the content beside it. */
 export function PanelSheet({ title, onClose, children }) {
-  return (
+  return createPortal(
     <>
       <div className="chat-sheet-backdrop" onClick={onClose} />
       <div className="panel-sheet" role="dialog" aria-label={title}>
@@ -247,7 +250,8 @@ export function PanelSheet({ title, onClose, children }) {
         </div>
         <div className="panel-sheet__body">{children}</div>
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 

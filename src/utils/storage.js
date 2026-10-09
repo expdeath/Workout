@@ -72,3 +72,19 @@ export function getPrefs() {
 export function setPref(key, value) {
   cloudSetState('prefs', { ...(cloudState('prefs', {}) || {}), [key]: value });
 }
+
+// ── AI consent: may the app send data to Google Gemini? ──
+// Account state `aiConsent` { allowed, at, version } — asked once per
+// account (screens/AIConsent.jsx), changeable in Settings → AI Coach.
+export const AI_CONSENT_VERSION = 1;
+
+/** null = never asked; otherwise { allowed, at, version }. */
+export function getAIConsent() {
+  return cloudState('aiConsent', null);
+}
+
+export const hasAIConsent = () => getAIConsent()?.allowed === true;
+
+export function setAIConsent(allowed) {
+  cloudSetState('aiConsent', { allowed: !!allowed, at: Date.now(), version: AI_CONSENT_VERSION });
+}

@@ -69,6 +69,13 @@ in the console (deleting the entry would just let it sign up again).
 - **Newer wins**: a session or `aiSettings` write with an older
   `updatedAt` than the stored copy is rejected (the old merge's
   `pickSession` / newest-settings rule).
+- **Account deletion** (Settings → Delete account): the owner may
+  delete every document of their account, the account doc and — last —
+  their own allowlist entry (not a blocked one, so deleting can't undo a
+  block). Steps and App Store notes: docs/app-store.md.
+- `state/aiConsent` `{ allowed, at, version }`: whether this account
+  allowed sending data to Google Gemini; both apps refuse every Gemini
+  call without it.
 - Clients can only create their own allowlist entry (never admin,
   never another account's id) and never change it afterwards; they
   can't edit an account's name/metadata.

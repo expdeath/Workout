@@ -18,6 +18,7 @@ import {
   cloudSetState,
   finishRedirectSignIn,
   cloudFlushWrites,
+  cloudDeleteAccount,
 } from '../db/cloud.js';
 
 /** { name, accountId, admin, email } of the signed-in account, or null. */
@@ -95,6 +96,14 @@ export async function wipeLocal() {
     const req = indexedDB.deleteDatabase('coach-db');
     req.onsuccess = req.onerror = req.onblocked = () => resolve();
   });
+}
+
+/** Delete the account and everything in it, then this device's copy.
+ *  Throws (nothing deleted) if the re-sign-in is cancelled or blocked. */
+export async function deleteAccount() {
+  await cloudDeleteAccount();
+  await wipeLocal();
+  window.location.reload();
 }
 
 /** Sign out: this device forgets the account (data stays in the cloud).

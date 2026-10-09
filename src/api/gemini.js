@@ -1,6 +1,6 @@
 // ── Gemini API integration ───────────────────────────────────────
 import { parsePlan } from '../utils/parser.js';
-import { getApiKey, getAISettings } from '../utils/storage.js';
+import { getApiKey, getAISettings, hasAIConsent } from '../utils/storage.js';
 import { todayStr, setLogged, fmtSet, MAX_WEIGHT_KG } from '../utils/helpers.js';
 import { buildLongTermSummary } from '../utils/aiContext.js';
 import {
@@ -16,6 +16,21 @@ import {
 } from '../utils/stats.js';
 import { logEvent, getAllHealth } from '../db/db.js';
 import { workoutBrief } from '../utils/workouts.js';
+
+// ── Consent ──────────────────────────────────────────────────────
+// Nothing goes to Google Gemini until the athlete has said yes on the
+// consent screen (App Store guideline 5.1.2(i); screens/AIConsent.jsx).
+
+export class AIConsentError extends Error {
+  constructor() {
+    super('The AI coach is off — turn it on in Settings → AI Coach. Your data only goes to Google Gemini with your OK.');
+    this.code = 'AI_CONSENT';
+  }
+}
+
+function requireAIConsent() {
+  if (!hasAIConsent()) throw new AIConsentError();
+}
 
 // ── Workout database ─────────────────────────────────────────────
 // A MENU, not a script: each day lists staples plus a rotation pool.
@@ -362,6 +377,7 @@ const supportsThinkingLevel = (model) => /^gemini-3\.[5-9]-flash$/.test(model);
  * Call Google Gemini API to generate a workout plan.
  */
 async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
+  requireAIConsent();
   const apiKey = getApiKey();
   if (!apiKey) {
     throw new Error('No Gemini API key set. Go to Settings to add one.');
@@ -520,6 +536,7 @@ function sleep(ms) {
 // Non-critical: single attempt + one model fallback, 20s timeout.
 
 async function callGeminiText(userMsg, maxTokens, eventType) {
+  requireAIConsent();
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('No API key');
 
@@ -592,6 +609,7 @@ function sessionDetail(s) {
  * Returns the coach's reply as plain text.
  */
 export async function askCoach(messages, { history = [], todayPlan = null, healthLog = [], focusSession = null } = {}) {
+  requireAIConsent();
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
 
@@ -698,6 +716,7 @@ const INTENSIFY_SCHEMA = {
  * grounded in the same history + sleep/HRV data the plan was built from.
  */
 export async function intensifyWorkout(today, history, healthLog = []) {
+  requireAIConsent();
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
 
@@ -897,6 +916,7 @@ ${s.weightStart && s.weightEnd ? `Bodyweight: ${s.weightStart} → ${s.weightEnd
  * @param {function} onStatus - Optional callback for status messages
  */
 export async function generateWorkoutPlan(checkin, history, onStatus) {
+  requireAIConsent(); // before the model ladder — no point trying another model
   const healthLog = await getAllHealth().catch(() => []);
   // Errors from models we fell back past — surfaced with the final error so
   // a failing fallback (e.g. a retired model's 404) can't hide the real cause.
@@ -1007,6 +1027,7 @@ const WORKOUTS_SCHEMA = {
  * → { workouts: [{ name, kind, days: [0-6], notes, exercises }], message }
  */
 export async function buildWorkouts({ text = '', image = null, source = 'me', history = [] }) {
+  requireAIConsent();
   const apiKey = getApiKey();
   if (!apiKey) throw new Error('Add your Gemini API key in Settings first — the coach builds workouts with it.');
   const settings = getAISettings();
