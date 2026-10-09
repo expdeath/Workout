@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.hardware.type.watch" />
+
+    <!-- heart rate during the workout: health.READ_HEART_RATE on Wear OS 6+,
+         BODY_SENSORS before it -->
+    <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <uses-permission android:name="android.permission.BODY_SENSORS" android:maxSdkVersion="35" />
+    <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
+    <!-- the workout runs in a foreground service so the rest timer buzzes with the screen off -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
+    <application
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:label="COACH"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.CoachWatch">
+
+        <!-- needs the COACH phone app: the phone runs the plan, the watch logs it -->
+        <meta-data android:name="com.google.android.wearable.standalone" android:value="false" />
+
+        <activity
+            android:name=".WatchActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- the phone opens this when a workout starts (WearBridge.openOnWatch) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="coach" android:host="workout" />
+            </intent-filter>
+        </activity>
+
+        <service
+            android:name=".WorkoutService"
+            android:exported="false"
+            android:foregroundServiceType="health" />
+
+        <!-- the phone's workout state (Data Layer) — PhoneLink.kt -->
+        <service android:name=".PhoneListenerService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:scheme="wear" android:host="*" android:path="/coach/state" />
+            </intent-filter>
+        </service>
+    </application>
+</manifest>

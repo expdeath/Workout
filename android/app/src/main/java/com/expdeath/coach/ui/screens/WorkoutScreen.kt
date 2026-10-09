@@ -63,6 +63,7 @@ import androidx.compose.ui.window.DialogProperties
 import com.expdeath.coach.ai.Gemini
 import com.expdeath.coach.app.AppState
 import com.expdeath.coach.app.MainActivity
+import com.expdeath.coach.app.RestTimer
 import com.expdeath.coach.app.RestNotifier
 import com.expdeath.coach.app.Screen
 import com.expdeath.coach.models.FinishInfo
@@ -96,7 +97,6 @@ import com.expdeath.coach.ui.VGap
 import com.expdeath.coach.ui.openUrl
 import com.expdeath.coach.ui.panel
 import com.expdeath.coach.ui.sf
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -115,7 +115,6 @@ fun parseRestSeconds(rest: String): Double {
     return secs.coerceIn(15.0, 600.0)
 }
 
-private data class RestTimer(val endsAt: Long, val total: Double, val exName: String)
 private data class SheetState(val exI: Int, val mode: String) // menu | swap | remove
 private data class HarderState(val loading: Boolean = false, val caution: String? = null, val options: List<Gemini.IntensifyOption> = emptyList(), val applied: Set<Int> = emptySet(), val error: String? = null)
 
@@ -146,8 +145,6 @@ fun WorkoutScreen(app: AppState) {
     var editingCue by remember { mutableStateOf<Int?>(null) }
     var cueDraft by remember { mutableStateOf("") }
     var harder by remember { mutableStateOf<HarderState?>(null) }
-    var timer by remember { mutableStateOf<RestTimer?>(null) }
-    var restJob by remember { mutableStateOf<Job?>(null) }
     var mediaVersion by remember { mutableIntStateOf(0) } // bump to re-read thumbnails
     var viewer by remember { mutableStateOf<MediaStore.Item?>(null) }
     var pickFor by remember { mutableStateOf<String?>(null) } // exercise name awaiting a photo/clip
@@ -169,44 +166,40 @@ fun WorkoutScreen(app: AppState) {
         }
     }
 
-    fun stopTimer() {
-        restJob?.cancel()
-        restJob = null
-        timer = null
-        view.keepScreenOn = false
-        RestNotifier.cancel(ctx)
-    }
-
-    fun startTimer(seconds: Double, exName: String) {
-        stopTimer()
-        timer = RestTimer(System.currentTimeMillis() + (seconds * 1000).toLong(), seconds, exName)
-        // Settings → Alerts & reports decides which of these happen
+    // The rest timer lives in AppState (a set ticked on the watch starts it
+    // too); this screen does the phone's part: screen on, notification, buzz.
+    val rest = app.rest
+    LaunchedEffect(rest) {
+        if (rest == null) { view.keepScreenOn = false; RestNotifier.cancel(ctx); return@LaunchedEffect }
+        // Settings → Alerts & reports decides which of these happen; a set
+        // logged on the watch is the watch's to announce — it buzzes on the wrist
+        val phone = !rest.fromWatch
         val sound = Prefs.isOn("restSound"); val buzz = Prefs.isOn("restVibrate")
-        if (Prefs.isOn("keepAwake")) view.keepScreenOn = true // screen stays on while resting
-        restJob = scope.launch {
-            // a real notification: fires even with the phone locked or in another app
-            if (Prefs.isOn("restNotify") && (MainActivity.current?.askNotifications() ?: RestNotifier.canNotify(ctx))) {
-                val left = (timer?.endsAt ?: 0L) - System.currentTimeMillis()
-                if (left > 0) RestNotifier.schedule(ctx, left / 1000.0, exName, sound)
-            }
-            val left = (timer?.endsAt ?: 0L) - System.currentTimeMillis()
-            if (left > 0) delay(left)
-            if (buzz) RestNotifier.buzz(ctx)
-            if (sound) RestNotifier.beep()
-            delay(4000)
-            timer = null
-            view.keepScreenOn = false
+        if (phone && Prefs.isOn("keepAwake")) view.keepScreenOn = true // screen stays on while resting
+        // a real notification: fires even with the phone locked or in another app
+        if (phone && Prefs.isOn("restNotify") && (MainActivity.current?.askNotifications() ?: RestNotifier.canNotify(ctx))) {
+            val left = rest.endsAt - System.currentTimeMillis()
+            if (left > 0) RestNotifier.schedule(ctx, left / 1000.0, rest.exName, sound)
+        } else RestNotifier.cancel(ctx)
+        val left = rest.endsAt - System.currentTimeMillis()
+        if (left > 0) {
+            delay(left)
+            if (phone && buzz) RestNotifier.buzz(ctx)
+            if (phone && sound) RestNotifier.beep()
         }
+        delay(4000)
+        view.keepScreenOn = false
+        if (app.rest == rest) app.stopRest()
     }
 
-    DisposableEffect(Unit) { onDispose { restJob?.cancel(); view.keepScreenOn = false; RestNotifier.cancel(ctx) } }
+    DisposableEffect(Unit) { onDispose { view.keepScreenOn = false; RestNotifier.cancel(ctx) } }
 
     fun toggleSet(exI: Int, setI: Int, set: SetLog) {
         val turningOn = !set.done
         app.updateSet(exI, setI, done = turningOn)
         RestNotifier.tick(ctx)
         val ex = t.plan.exercises.getOrNull(exI) ?: return
-        if (turningOn) startTimer(parseRestSeconds(ex.rest), ex.name)
+        if (turningOn) app.startRest(parseRestSeconds(ex.rest), ex.name)
     }
 
     fun exMeta(exI: Int): ExMeta {
@@ -354,7 +347,7 @@ fun WorkoutScreen(app: AppState) {
                     val anyLogged = t.log.any { r -> r.any { it.isLogged } }
                     Row(Modifier.padding(top = 10.dp).fillMaxWidth().clip(RoundedCornerShape(Theme.radiusSm)).background(Theme.redBg).padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         T("Discard this session entirely?${if (anyLogged) " Your logged sets will be lost." else ""}", Theme.body(13.5f), Theme.textBody, Modifier.weight(1f))
-                        TextButtonC("Discard", Theme.red, Theme.head(14f, FontWeight.Bold)) { stopTimer(); app.cancelSession() }
+                        TextButtonC("Discard", Theme.red, Theme.head(14f, FontWeight.Bold)) { app.cancelSession() }
                         TextButtonC("Keep", Theme.muted, Theme.head(14f, FontWeight.Bold)) { confirmCancel = false }
                     }
                 }
@@ -455,10 +448,10 @@ fun WorkoutScreen(app: AppState) {
                     app.fin = FinishInfo()
                     app.screen = Screen.Finish
                 }
-                VGap(if (timer == null) 24.dp else 96.dp)
+                VGap(if (rest == null) 24.dp else 96.dp)
             }
         }
-        timer?.let { RestBar(it, Modifier.align(Alignment.BottomCenter)) { stopTimer() } }
+        rest?.let { RestBar(it, Modifier.align(Alignment.BottomCenter)) { app.stopRest() } }
     }
 
     // ── ⋯ menu (bottom sheet) ──

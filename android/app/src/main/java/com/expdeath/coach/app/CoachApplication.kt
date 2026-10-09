@@ -5,6 +5,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Bundle
 import com.expdeath.coach.sync.Cloud
+import com.expdeath.coach.sync.WearBridge
 import java.lang.ref.WeakReference
 
 class CoachApplication : Application() {
@@ -12,6 +13,7 @@ class CoachApplication : Application() {
         super.onCreate()
         instance = this
         Cloud.configure()
+        WearBridge.start()
         registerActivityLifecycleCallbacks(object : ActivityLifecycleCallbacks {
             override fun onActivityResumed(activity: Activity) { current = WeakReference(activity) }
             override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) { current = WeakReference(activity) }

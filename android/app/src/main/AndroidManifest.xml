@@ -8,7 +8,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 
-    <!-- Health Connect (the Android twin of HealthKit): read only -->
+    <!-- Health Connect (the Android twin of HealthKit): reads the watch's day… -->
     <uses-permission android:name="android.permission.health.READ_HEART_RATE_VARIABILITY" />
     <uses-permission android:name="android.permission.health.READ_RESTING_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_STEPS" />
@@ -20,6 +20,11 @@
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_OXYGEN_SATURATION" />
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
+    <uses-permission android:name="android.permission.health.READ_SKIN_TEMPERATURE" />
+    <!-- …and files workouts the COACH watch app records (HealthConnectSync.saveWatchWorkout) -->
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+    <uses-permission android:name="android.permission.health.WRITE_ACTIVE_CALORIES_BURNED" />
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
 
     <queries>
         <package android:name="com.google.android.apps.healthdata" />
@@ -42,6 +47,13 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- the watch app's "Open on phone" (RemoteActivityHelper) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="coach" android:host="open" />
+            </intent-filter>
             <!-- Health Connect links here for "why does COACH need this?" -->
             <intent-filter>
                 <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
@@ -61,6 +73,14 @@
         </activity-alias>
 
         <receiver android:name=".app.RestAlarmReceiver" android:exported="false" />
+
+        <!-- Commands from the COACH watch app (Wear OS Data Layer) — WearBridge.kt -->
+        <service android:name=".sync.WatchListenerService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
+                <data android:scheme="wear" android:host="*" android:pathPrefix="/coach/cmd" />
+            </intent-filter>
+        </service>
 
         <provider
             android:name="androidx.core.content.FileProvider"

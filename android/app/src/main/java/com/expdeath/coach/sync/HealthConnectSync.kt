@@ -5,18 +5,23 @@ import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.ActiveCaloriesBurnedRecord
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
+import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
 import androidx.health.connect.client.records.OxygenSaturationRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RespiratoryRateRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
+import androidx.health.connect.client.records.SkinTemperatureRecord
 import androidx.health.connect.client.records.SleepSessionRecord
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.records.metadata.Device
+import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import androidx.health.connect.client.units.Energy
 import com.expdeath.coach.app.CoachApplication
 import com.expdeath.coach.models.HealthRow
 import com.expdeath.coach.models.JSONValue
@@ -25,9 +30,11 @@ import com.expdeath.coach.persistence.LocalStore
 import com.expdeath.coach.stats.Helpers
 import com.expdeath.coach.stats.fmt
 import com.expdeath.coach.stats.rounded
+import com.expdeath.coach.watchlink.WorkoutSummary
 import kotlinx.coroutines.CompletableDeferred
 import java.time.Instant
 import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.reflect.KClass
 
 /** Health Connect → the account's health rows — the Android twin of
@@ -44,7 +51,13 @@ import kotlin.reflect.KClass
  *  night recorded by both a watch and the phone counts once.
  *
  *  Differences from HealthKit, by necessity: HRV is RMSSD (Health Connect
- *  has no SDNN); there's no wrist-temperature reading to map. */
+ *  has no SDNN), and wrist temperature is skin temperature — read only
+ *  when the watch reports its baseline, since Health Connect stores the
+ *  night's change from it rather than the temperature itself.
+ *
+ *  The one thing written: a workout recorded by the COACH watch app
+ *  (saveWatchWorkout) — the Wear OS twin of the Apple Watch app saving
+ *  its HKWorkout. */
 object HealthConnectSync {
     private val ctx get() = CoachApplication.context
 
@@ -65,10 +78,21 @@ object HealthConnectSync {
     private val recordTypes: List<KClass<out Record>> = listOf(
         HeartRateVariabilityRmssdRecord::class, RestingHeartRateRecord::class, StepsRecord::class, Vo2MaxRecord::class,
         ActiveCaloriesBurnedRecord::class, ExerciseSessionRecord::class, DistanceRecord::class, RespiratoryRateRecord::class,
-        WeightRecord::class, OxygenSaturationRecord::class, SleepSessionRecord::class,
+        WeightRecord::class, OxygenSaturationRecord::class, SleepSessionRecord::class, SkinTemperatureRecord::class,
+    )
+
+    /** What a COACH watch workout writes: the session, its energy, its heart rate. */
+    private val writeTypes: List<KClass<out Record>> = listOf(
+        ExerciseSessionRecord::class, ActiveCaloriesBurnedRecord::class, HeartRateRecord::class,
     )
 
     val permissions: Set<String> = recordTypes.map { HealthPermission.getReadPermission(it) }.toSet()
+    val writePermissions: Set<String> = writeTypes.map { HealthPermission.getWritePermission(it) }.toSet()
+
+    /** Bump when the permission list grows: the next Connect asks again
+     *  (Health Connect only shows what isn't granted yet). */
+    private const val PERMISSIONS_VERSION = "2" // 2: skin temperature + watch workouts
+    val newPermissions: Boolean get() = requested && Defaults.string("healthconnect-perms-version") != PERMISSIONS_VERSION
 
     /** MainActivity's permission launcher — set while the activity lives. */
     var launcher: ((Set<String>) -> Unit)? = null
@@ -86,9 +110,10 @@ object HealthConnectSync {
         val launch = launcher ?: return false
         val d = CompletableDeferred<Set<String>>()
         pending = d
-        launch(permissions)
+        launch(permissions + writePermissions)
         val granted = d.await()
         requested = true
+        Defaults.set(PERMISSIONS_VERSION, "healthconnect-perms-version")
         return granted.isNotEmpty()
     }
 
@@ -100,7 +125,7 @@ object HealthConnectSync {
 
     /** Bump when how a day is read changes: the next sync re-reads every
      *  day in range once (not only missing ones), fixing stored rows. */
-    private const val READ_VERSION = "1"
+    private const val READ_VERSION = "2" // 2: skin temperature
 
     /** Today plus any of the last `days` days with no row yet. Returns how
      *  many days were written. */
@@ -200,7 +225,7 @@ object HealthConnectSync {
             exerciseMin = agg?.get(ExerciseSessionRecord.EXERCISE_DURATION_TOTAL)?.toMillis()?.let { it / 60000.0 }?.takeIf { it > 0 },
             distKm = agg?.get(DistanceRecord.DISTANCE_TOTAL)?.inKilometers?.takeIf { it > 0 },
             respRate = resp,
-            wristC = null,
+            wristC = wristTemp(day),
             spo2 = spo2,
             vo2max = vo2,
             weightKg = weight,
@@ -209,6 +234,68 @@ object HealthConnectSync {
     }
 
     private fun List<Double>.averageOrNull(): Double? = if (isEmpty()) null else average()
+
+    /** The night ending on this day, like HealthKit's sleeping wrist
+     *  temperature: baseline + the night's average change, °C. */
+    private suspend fun wristTemp(day: LocalDate): Double? {
+        val dayStart = startOf(day)
+        val nights = records(SkinTemperatureRecord::class, dayStart.minusSeconds(6 * 3600L), dayStart.plusSeconds(14 * 3600L))
+            .mapNotNull { r ->
+                val base = r.baseline?.inCelsius ?: return@mapNotNull null
+                val deltas = r.deltas.map { it.delta.inCelsius }
+                if (deltas.isEmpty()) null else base + deltas.average()
+            }
+        return nights.averageOrNull()?.let { (it * 100).rounded() / 100 }
+    }
+
+    // ── Watch workouts ───────────────────────────────────────────
+
+    /** Health Connect's activity for a COACH session type. */
+    private fun exerciseType(sessionType: String): Int = when (sessionType.lowercase()) {
+        "run" -> ExerciseSessionRecord.EXERCISE_TYPE_RUNNING
+        "cycle" -> ExerciseSessionRecord.EXERCISE_TYPE_BIKING
+        "walk" -> ExerciseSessionRecord.EXERCISE_TYPE_WALKING
+        "hike" -> ExerciseSessionRecord.EXERCISE_TYPE_HIKING
+        "stretch & mobility", "active recovery" -> ExerciseSessionRecord.EXERCISE_TYPE_STRETCHING
+        "cardio" -> ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT
+        else -> ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING
+    }
+
+    /** Files a workout the COACH watch app recorded — session, energy and
+     *  heart rate, each only when that write is allowed. The client ids
+     *  make a redelivered summary overwrite itself, not duplicate. Then
+     *  today's row is re-read, so the workout's minutes and energy count. */
+    suspend fun saveWatchWorkout(w: WorkoutSummary, title: String): Boolean {
+        if (!isAvailable || w.end <= w.start) return false
+        val granted = try { client.permissionController.getGrantedPermissions() } catch (_: Exception) { return false }
+        fun can(type: KClass<out Record>) = HealthPermission.getWritePermission(type) in granted
+        if (!can(ExerciseSessionRecord::class)) return false
+        val start = Instant.ofEpochMilli(w.start)
+        val end = Instant.ofEpochMilli(w.end)
+        val zone = ZoneId.systemDefault().rules.getOffset(start)
+        fun meta(kind: String) = Metadata.activelyRecorded(Device(type = Device.TYPE_WATCH), "coach-watch-$kind-${w.start}", 1)
+        val out = mutableListOf<Record>(
+            ExerciseSessionRecord(
+                startTime = start, startZoneOffset = zone, endTime = end, endZoneOffset = zone,
+                metadata = meta("session"), exerciseType = exerciseType(w.type), title = title,
+            ),
+        )
+        val kcal = w.kcal
+        if (kcal != null && kcal > 0 && can(ActiveCaloriesBurnedRecord::class)) {
+            out.add(ActiveCaloriesBurnedRecord(start, zone, end, zone, Energy.kilocalories(kcal), meta("kcal")))
+        }
+        val samples = w.hr.filter { (t, bpm) -> t in w.start..w.end && bpm in 1..300 }
+            .map { (t, bpm) -> HeartRateRecord.Sample(Instant.ofEpochMilli(t), bpm.toLong()) }
+        if (samples.isNotEmpty() && can(HeartRateRecord::class)) {
+            out.add(HeartRateRecord(start, zone, end, zone, samples, meta("hr")))
+        }
+        return try {
+            client.insertRecords(out)
+            LocalStore.logEvent("watch_workout_saved", mapOf("minutes" to JSONValue.Num(((w.end - w.start) / 60000).toDouble())))
+            sync(1)
+            true
+        } catch (_: Exception) { false }
+    }
 
     private val asleepStages = setOf(
         SleepSessionRecord.STAGE_TYPE_SLEEPING, SleepSessionRecord.STAGE_TYPE_LIGHT,

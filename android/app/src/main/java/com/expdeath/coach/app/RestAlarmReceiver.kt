@@ -81,6 +81,8 @@ object RestNotifier {
             .setContentText("Next set: $exName")
             .setAutoCancel(true)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            // the COACH watch app buzzes for itself — don't bridge a second alert to the wrist
+            .setLocalOnly(WatchSync.watchActive)
             .setContentIntent(open)
             .build()
         try { NotificationManagerCompat.from(ctx).notify(ID, n) } catch (_: SecurityException) {}

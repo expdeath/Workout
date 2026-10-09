@@ -54,6 +54,7 @@ import com.expdeath.coach.stats.Stats
 import com.expdeath.coach.sync.Cloud
 import com.expdeath.coach.sync.GitHubSync
 import com.expdeath.coach.sync.HealthConnectSync
+import com.expdeath.coach.sync.WearBridge
 import com.expdeath.coach.ui.Avatar
 import com.expdeath.coach.ui.BigButton
 import com.expdeath.coach.ui.CIconButton
@@ -371,13 +372,13 @@ private fun ColumnScope.WatchSection(watchStatus: String, onChanged: () -> Unit)
         }
         else -> {
             T(if (HealthConnectSync.requested) "Reads HRV, resting HR, sleep and more each time the app opens. Change access in Health Connect → App permissions."
-              else "Read-only. COACH never writes to Health Connect. Your watch's app (Fitbit, Samsung Health, Garmin…) needs to share with Health Connect too.",
+              else "COACH reads your watch's day, and saves only workouts recorded by the COACH watch app. Your watch's app (Fitbit, Samsung Health, Garmin…) needs to share with Health Connect too.",
                 Theme.body(13f), Theme.muted)
             BigButton(if (busy) "Reading Health Connect…" else if (HealthConnectSync.requested) "Read Health Connect now" else "Connect Health Connect", enabled = !busy) {
                 scope.launch {
                     busy = true; msg = ""
                     try {
-                        if (HealthConnectSync.grantedCount() == 0) HealthConnectSync.requestAccess()
+                        if (HealthConnectSync.grantedCount() == 0 || HealthConnectSync.newPermissions) HealthConnectSync.requestAccess()
                         HealthConnectSync.requested = true
                         onChanged()
                         val n = HealthConnectSync.sync()
@@ -391,6 +392,30 @@ private fun ColumnScope.WatchSection(watchStatus: String, onChanged: () -> Unit)
             }
             if (msg.isNotEmpty()) T(msg, Theme.body(13.5f), Theme.amber)
         }
+    }
+    WatchAppBlock()
+}
+
+/** COACH on a Wear OS watch: log sets, rest and finish from the wrist. */
+@Composable
+private fun WatchAppBlock() {
+    var withApp by remember { mutableStateOf<List<String>?>(null) }
+    var connected by remember { mutableStateOf<List<String>>(emptyList()) }
+    LaunchedEffect(Unit) {
+        connected = WearBridge.connectedWatches().map { it.displayName }
+        withApp = WearBridge.watchesWithApp().map { it.displayName }
+    }
+    VGap(6.dp)
+    T("COACH on your watch", Theme.head(16f, FontWeight.SemiBold))
+    val apps = withApp
+    when {
+        apps == null -> T("Looking for your watch…", Theme.body(13f), Theme.muted)
+        apps.isNotEmpty() -> {
+            T("Connected to ${apps.joinToString()}. During a workout it shows the next set, logs it with a tap, runs the rest timer on your wrist and records heart rate.", Theme.body(13f), Theme.green)
+            BigButton("Open COACH on the watch") { WearBridge.openOnWatch() }
+        }
+        connected.isNotEmpty() -> T("${connected.first()} is connected, but COACH isn't on it yet. Install COACH from the Play Store on the watch.", Theme.body(13f), Theme.muted)
+        else -> T("No Wear OS watch connected. With one, you can log sets and run the rest timer from your wrist, without taking out your phone.", Theme.body(13f), Theme.muted)
     }
 }
 

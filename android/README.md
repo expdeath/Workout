@@ -27,6 +27,7 @@ matching Swift file does", and behind that "whatever the matching JS file does".
 | Rest-timer alerts | `app/RestAlarmReceiver.kt` | `UNUserNotificationCenter` in `WorkoutView.swift` |
 | Debug seed (offline screenshots) | `app/DebugSeed.kt` | `App/DebugSeed.swift` |
 | Unit tests | `app/src/test/` (JUnit, every iOS unit test ported) | `CoachAppTests/` |
+| Watch app (Wear OS) + phone link | `wear/`, `watchlink/`, `app/WatchSync.kt`, `sync/WearBridge.kt` | `CoachWatch/`, `Shared/WatchLink.swift`, `Sync/WatchSync.swift` |
 
 ### Android differences, on purpose
 
@@ -45,6 +46,26 @@ matching Swift file does", and behind that "whatever the matching JS file does".
   store map to the same `pro` entitlement.
 - **Share / export** use the Android share sheet. **Import** uses the system
   file picker.
+
+## Wear OS watch app (`wear/`)
+
+Log sets, run the rest timer and finish from the wrist; heart rate from the
+watch. Spec and protocol: [`../docs/watch.md`](../docs/watch.md). The phone
+owns the workout; the watch sends commands over the Wear OS Data Layer.
+
+- Same application id as the phone app (`com.expdeath.coach`) and **the same
+  signing key**, or the Data Layer won't connect them. Publish both from one
+  Play listing (the watch build is uploaded as a Wear OS form factor).
+- `watchlink/` is the protocol both apps share (pure Kotlin, JVM-tested).
+- Health Connect now also asks for skin temperature (read) and exercise /
+  energy / heart-rate (write, for watch workouts only). Play Console's
+  Health Connect declaration needs those listed.
+
+```sh
+./gradlew :wear:assembleDebug :watchlink:testDebugUnitTest
+# Wear OS 6 emulator (AVD Wear_OS_6_Round), canned states without a phone:
+adb shell am start -n com.expdeath.coach/com.expdeath.coach.wear.WatchActivity --es COACH_DEBUG_SEED workout
+```
 
 ## Setup (one-time)
 

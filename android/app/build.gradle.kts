@@ -72,6 +72,11 @@ dependencies {
     // Health Connect — the Android twin of HealthKit
     implementation("androidx.health.connect:connect-client:1.1.0")
 
+    // The COACH watch app (../wear): Wear OS Data Layer + opening it from the phone
+    implementation(project(":watchlink"))
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
+    implementation("androidx.wear:wear-remote-interactions:1.2.0")
+
     // COACH Pro: Google Play subscriptions through RevenueCat (docs/subscriptions.md)
     implementation("com.revenuecat.purchases:purchases:10.26.0")
 

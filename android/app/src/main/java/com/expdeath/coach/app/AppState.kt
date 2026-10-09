@@ -59,6 +59,10 @@ enum class AppSheet { Notifications, Profile, Search }
 
 data class SyncInfo(val state: String, val at: Long? = null, val sessions: Int? = null, val message: String? = null)
 
+/** The rest timer between sets. `fromWatch`: started by a set logged on the
+ *  watch — the watch buzzes on the wrist, so the phone stays quiet. */
+data class RestTimer(val endsAt: Long, val total: Double, val exName: String, val fromWatch: Boolean = false)
+
 /** Root app state — ports the state + effects in src/App.jsx (and
  *  AppState.swift) onto one observable object driving RootScreen's screen
  *  switch: the daily check-in → AI plan → workout → finish loop, sync
@@ -96,6 +100,9 @@ class AppState(private val debugStart: Screen? = null) {
 
     var ci by mutableStateOf(Checkin())
     var fin by mutableStateOf(FinishInfo())
+    /** Lives here, not in WorkoutScreen, so a set ticked on the watch starts
+     *  it too and the watch shows the same countdown. */
+    var rest by mutableStateOf<RestTimer?>(null)
 
     val muscleGap: Stats.MuscleGap? get() = Stats.biggestMuscleGap(history)
 
@@ -201,6 +208,7 @@ class AppState(private val debugStart: Screen? = null) {
         Cloud.onChange = { what -> cloudChanged(what) }
         loadActive()
         loadStateFromCloud()
+        WatchSync.publish(this, force = true)
         pruneOldHealthText()
         LocalStore.logEvent("app_open", mapOf("sessions" to JSONValue.Num(history.size.toDouble())))
         HealthIngest.reparseRows() // parser upgrades backfill old rows
@@ -236,6 +244,7 @@ class AppState(private val debugStart: Screen? = null) {
     private fun persistToday(t: Session?) {
         todayPlan = t
         Cloud.setState("today", t?.toJson())
+        WatchSync.publish(this)
     }
 
     // ── Cloud state (shared with the other apps, same keys) ──────────
@@ -280,7 +289,7 @@ class AppState(private val debugStart: Screen? = null) {
     private fun cloudChanged(what: String) {
         when (what) {
             "sessions" -> loadActive()
-            "state" -> { loadStateFromCloud(); stateTick += 1 }
+            "state" -> { loadStateFromCloud(); stateTick += 1; WatchSync.publish(this) }
             "pro" -> stateTick += 1
         }
     }
@@ -431,6 +440,7 @@ class AppState(private val debugStart: Screen? = null) {
             )
             persistToday(t)
             screen = Screen.Workout
+            WatchSync.workoutStarted()
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             LocalStore.logEvent("generation_failed", mapOf("message" to JSONValue.Str(e.message ?: "")))
@@ -575,10 +585,30 @@ class AppState(private val debugStart: Screen? = null) {
         return true
     }
 
+    // ── Rest timer ───────────────────────────────────────────────────
+
+    fun startRest(seconds: Double, exName: String, startedAt: Long = System.currentTimeMillis(), fromWatch: Boolean = false) {
+        rest = RestTimer(startedAt + (seconds * 1000).toLong(), seconds, exName, fromWatch)
+        WatchSync.publish(this)
+    }
+
+    fun extendRest(seconds: Int) {
+        val r = rest ?: return
+        rest = r.copy(endsAt = r.endsAt + seconds * 1000L, total = r.total + seconds)
+        WatchSync.publish(this)
+    }
+
+    fun stopRest() {
+        if (rest == null) return
+        rest = null
+        WatchSync.publish(this)
+    }
+
     // ── Finish / cancel ──────────────────────────────────────────────
 
     fun finishSession() = scope.launch {
         var t = todayPlan ?: return@launch
+        rest = null
         val durationMin: Int? = if (t.startedAt > 0) minOf(((nowMs() - t.startedAt) / 60000).rounded().toInt(), 240) else null
         t = t.copy(
             finished = true,
@@ -615,6 +645,7 @@ class AppState(private val debugStart: Screen? = null) {
 
     fun cancelSession() {
         LocalStore.logEvent("session_cancelled")
+        rest = null
         persistToday(null)
         screen = Screen.Home
     }
