@@ -1,0 +1,66 @@
+name: CoachApp
+options:
+  bundleIdPrefix: com.expdeath
+  deploymentTarget:
+    iOS: "17.0"
+configs:
+  Debug: debug
+  Release: release
+targets:
+  CoachApp:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CoachApp
+    info:
+      path: CoachApp/Info.plist
+      properties:
+        CFBundleDisplayName: COACH
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UIAppFonts:
+          - BarlowCondensed-Bold.ttf
+          - BarlowCondensed-SemiBold.ttf
+          - BarlowCondensed-Medium.ttf
+          - IBMPlexMono-Regular.ttf
+          - IBMPlexMono-Medium.ttf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.expdeath.CoachApp
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        ASSETSCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+  CoachAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: CoachAppTests
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        GENERATE_INFOPLIST_FILE: YES
+    dependencies:
+      - target: CoachApp
+schemes:
+  CoachApp:
+    build:
+      targets:
+        CoachApp: all
+        CoachAppTests: [test]
+    run:
+      config: Debug
+    test:
+      targets:
+        - CoachAppTests
+    archive:
+      config: Release
