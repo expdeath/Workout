@@ -56,6 +56,8 @@ struct SettingsView: View {
                 if account != nil { profileCard }
 
                 group("Preferences", note: "Coach logic") {
+                    SettingsRow(icon: "crown", tint: Cloud.shared.proActive ? Theme.green : Theme.amberText, title: "COACH Pro",
+                                subtitle: Cloud.shared.proActive ? (Cloud.shared.proTrial ? "Active · free trial" : "Active") : "AI coach with no key to set up · 7 days free") { detail = "pro" }
                     SettingsRow(icon: "brain.head.profile", title: "AI Coach", subtitle: coachStatus) { detail = "coach" }
                     SettingsRow(icon: "bell.badge", title: "Alerts & reports", subtitle: alertsStatus) { detail = "alerts" }
                     SettingsRow(icon: "target", tint: Theme.green, title: "Weekly target", subtitle: "Streak, consistency and the target bar") { detail = "target" } trailing: {
@@ -106,7 +108,7 @@ struct SettingsView: View {
             .padding(.horizontal, 16).padding(.top, 4).padding(.bottom, 24)
         }
         .coachScreen()
-        .onAppear { if Cloud.shared.geminiKey.isEmpty { detail = "coach" } }
+        .onAppear { if !Cloud.shared.aiReady { detail = "coach" } }
         .task { eventCount = await Cloud.shared.countEvents() }
         .sheet(item: $detail) { id in detailSheet(id) }
     }
@@ -152,7 +154,7 @@ struct SettingsView: View {
     }
 
     private static let titles = ["coach": "AI Coach", "target": "Weekly target", "watch": "Apple Health", "gym": "Plates & Bar",
-                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About", "alerts": "Alerts & reports", "delete": "Delete account"]
+                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About", "alerts": "Alerts & reports", "delete": "Delete account", "pro": "COACH Pro"]
 
     private func detailSheet(_ id: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -174,9 +176,15 @@ struct SettingsView: View {
                     case "account": accountSection
                     case "alerts": alertsSection
                     case "delete": deleteSection
+                    case "pro": ProSectionView()
                     default:
                         Text("COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.")
                             .font(Theme.body(14)).foregroundStyle(Theme.muted)
+                        HStack(spacing: 16) {
+                            Link("Privacy policy", destination: Subscriptions.privacyURL)
+                            Link("Terms of service", destination: Subscriptions.termsURL)
+                        }
+                        .font(Theme.body(14)).tint(Theme.amberText)
                     }
                 }
                 .padding(.horizontal, 20).padding(.bottom, 24)
@@ -198,6 +206,7 @@ struct SettingsView: View {
     private var coachStatus: String {
         _ = prefsTick
         if !AIConsent.allowed { return "Off — nothing is sent to Google Gemini" }
+        if Cloud.shared.proActive { return "Ready · COACH Pro" }
         return Cloud.shared.geminiKey.isEmpty
             ? (Cloud.shared.canSetGeminiKey ? "No API key yet — add one to start" : "No API key yet — ask Abhi")
             : (LocalStore.shared.backup.aiSettings.profile.isEmpty ? "Ready · add your profile" : "Ready · profile set")

@@ -43,6 +43,8 @@ final class Cloud {
     private(set) var account: AccountInfo?
     /// accounts/{id} — name, github { repo, token, lastBackup }, …
     private(set) var accountDoc: [String: JSONValue] = [:]
+    /// entitlements/{id} — COACH Pro, written only by the server
+    private(set) var pro: [String: JSONValue] = [:]
     /// config/shared — { geminiKey } (invited accounts only)
     private(set) var shared: [String: JSONValue] = [:]
     /// accounts/{id}/state/* other than aiSettings (today, weeklyReview, …)
@@ -78,6 +80,43 @@ final class Cloud {
         let source = account?.selfServe == true ? accountDoc : shared
         if case .string(let k)? = source["geminiKey"] { return k }
         return ""
+    }
+
+    // ── COACH Pro (functions/index.js; docs/subscriptions.md) ──
+
+    static let functionsBase = "https://europe-west2-heath-9a322.cloudfunctions.net"
+
+    var proActive: Bool {
+        guard case .bool(true)? = pro["pro"] else { return false }
+        if case .number(let exp)? = pro["expiresAt"] { return exp > Date().timeIntervalSince1970 * 1000 }
+        return true
+    }
+    var proTrial: Bool { if case .bool(let b)? = pro["trial"] { return b }; return false }
+    var proWillRenew: Bool { if case .bool(let b)? = pro["willRenew"] { return b }; return false }
+    var proStore: String { if case .string(let s)? = pro["store"] { return s }; return "" }
+    var proExpires: Date? { if case .number(let n)? = pro["expiresAt"] { return Date(timeIntervalSince1970: n / 1000) }; return nil }
+
+    /// Can the AI coach run? A key (own or shared), or COACH Pro.
+    var aiReady: Bool { !geminiKey.isEmpty || proActive }
+
+    func idToken() async throws -> String {
+        #if DEBUG
+        if let t = debugIdToken { return t }
+        #endif
+        guard let user = Auth.auth().currentUser else { throw CloudError.signInFailed("Not signed in.") }
+        return try await user.getIDToken()
+    }
+
+    /// Ask the server to re-read the subscription now (right after a purchase).
+    func refreshPro() async {
+        guard !offline, var req = URL(string: "\(Self.functionsBase)/refreshPro").map({ URLRequest(url: $0) }),
+              let token = try? await idToken() else { return }
+        req.httpMethod = "POST"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        guard let (data, resp) = try? await URLSession.shared.data(for: req), (resp as? HTTPURLResponse)?.statusCode == 200,
+              case .object(let o)? = try? JSONDecoder().decode(JSONValue.self, from: data) else { return }
+        pro = o
+        onChange?("pro")
     }
 
     /// The owner (shared key) or a self-serve account (its own) can change it.
@@ -244,8 +283,9 @@ final class Cloud {
         LocalStore.shared.resetMirror()
 
         await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-            let pending = PendingCount(info.selfServe ? 5 : 6) { done.resume() }
+            let pending = PendingCount(info.selfServe ? 6 : 7) { done.resume() }
             watchDoc(path(), "account", pending) { [weak self] d in self?.accountDoc = d }
+            watchDoc("entitlements/\(accountId)", "pro", pending) { [weak self] d in self?.pro = d }
             // the shared key is for invited accounts; self-serve ones bring their own
             if !info.selfServe {
                 watchDoc("config/shared", "shared", pending) { [weak self] d in self?.shared = d }
@@ -279,6 +319,7 @@ final class Cloud {
         listeners = []
         account = nil
         accountDoc = [:]
+        pro = [:]
         shared = [:]
         state = [:]
     }
@@ -321,6 +362,10 @@ final class Cloud {
     }
 
     #if DEBUG
+    /// Tests: a stand-in ID token and Pro status (no Firebase behind them).
+    var debugIdToken: String?
+    func debugSetPro(_ p: [String: JSONValue]) { pro = p }
+
     /// DebugSeed: a signed-in-looking state with no Firebase behind it.
     func debugActivate(account: AccountInfo, geminiKey: String) {
         offline = true

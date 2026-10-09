@@ -172,6 +172,7 @@ final class AppState {
     @MainActor
     func deleteAccount() async -> String? {
         do {
+            await Subscriptions.stop()
             try await Account.deleteAccount()
         } catch {
             if (error as? ASAuthorizationError)?.code == .canceled { return "Cancelled — nothing was deleted." }
@@ -191,7 +192,7 @@ final class AppState {
     func aiConsentAnswered(_ allowed: Bool) {
         AIConsent.set(allowed)
         LocalStore.shared.logEvent(type: "ai_consent", data: ["allowed": .bool(allowed)])
-        screen = Cloud.shared.geminiKey.isEmpty ? .settings : .home
+        screen = Cloud.shared.aiReady ? .home : .settings
     }
 
     /// Signs out only once everything logged on this device is in the
@@ -203,6 +204,7 @@ final class AppState {
         guard await Cloud.shared.flushWrites() else {
             return "Some changes haven't reached the cloud yet (no connection?). Connect to the internet and try again — signing out now would lose them."
         }
+        await Subscriptions.stop()
         await Account.signOut()
         history = []
         todayPlan = nil
@@ -218,6 +220,7 @@ final class AppState {
     }
 
     func boot() async {
+        if let acct = Account.current()?.accountId { Task { await Subscriptions.start(accountId: acct) } }
         Cloud.shared.onChange = { [weak self] what in self?.cloudChanged(what) }
         adoptLegacyDeviceSettings()
         loadActive()
@@ -232,7 +235,7 @@ final class AppState {
         Task { await maybeMonthlyReport() }
         // asked once per account before anything goes to Gemini; then, with
         // no API key yet, Settings first
-        screen = !AIConsent.answered ? .aiConsent : Cloud.shared.geminiKey.isEmpty ? .settings : .home
+        screen = !AIConsent.answered ? .aiConsent : Cloud.shared.aiReady ? .home : .settings
         #if DEBUG
         if let s = DebugSeed.startScreen {
             ci = buildDefaultCheckin() // what Home's "Start check-in" tap does
@@ -307,6 +310,7 @@ final class AppState {
         switch what {
         case "sessions": loadActive()
         case "state": loadStateFromCloud(); stateTick += 1
+        case "pro": stateTick += 1
         default: break
         }
     }
@@ -484,7 +488,7 @@ final class AppState {
         guard Calendar.current.component(.weekday, from: Date()) == 1 else { return } // Sundays only (1 = Sunday)
         let thisMonday = Stats.mondayOf(Helpers.todayStr())
         guard stateField("weeklyReview", "week") != thisMonday else { return } // already done this week
-        guard let summary = Stats.lastWeekSummary(history), !Cloud.shared.geminiKey.isEmpty else { return }
+        guard let summary = Stats.lastWeekSummary(history), Cloud.shared.aiReady else { return }
         guard let text = try? await Gemini.generateWeeklyReview(summary) else { return }
         let review = WeeklyReviewCache(week: thisMonday, at: (Date().timeIntervalSince1970 * 1000).rounded(), text: text, count: summary.count, progressions: summary.progressions)
         Cloud.shared.setState("weeklyReview", try? JSONValue.encoding(review))
@@ -499,7 +503,7 @@ final class AppState {
         guard let prevMonthDate = cal.date(byAdding: .month, value: -1, to: now) else { return }
         let ym = "\(cal.component(.year, from: prevMonthDate))-\(String(format: "%02d", cal.component(.month, from: prevMonthDate)))"
         guard stateField("monthlyReport", "month") != ym else { return } // already generated
-        guard !Cloud.shared.geminiKey.isEmpty else { return }
+        guard Cloud.shared.aiReady else { return }
         guard let sum = Stats.monthSummary(history, LocalStore.shared.backup.health, ym: ym) else { return }
         guard let text = try? await Gemini.generateMonthlyReport(sum) else { return }
         let report = MonthlyReportCache(month: ym, at: (Date().timeIntervalSince1970 * 1000).rounded(), text: text, sum: sum)

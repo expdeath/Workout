@@ -70,6 +70,11 @@ struct LoginView: View {
                 .foregroundStyle(Theme.dim)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 24)
+            HStack(spacing: 14) {
+                Link("Privacy", destination: Subscriptions.privacyURL)
+                Link("Terms", destination: Subscriptions.termsURL)
+            }
+            .font(Theme.body(13)).tint(Theme.amberText)
 
             Spacer()
         }

@@ -13,6 +13,10 @@ packages:
   GoogleSignIn:
     url: https://github.com/google/GoogleSignIn-iOS
     exactVersion: 10.0.0
+  # COACH Pro: App Store subscriptions (docs/subscriptions.md)
+  RevenueCat:
+    url: https://github.com/RevenueCat/purchases-ios-spm
+    from: 5.0.0
 targets:
   CoachApp:
     type: application
@@ -80,6 +84,8 @@ targets:
         product: FirebaseFirestore
       - package: GoogleSignIn
         product: GoogleSignIn
+      - package: RevenueCat
+        product: RevenueCat
   CoachAppTests:
     type: bundle.unit-test
     platform: iOS

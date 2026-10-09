@@ -36,7 +36,7 @@ struct AIConsentView: View {
                     .overlay(RoundedRectangle(cornerRadius: Theme.radiusSm).stroke(Theme.border))
                     .clipShape(RoundedRectangle(cornerRadius: Theme.radiusSm))
                 }
-                Text(.init("It goes straight from your phone to Google with your account's Gemini API key, under [Google's Gemini API terms](https://ai.google.dev/gemini-api/terms) — on free keys Google may use it to improve its products. Nothing is sent until you allow it, and you can turn it off any time in Settings → AI Coach."))
+                Text(.init("With your own Gemini key it goes straight from your phone to Google, under [Google's Gemini API terms](https://ai.google.dev/gemini-api/terms) — on free keys Google may use it to improve its products. With COACH Pro it goes through COACH's server, which passes it on without keeping it, to COACH's paid Gemini account — which Google doesn't use to improve its products. Nothing is sent until you allow it, and you can turn it off any time in Settings → AI Coach. [Privacy policy](https://expdeath.github.io/Workout/privacy.html)"))
                     .font(Theme.meta(12.5)).foregroundStyle(Theme.muted).tint(Theme.amberText)
                 Button("Allow the AI coach") { appState.aiConsentAnswered(true) }
                     .buttonStyle(BigButtonStyle())

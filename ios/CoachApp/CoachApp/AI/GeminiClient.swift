@@ -12,6 +12,7 @@ enum Gemini {
     enum GeminiError: LocalizedError {
         case noApiKey
         case noConsent
+        case server(String)
         case rateLimited(retryDelay: Int)
         case overloaded(model: String)
         case blocked(String)
@@ -22,6 +23,7 @@ enum Gemini {
         var errorDescription: String? {
             switch self {
             case .noApiKey: return "No Gemini API key set. Go to Settings to add one."
+            case .server(let m): return m
             case .noConsent: return "The AI coach is off — turn it on in Settings → AI Coach. Your data only goes to Google Gemini with your OK."
             case .rateLimited: return "Rate limit hit twice. Wait a minute and try again."
             case .overloaded(let m): return "\(m) is overloaded."
@@ -378,21 +380,37 @@ enum Gemini {
     private static func post(model: String, systemInstruction: String, contents: [[String: Any]], generationConfig: [String: Any], timeout: TimeInterval) async throws -> (text: String, response: HTTPURLResponse, data: Data) {
         // every Gemini request passes here: nothing leaves without consent
         guard AIConsent.allowed else { throw GeminiError.noConsent }
-        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
-        var req = URLRequest(url: endpoint(model))
-        req.httpMethod = "POST"
-        req.timeoutInterval = timeout
-        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        req.setValue(Cloud.shared.geminiKey, forHTTPHeaderField: "X-goog-api-key")
         let body: [String: Any] = [
             "system_instruction": ["parts": [["text": systemInstruction]]],
             "contents": contents,
             "generationConfig": generationConfig,
         ]
-        req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        var req: URLRequest
+        if Cloud.shared.proActive {
+            // COACH Pro: the COACH server adds the owner's key (functions/index.js)
+            req = URLRequest(url: URL(string: "\(Cloud.functionsBase)/coach")!)
+            req.setValue("Bearer \(try await Cloud.shared.idToken())", forHTTPHeaderField: "Authorization")
+            req.httpBody = try JSONSerialization.data(withJSONObject: ["model": model, "body": body])
+        } else {
+            guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
+            req = URLRequest(url: endpoint(model))
+            req.setValue(Cloud.shared.geminiKey, forHTTPHeaderField: "X-goog-api-key")
+            req.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        req.httpMethod = "POST"
+        req.timeoutInterval = timeout
+        req.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let (data, resp) = try await URLSession.shared.data(for: req)
         guard let http = resp as? HTTPURLResponse else { throw GeminiError.message("No HTTP response") }
+
+        // the COACH server's own refusals (not Pro, consent off, today's
+        // limit) — final: another model won't change the answer
+        if Cloud.shared.proActive, [401, 402, 403].contains(http.statusCode) {
+            let msg = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])
+                .flatMap { ($0["error"] as? [String: Any])?["message"] as? String }
+            throw GeminiError.server(msg ?? "COACH Pro couldn't answer — try again.")
+        }
 
         if http.statusCode == 429 {
             var retryDelay = 45
@@ -495,7 +513,7 @@ enum Gemini {
     }
 
     private static func callGeminiText(_ userMsg: String, maxTokens: Int, eventType: String) async throws -> String {
-        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard Cloud.shared.aiReady else { throw GeminiError.noApiKey }
         var lastErr: Error = GeminiError.message("no models tried")
         for model in models.prefix(2) {
             var config: [String: Any] = ["maxOutputTokens": maxTokens + 1000, "temperature": 0.6]
@@ -537,7 +555,7 @@ enum Gemini {
     }
 
     static func askCoach(messages: [ChatMessage], history: [Session] = [], todayPlan: Session? = nil, healthLog: [HealthRow] = [], focusSession: Session? = nil) async throws -> String {
-        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard Cloud.shared.aiReady else { throw GeminiError.noApiKey }
         let recent = history.suffix(3).map { h -> String in
             "\(h.date) \(h.plan.sessionType) RPE \(h.fin.map { String($0.rpe) } ?? "?")\(h.fin?.pain.isEmpty == false ? " pain: \(h.fin!.pain)" : "")"
         }.joined(separator: "; ")
@@ -605,7 +623,7 @@ enum Gemini {
     ]
 
     static func intensifyWorkout(today: Session, history: [Session], healthLog: [HealthRow] = []) async throws -> IntensifyResult {
-        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
+        guard Cloud.shared.aiReady else { throw GeminiError.noApiKey }
         let p = today.plan
         let checkin = today.checkin
         let progress = p.exercises.enumerated().map { (i, ex) -> String in
@@ -756,6 +774,7 @@ enum Gemini {
                 return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog, template: template)
             } catch let error as GeminiError {
                 if case .noConsent = error { throw error } // no point trying another model
+                if case .server = error { throw error }
                 if case .overloaded = error, mi < models.count - 1 {
                     failures.append("\(model): overloaded")
                     onStatus?("\(model) is busy — switching model…")
@@ -834,7 +853,7 @@ enum Gemini {
     /// JPEG photo of it) or a description — into saved-workout drafts to
     /// review (buildWorkouts in gemini.js). Nothing is saved here.
     static func buildWorkouts(text: String, imageJPEG: Data?, source: String, history: [Session]) async throws -> (workouts: [SavedWorkout], message: String) {
-        guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.message("Add your Gemini API key in Settings first — the coach builds workouts with it.") }
+        guard Cloud.shared.aiReady else { throw GeminiError.message("Add your Gemini API key in Settings first — the coach builds workouts with it.") }
         let settings = LocalStore.shared.backup.aiSettings
         var seen = Set<String>()
         let known = history.flatMap { $0.plan.exercises.map { $0.name.trimmingCharacters(in: .whitespaces) } }

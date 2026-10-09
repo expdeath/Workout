@@ -220,7 +220,12 @@ final class DailyLoopUITests: XCTestCase {
         text("Barbell & plate setup").tap()
         XCTAssertTrue(button("Save gym setup").waitForExistence(timeout: 3))
         button("Close").tap()
-        text("Send feedback").tap()
+        XCTAssertTrue(button("Save gym setup").waitForNonExistence(timeout: 5), "the sheet closed")
+        // the list is taller than the screen (COACH Pro, Alerts & reports…) — scroll to it
+        let feedback = text("Send feedback")
+        // (isHittable is true even under the tab bar — check it's clear of it)
+        for _ in 0..<6 where feedback.frame.maxY > app.frame.maxY - 140 { app.swipeUp() }
+        feedback.tap()
         XCTAssertTrue(button("Send feedback").waitForExistence(timeout: 3))
         button("Close").tap()
 
