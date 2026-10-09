@@ -30,6 +30,25 @@ enum Account {
         }
     }
 
+    /// The Login screen's Sign in with Apple button.
+    @MainActor
+    static func signInWithApple(_ a: AppleSignIn.Result) async throws -> Cloud.AccountInfo {
+        let user = try await Cloud.shared.signInWithApple(a)
+        do {
+            return try await Cloud.shared.start(user: user)
+        } catch {
+            await Cloud.shared.signOut()
+            throw error
+        }
+    }
+
+    /// Delete the account and everything in it, then this device's copy.
+    @MainActor
+    static func deleteAccount() async throws {
+        try await Cloud.shared.deleteAccount()
+        wipeLocal()
+    }
+
     /// Clears everything this device kept for the old invite-code setup
     /// (Keychain secrets, settings) and the in-memory mirror.
     static func wipeLocal() {

@@ -11,6 +11,10 @@ struct SettingsView: View {
 
     @State private var detail: String?
     @State private var prefsTick = 0 // re-read Prefs after a switch flips
+    // Delete account: type DELETE, then a fresh sign-in proves it's you
+    @State private var deleteTyped = ""
+    @State private var deleting = false
+    @State private var deleteMsg = ""
     @State private var target = Dashboard.weeklyTarget(LocalStore.shared.backup.aiSettings)
     // coach setup
     @State private var key = Cloud.shared.geminiKey
@@ -93,6 +97,8 @@ struct SettingsView: View {
                     if !signOutMsg.isEmpty { Text(signOutMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amberText) }
                     Text("Signing out clears this device, including exercise photos. Your log stays in the cloud.")
                         .font(Theme.body(12.5)).foregroundStyle(Theme.dim)
+                    Button { detail = "delete" } label: { Label("Delete account", systemImage: "trash") }
+                        .font(Theme.body(14, weight: .medium)).foregroundStyle(Theme.red).padding(.top, 6)
                 }
                 Text("COACH · v\(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0") (\(Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"))")
                     .capsLabel(Theme.dim, size: 11).frame(maxWidth: .infinity)
@@ -146,7 +152,7 @@ struct SettingsView: View {
     }
 
     private static let titles = ["coach": "AI Coach", "target": "Weekly target", "watch": "Apple Health", "gym": "Plates & Bar",
-                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About", "alerts": "Alerts & reports"]
+                                 "sync": "Cloud backup", "data": "Your data", "account": "Feedback", "about": "About", "alerts": "Alerts & reports", "delete": "Delete account"]
 
     private func detailSheet(_ id: String) -> some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -167,6 +173,7 @@ struct SettingsView: View {
                     case "data": dataSection
                     case "account": accountSection
                     case "alerts": alertsSection
+                    case "delete": deleteSection
                     default:
                         Text("COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.")
                             .font(Theme.body(14)).foregroundStyle(Theme.muted)
@@ -189,7 +196,9 @@ struct SettingsView: View {
     // MARK: - Row statuses
 
     private var coachStatus: String {
-        Cloud.shared.geminiKey.isEmpty
+        _ = prefsTick
+        if !AIConsent.allowed { return "Off — nothing is sent to Google Gemini" }
+        return Cloud.shared.geminiKey.isEmpty
             ? (Cloud.shared.canSetGeminiKey ? "No API key yet — add one to start" : "No API key yet — ask Abhi")
             : (LocalStore.shared.backup.aiSettings.profile.isEmpty ? "Ready · add your profile" : "Ready · profile set")
     }
@@ -244,6 +253,34 @@ struct SettingsView: View {
 
     private var coachSection: some View {
         return section {
+            Toggle(isOn: Binding(
+                get: { _ = prefsTick; return AIConsent.allowed },
+                set: { on in
+                    AIConsent.set(on)
+                    prefsTick += 1
+                    LocalStore.shared.logEvent(type: "ai_consent", data: ["allowed": .bool(on), "from": .string("settings")])
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Use the AI coach (Google Gemini)").font(Theme.body(15, weight: .medium))
+                    Text(AIConsent.allowed
+                         ? "Sends your workouts, check-ins, chats and Health data to Google Gemini to plan sessions."
+                         : "Off — nothing goes to Gemini. You can still log workouts and run saved ones as written.")
+                        .font(Theme.meta(12.5)).foregroundStyle(Theme.muted)
+                }
+            }
+            .tint(Theme.amber)
+            if AIConsent.allowed {
+                DisclosureGroup("What's shared") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(AIConsentView.shared, id: \.title) { item in
+                            (Text(item.title).bold() + Text(" — \(item.sub)")).font(Theme.meta(12.5)).foregroundStyle(Theme.muted)
+                        }
+                    }
+                    .padding(.top, 6)
+                }
+                .font(Theme.body(13.5)).tint(Theme.amberText)
+            }
             if Cloud.shared.canSetGeminiKey {
                 QLabel(text: account?.selfServe == true ? "Your Gemini API key" : "Gemini API key (shared)")
                 HStack {
@@ -438,6 +475,38 @@ struct SettingsView: View {
     // MARK: - Pieces
 
     /// The body of one settings sheet.
+    // MARK: - Delete account (App Store guideline 5.1.1(v))
+
+    private var deleteSection: some View {
+        section {
+            Text("This permanently deletes your COACH account and everything in it:").font(Theme.body(14.5))
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(["every logged session, set and personal record",
+                         "Apple Health / Watch data, check-ins, coach chats and reports",
+                         "saved workouts, settings, your Gemini key and GitHub token",
+                         "your sign-in — signing in again starts a brand-new, empty account"], id: \.self) {
+                    Text("• \($0)").font(Theme.meta(13)).foregroundStyle(Theme.muted)
+                }
+            }
+            Text("Your GitHub backup repository is yours and isn't touched — delete it on github.com if you want it gone too. You'll sign in once more to confirm it's you.")
+                .font(Theme.meta(12.5)).foregroundStyle(Theme.dim)
+            QLabel(text: "Type DELETE to confirm")
+            TextField("", text: $deleteTyped).textInputAutocapitalization(.characters).autocorrectionDisabled().coachInput()
+            if !deleteMsg.isEmpty { ErrorBox(text: deleteMsg) }
+            Button(deleting ? "Deleting…" : "Delete my account") {
+                Task {
+                    deleting = true
+                    deleteMsg = ""
+                    if let err = await appState.deleteAccount() { deleteMsg = err } else { detail = nil }
+                    deleting = false
+                }
+            }
+            .buttonStyle(BigButtonStyle(danger: true))
+            .disabled(deleting || deleteTyped.trimmingCharacters(in: .whitespaces) != "DELETE")
+            .opacity(deleting || deleteTyped.trimmingCharacters(in: .whitespaces) != "DELETE" ? 0.5 : 1)
+        }
+    }
+
     // MARK: - Alerts & reports (account state `prefs`, shared with the web app)
 
     private static let prefRows: [(group: String, rows: [(key: String, title: String, sub: String)])] = [

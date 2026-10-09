@@ -35,6 +35,7 @@ final class WorkoutsTests: XCTestCase {
     override func setUp() {
         Cloud.shared.offline = true
         Cloud.shared.setSharedGeminiKey("stub-key")
+        AIConsent.set(true)
         for k in Cloud.shared.stateKeys() where k.hasPrefix("workout-") { Cloud.shared.setState(k, nil) }
         URLProtocol.registerClass(Stub.self)
     }
@@ -136,6 +137,27 @@ final class WorkoutsTests: XCTestCase {
         let empty = String(data: try JSONEncoder().encode(GitHubSync.normalizeBackup(Backup())), encoding: .utf8)!
         XCTAssertFalse(empty.contains("workouts"), "no key when there's nothing to carry — same as the web")
         XCTAssertFalse(empty.contains("prefs"))
+    }
+
+    /// Guideline 5.1.2(i): no consent → no request leaves the phone.
+    func testNothingGoesToGeminiWithoutConsent() async {
+        Stub.lastBody = ""
+        AIConsent.set(false)
+        do {
+            _ = try await Gemini.generateWorkoutPlan(checkin: Checkin(), history: [])
+            XCTFail("should refuse")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, Gemini.GeminiError.noConsent.localizedDescription)
+        }
+        do {
+            _ = try await Gemini.buildWorkouts(text: "core every day", imageJPEG: nil, source: "me", history: [])
+            XCTFail("should refuse")
+        } catch {}
+        XCTAssertEqual(Stub.lastBody, "", "no request was made")
+        Cloud.shared.setState("aiConsent", nil)
+        XCTAssertFalse(AIConsent.answered, "never asked → the consent screen shows")
+        AIConsent.set(true)
+        XCTAssertTrue(AIConsent.answered && AIConsent.allowed)
     }
 
     func testSwitchesDefaultOnAndSave() {

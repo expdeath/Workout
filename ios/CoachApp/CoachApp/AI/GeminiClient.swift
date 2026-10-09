@@ -11,6 +11,7 @@ enum Gemini {
 
     enum GeminiError: LocalizedError {
         case noApiKey
+        case noConsent
         case rateLimited(retryDelay: Int)
         case overloaded(model: String)
         case blocked(String)
@@ -21,6 +22,7 @@ enum Gemini {
         var errorDescription: String? {
             switch self {
             case .noApiKey: return "No Gemini API key set. Go to Settings to add one."
+            case .noConsent: return "The AI coach is off — turn it on in Settings → AI Coach. Your data only goes to Google Gemini with your OK."
             case .rateLimited: return "Rate limit hit twice. Wait a minute and try again."
             case .overloaded(let m): return "\(m) is overloaded."
             case .blocked(let r): return "Request blocked by Gemini: \(r)"
@@ -374,6 +376,8 @@ enum Gemini {
     /// text/chat calls) react to them differently (retry ladder vs
     /// simple model fallback).
     private static func post(model: String, systemInstruction: String, contents: [[String: Any]], generationConfig: [String: Any], timeout: TimeInterval) async throws -> (text: String, response: HTTPURLResponse, data: Data) {
+        // every Gemini request passes here: nothing leaves without consent
+        guard AIConsent.allowed else { throw GeminiError.noConsent }
         guard !Cloud.shared.geminiKey.isEmpty else { throw GeminiError.noApiKey }
         var req = URLRequest(url: endpoint(model))
         req.httpMethod = "POST"
@@ -751,6 +755,7 @@ enum Gemini {
                 if mi > 0 { onStatus?("Trying \(model)…") }
                 return try await callGemini(checkin: checkin, history: history, model: model, healthLog: healthLog, template: template)
             } catch let error as GeminiError {
+                if case .noConsent = error { throw error } // no point trying another model
                 if case .overloaded = error, mi < models.count - 1 {
                     failures.append("\(model): overloaded")
                     onStatus?("\(model) is busy — switching model…")

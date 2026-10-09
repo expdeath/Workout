@@ -16,6 +16,7 @@
 		0C883595F747078EEAF886D2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A4857B65C34E9E4650D2DA9A /* Assets.xcassets */; };
 		129324DAD2B3BE91B1EDFEAB /* ReadinessBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA0B54535C1DC13160877BB4 /* ReadinessBar.swift */; };
 		15A1C80FD0F5593B5EFF7D92 /* Keychain.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80D902733D0D54899A36B5F1 /* Keychain.swift */; };
+		1C49CE717455595315A57C67 /* AppleSignIn.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40944D0779B1E2B037F2D638 /* AppleSignIn.swift */; };
 		1E41D2DBD1D0122243958933 /* FirestoreCodec.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C41053E5BC0BD24649F83A6 /* FirestoreCodec.swift */; };
 		2ABE9FBAFC4181D2D3C19048 /* AISettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = D6CE98D7C81213FB136546C0 /* AISettings.swift */; };
 		31DFBD66C7E446FE6E214BB9 /* LenientDecodingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F532E7DB967C7E61C02AEC8C /* LenientDecodingTests.swift */; };
@@ -23,6 +24,7 @@
 		3664BD3FA68CC56DE50BF7D9 /* StatsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37B5A5069CED84D6E719D757 /* StatsTests.swift */; };
 		36F73839C6B05A28D8CEB7BE /* Checkin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 400E5A5CCB50C2E2BCB4B645 /* Checkin.swift */; };
 		38749E86DF6177EFCE6D44A2 /* CoachChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2E6B54A53354408D2D89552 /* CoachChatView.swift */; };
+		3FEC5359569562EBACDE0BE5 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = D38FF1B86B432466717FAADE /* PrivacyInfo.xcprivacy */; };
 		4C473CE7574265B047BA0C53 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 180DA316F07D5763470FFC74 /* HistoryView.swift */; };
 		4FB215E244426BB20D24276A /* GitHubSyncTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F2D03D9C91E568C8F16E21 /* GitHubSyncTests.swift */; };
 		52117873534E423B28660223 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 58427C02DEE6A795B79725A0 /* FirebaseFirestore */; };
@@ -48,6 +50,7 @@
 		8A550C3192B1F8A14F784EEA /* DebugSeed.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCAEA435AFB6A4DE1807AFCB /* DebugSeed.swift */; };
 		8C5CE376A12B7E284DB19BAC /* MediaStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF2B5726910E58A9446D8077 /* MediaStore.swift */; };
 		8EA307E788505041A279D0CF /* Cloud.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F578B0AEDD93EB8E02DC983 /* Cloud.swift */; };
+		93AAB913ACA6643777C259CC /* AIConsentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2625C1301A3744D54EF7CE48 /* AIConsentView.swift */; };
 		952B57626F88F9A754787BDD /* GeminiFallbackTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5BF2E87FA4AEF080FD68926E /* GeminiFallbackTests.swift */; };
 		9666D47A079900C4E90CBA2A /* WorkoutsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC4B4E1361BB4841BE16531 /* WorkoutsTests.swift */; };
 		9B0AD0E6DC5DDCD2A59518D5 /* SpaceGrotesk-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 09D15BCCFD4507F5ED55BB2F /* SpaceGrotesk-Bold.ttf */; };
@@ -114,6 +117,7 @@
 		1B273D75988EF8DCE8FF29D1 /* CoachApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoachApp.swift; sourceTree = "<group>"; };
 		1F1B19224C143F183F29545E /* Plan.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Plan.swift; sourceTree = "<group>"; };
 		238E72E5B7FD8A03A7BC5F16 /* NotificationsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsView.swift; sourceTree = "<group>"; };
+		2625C1301A3744D54EF7CE48 /* AIConsentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIConsentView.swift; sourceTree = "<group>"; };
 		27CDCA97873836F9F42756CF /* AIContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIContext.swift; sourceTree = "<group>"; };
 		2CDE3D0BD8ED1733CD5350E5 /* SpaceGrotesk-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "SpaceGrotesk-Regular.ttf"; sourceTree = "<group>"; };
 		368422A12F504996535F0598 /* Goals.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Goals.swift; sourceTree = "<group>"; };
@@ -124,6 +128,7 @@
 		3FD893E91D3C8EFCB6AE803E /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		400E5A5CCB50C2E2BCB4B645 /* Checkin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Checkin.swift; sourceTree = "<group>"; };
 		404CBC204208A4A6D0C01CDF /* CoachApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = CoachApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		40944D0779B1E2B037F2D638 /* AppleSignIn.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleSignIn.swift; sourceTree = "<group>"; };
 		4491298A2DA8223A1FE61FF1 /* CloudEndToEndUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudEndToEndUITests.swift; sourceTree = "<group>"; };
 		45845A11002E03D281751367 /* Dashboard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Dashboard.swift; sourceTree = "<group>"; };
 		459C2153FE9C6D2EF12DA926 /* SetLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetLog.swift; sourceTree = "<group>"; };
@@ -173,6 +178,7 @@
 		CD8BA800263FD9A95B27CF7D /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		D0EE6A02CA1C2D131CE51BA3 /* BarlowCondensed-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "BarlowCondensed-Bold.ttf"; sourceTree = "<group>"; };
 		D2923F3D4DFF4D9FBDBF9790 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		D38FF1B86B432466717FAADE /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		D4A1B9AE218A1F3ECC2FBA19 /* FinishView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinishView.swift; sourceTree = "<group>"; };
 		D6CE98D7C81213FB136546C0 /* AISettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AISettings.swift; sourceTree = "<group>"; };
 		DCAEA435AFB6A4DE1807AFCB /* DebugSeed.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugSeed.swift; sourceTree = "<group>"; };
@@ -205,6 +211,7 @@
 			isa = PBXGroup;
 			children = (
 				3F606463A22634617CD2F0DB /* AddPastView.swift */,
+				2625C1301A3744D54EF7CE48 /* AIConsentView.swift */,
 				AC351811A65DE09111910C78 /* CheckInView.swift */,
 				C2E6B54A53354408D2D89552 /* CoachChatView.swift */,
 				D4A1B9AE218A1F3ECC2FBA19 /* FinishView.swift */,
@@ -338,6 +345,7 @@
 				9A3CA8B93261AC2EA09093B1 /* CoachApp.entitlements */,
 				603465482B7BC774B7E3E841 /* GoogleService-Info.plist */,
 				5F8DC321378F931AB7FF4102 /* Info.plist */,
+				D38FF1B86B432466717FAADE /* PrivacyInfo.xcprivacy */,
 				EEB9D466644CB8DB3C55F465 /* Account */,
 				5671A94B681D1E692600A39A /* AI */,
 				500C7B2A82096E41FA56B464 /* App */,
@@ -403,6 +411,7 @@
 			isa = PBXGroup;
 			children = (
 				F3C5007568985F1CEDE236DA /* Account.swift */,
+				40944D0779B1E2B037F2D638 /* AppleSignIn.swift */,
 			);
 			path = Account;
 			sourceTree = "<group>";
@@ -521,6 +530,7 @@
 				744CCC8BCB26D0EF64CE193C /* BarlowCondensed-Medium.ttf in Resources */,
 				855997403D3F8E7F0B451E1D /* BarlowCondensed-SemiBold.ttf in Resources */,
 				0A33DDBBF2EB9A47113AE804 /* GoogleService-Info.plist in Resources */,
+				3FEC5359569562EBACDE0BE5 /* PrivacyInfo.xcprivacy in Resources */,
 				9B0AD0E6DC5DDCD2A59518D5 /* SpaceGrotesk-Bold.ttf in Resources */,
 				B5FC1D15298877D783FFC646 /* SpaceGrotesk-Medium.ttf in Resources */,
 				5FB5F229CB26AF4126F95E21 /* SpaceGrotesk-OFL.txt in Resources */,
@@ -551,11 +561,13 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				93AAB913ACA6643777C259CC /* AIConsentView.swift in Sources */,
 				D8F8F37DAA7CF068B72BAAE2 /* AIContext.swift in Sources */,
 				2ABE9FBAFC4181D2D3C19048 /* AISettings.swift in Sources */,
 				BFE41F2D8F909AEA7C9108E7 /* Account.swift in Sources */,
 				0130ACD7F3581681D8FE1F06 /* AddPastView.swift in Sources */,
 				7ACB2ACD4CBF7562C47065DD /* AppState.swift in Sources */,
+				1C49CE717455595315A57C67 /* AppleSignIn.swift in Sources */,
 				A989565DFDAB9AD66CF14E81 /* Backup.swift in Sources */,
 				E59867229736AE8D6EE1EB56 /* Calories.swift in Sources */,
 				D31F58BB46BB223D0ABCBD55 /* Charts.swift in Sources */,

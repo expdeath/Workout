@@ -1,5 +1,6 @@
 import Foundation
 import FirebaseAuth
+import AuthenticationServices
 
 /// Mirrors the screen state machine in src/App.jsx — one enum case per
 /// screen the JS `useState('screen')` can hold.
@@ -18,6 +19,7 @@ enum Screen: Equatable {
     case progress
     case settings
     case workouts
+    case aiConsent
 }
 
 /// App-wide sheets opened from the tab header.
@@ -150,6 +152,48 @@ final class AppState {
         }
     }
 
+    /// The Sign in with Apple button finished (LoginView).
+    @MainActor
+    func signInWithApple(_ result: Result<ASAuthorization, Error>, nonce: String) async {
+        loginError = ""
+        do {
+            let auth = try result.get()
+            _ = try await Account.signInWithApple(AppleSignIn.result(from: auth, rawNonce: nonce))
+            screen = .loading
+            await boot()
+        } catch {
+            if (error as? ASAuthorizationError)?.code == .canceled { return } // closed Apple's sheet
+            loginError = Self.message(for: error)
+        }
+    }
+
+    /// Settings → Delete account. Returns why it failed (nothing deleted
+    /// when the re-sign-in is cancelled), or nil — then we're at Login.
+    @MainActor
+    func deleteAccount() async -> String? {
+        do {
+            try await Account.deleteAccount()
+        } catch {
+            if (error as? ASAuthorizationError)?.code == .canceled { return "Cancelled — nothing was deleted." }
+            if (error as NSError).domain == "com.google.GIDSignIn", (error as NSError).code == -5 { return "Cancelled — nothing was deleted." }
+            if (error as NSError).code == AuthErrorCode.userMismatch.rawValue { return "That was a different account — sign in as the one you want to delete." }
+            return error.localizedDescription
+        }
+        history = []
+        todayPlan = nil
+        weeklyReview = nil
+        monthlyReport = nil
+        screen = .login
+        return nil
+    }
+
+    /// The consent screen was answered — on to the app.
+    func aiConsentAnswered(_ allowed: Bool) {
+        AIConsent.set(allowed)
+        LocalStore.shared.logEvent(type: "ai_consent", data: ["allowed": .bool(allowed)])
+        screen = Cloud.shared.geminiKey.isEmpty ? .settings : .home
+    }
+
     /// Signs out only once everything logged on this device is in the
     /// cloud — signing out clears the device's offline copy, so unsynced
     /// changes would be lost. Returns why it refused, or nil.
@@ -186,7 +230,9 @@ final class AppState {
         }
         Task { await maybeWeeklyReview() }
         Task { await maybeMonthlyReport() }
-        screen = Cloud.shared.geminiKey.isEmpty ? .settings : .home
+        // asked once per account before anything goes to Gemini; then, with
+        // no API key yet, Settings first
+        screen = !AIConsent.answered ? .aiConsent : Cloud.shared.geminiKey.isEmpty ? .settings : .home
         #if DEBUG
         if let s = DebugSeed.startScreen {
             ci = buildDefaultCheckin() // what Home's "Start check-in" tap does

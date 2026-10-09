@@ -33,6 +33,7 @@ final class GeminiFallbackTests: XCTestCase {
         Stub.requested = []
         Cloud.shared.offline = true
         Cloud.shared.setSharedGeminiKey("stub-key")
+        AIConsent.set(true)
     }
 
     override func tearDown() {

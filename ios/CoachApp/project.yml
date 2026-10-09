@@ -25,11 +25,17 @@ targets:
       properties:
         com.apple.developer.healthkit: true
         com.apple.developer.healthkit.access: []
+        # Sign in with Apple — needs the paid Apple Developer Program (a free
+        # Personal Team can't sign this). Uncomment with the
+        # SWIFT_ACTIVE_COMPILATION_CONDITIONS line below; docs/app-store.md.
+        # com.apple.developer.applesignin: [Default]
     info:
       path: CoachApp/Info.plist
       properties:
         NSHealthShareUsageDescription: COACH reads your Watch data (HRV, resting heart rate, sleep, steps, VO₂max, workouts' energy) to judge recovery and plan each session.
         NSHealthUpdateUsageDescription: COACH doesn't write to Apple Health.
+        # standard HTTPS only — no export-compliance paperwork at upload
+        ITSAppUsesNonExemptEncryption: false
         UIBackgroundModes: [fetch]
         CFBundleDisplayName: COACH
         UILaunchScreen: {}
@@ -60,6 +66,7 @@ targets:
         # state, the Firestore mirror and AI replies can't race each other
         SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
         TARGETED_DEVICE_FAMILY: "1"
+        # SWIFT_ACTIVE_COMPILATION_CONDITIONS: "$(inherited) APPLE_SIGN_IN"
         ASSETSCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETSCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic

@@ -99,6 +99,12 @@ final class Cloud {
 
     @MainActor
     func signInWithGoogle() async throws -> User {
+        try await Auth.auth().signIn(with: googleCredential()).user
+    }
+
+    /// Google's account picker → a Firebase credential.
+    @MainActor
+    private func googleCredential() async throws -> AuthCredential {
         guard let presenter = UIApplication.shared.connectedScenes
             .compactMap({ ($0 as? UIWindowScene)?.keyWindow?.rootViewController }).first
         else { throw CloudError.noPresenter }
@@ -106,8 +112,58 @@ final class Cloud {
         guard let idToken = result.user.idToken?.tokenString else {
             throw CloudError.signInFailed("Google didn't return an identity — try again.")
         }
-        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: result.user.accessToken.tokenString)
-        return try await Auth.auth().signIn(with: credential).user
+        return GoogleAuthProvider.credential(withIDToken: idToken, accessToken: result.user.accessToken.tokenString)
+    }
+
+    /// Sign in with Apple (AppleSignIn.swift). Apple sends the name only on
+    /// the very first sign-in, so it's kept on the Firebase user.
+    func signInWithApple(_ a: AppleSignIn.Result) async throws -> User {
+        let cred = OAuthProvider.appleCredential(withIDToken: a.idToken, rawNonce: a.rawNonce, fullName: a.fullName)
+        let user = try await Auth.auth().signIn(with: cred).user
+        if (user.displayName ?? "").isEmpty, let n = a.fullName {
+            let name = PersonNameComponentsFormatter().string(from: n)
+            if !name.isEmpty {
+                let change = user.createProfileChangeRequest()
+                change.displayName = name
+                try? await change.commitChanges()
+            }
+        }
+        return user
+    }
+
+    /// Settings → Delete account (port of cloudDeleteAccount in cloud.js).
+    /// Proves it's really you first — Firebase only deletes a sign-in made
+    /// moments ago — then deletes every document of the account, the
+    /// account itself, your allowlist entry (last: the rules check it until
+    /// then) and the sign-in. An Apple sign-in's token is revoked too, as
+    /// Apple requires. The GitHub backup repo is the user's and is left.
+    @MainActor
+    func deleteAccount() async throws {
+        guard let user = Auth.auth().currentUser, let account else { throw CloudError.signInFailed("Not signed in.") }
+        if user.providerData.contains(where: { $0.providerID == "apple.com" }) {
+            let a = try await AppleSignIn.request()
+            try await user.reauthenticate(with: OAuthProvider.appleCredential(withIDToken: a.idToken, rawNonce: a.rawNonce, fullName: nil))
+            if let code = a.authorizationCode { try? await Auth.auth().revokeToken(withAuthorizationCode: code) }
+        } else {
+            try await user.reauthenticate(with: googleCredential())
+        }
+
+        var refs: [DocumentReference] = []
+        for name in ["sessions", "health", "deletedIds", "events", "state", "feedback"] {
+            refs += try await db.collection(path(name)).getDocuments().documents.map(\.reference)
+        }
+        for chunk in stride(from: 0, to: refs.count, by: 450).map({ Array(refs[$0..<min($0 + 450, refs.count)]) }) {
+            let batch = db.batch()
+            chunk.forEach { batch.deleteDocument($0) }
+            try await batch.commit()
+        }
+        try await db.document(path()).delete()
+        try await db.collection("allowlist").document(account.email).delete()
+        stop()
+        try await user.delete()
+        GIDSignIn.sharedInstance.signOut()
+        try? await db.terminate()
+        try? await db.clearPersistence()
     }
 
     /// Sign out and drop this device's offline copy of the account.

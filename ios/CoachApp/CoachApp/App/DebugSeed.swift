@@ -31,6 +31,9 @@ enum DebugSeed {
             account: Cloud.AccountInfo(accountId: "preview", name: "Preview", admin: false, email: "preview@example.invalid"),
             geminiKey: "debug-not-a-real-key"
         )
+        // the screenshot account has already said yes to the AI coach
+        // (`COACH_DEBUG_CONSENT=ask` shows the consent screen instead)
+        if ProcessInfo.processInfo.environment["COACH_DEBUG_CONSENT"] != "ask" { AIConsent.set(true) }
 
         let plan = Plan(
             sessionType: "Push", title: "Push Day", recoveryScore: 78,

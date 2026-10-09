@@ -29,6 +29,8 @@
 	</array>
 	<key>CFBundleVersion</key>
 	<string>1</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>NSHealthShareUsageDescription</key>
 	<string>COACH reads your Watch data (HRV, resting heart rate, sleep, steps, VO₂max, workouts' energy) to judge recovery and plan each session.</string>
 	<key>NSHealthUpdateUsageDescription</key>

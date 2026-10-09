@@ -34,6 +34,8 @@ struct RootView: View {
                 RecordsView()
             case .progress:
                 ProgressScreen()
+            case .aiConsent:
+                AIConsentView()
             case .workouts:
                 WorkoutsView(openId: appState.workoutsOpenId).id(appState.workoutsOpenId ?? "list")
             }
