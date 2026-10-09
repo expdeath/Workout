@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COACH Privacy Policy</title>
+<meta name="description" content="How COACH handles your account, training and Apple Health data.">
+<style>
+  :root { --bg: #0B0F17; --card: #131B2E; --text: #F8FAFC; --body: #DFE2EE; --muted: #8391A7; --amber: #FBBF24; --border: rgba(255,255,255,0.08); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--body); font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; padding: 40px 16px 64px; }
+  h1 { color: var(--text); font-size: 34px; margin: 0 0 4px; letter-spacing: 0.01em; }
+  h2 { color: var(--text); font-size: 20px; margin: 36px 0 8px; }
+  .meta { color: var(--muted); font-size: 14px; margin: 0 0 24px; }
+  .box { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; margin: 16px 0; }
+  .box p { margin: 6px 0; }
+  a { color: var(--amber); }
+  ul { padding-left: 20px; }
+  li { margin: 4px 0; }
+  b { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Privacy Policy</h1>
+  <p class="meta">COACH — the AI training coach (iPhone app and expdeath.github.io/Workout) · Last updated 9 October 2026</p>
+
+  <div class="box">
+    <p><b>The short version.</b> Your training and health data are yours. Only you can read them — not other users, and not the app's owner. Nothing goes to an AI service until you say yes. We don't sell data, show ads or track you. You can delete everything from inside the app at any time.</p>
+  </div>
+
+  <h2>Who runs COACH</h2>
+  <p>COACH is an independent app run by its developer (“we”). To reach us, use <b>Settings → Send feedback</b> in the app.</p>
+
+  <h2>What we store</h2>
+  <ul>
+    <li><b>Your account:</b> your email address and name from Google (or Apple) sign-in, and an account ID.</li>
+    <li><b>Your training:</b> logged workouts, sets, weights and notes, check-ins (energy, sleep, soreness, body weight), goals, equipment, saved workouts and schedules, coach chats and reports, and your settings.</li>
+    <li><b>Health data</b>, if you connect Apple Health (or the optional Shortcut): heart-rate variability, resting heart rate, sleep, steps, active energy, VO₂max and similar readings.</li>
+    <li><b>An activity log</b> of what you do in the app (e.g. “session finished”), which the coach uses as context.</li>
+    <li><b>Feedback</b> you choose to send us.</li>
+    <li><b>Subscription status</b> if you subscribe to COACH Pro: whether it's active, the plan, renewal or end date and the store. We never see your card or bank details.</li>
+  </ul>
+  <p>Exercise photos and clips you attach to an exercise stay on your device and are never uploaded. A program photo you add in “Build with coach” is sent to the AI to read and is not stored.</p>
+
+  <h2>Where it's kept</h2>
+  <p>Your data is stored in Google Firebase (Cloud Firestore and Firebase Authentication), part of Google Cloud. COACH Pro requests run on Google Cloud Functions in London. Everything travels over encrypted connections (HTTPS).</p>
+
+  <h2>Who can see it</h2>
+  <p>Our database rules let <b>only your own sign-in</b> read your account's data. The app's admin account cannot read anyone's workouts, health data, check-ins or chats. As the operator, we can see your name and email, whether you have COACH Pro, and feedback you send us. We don't otherwise access account data, except if you ask us to help with a problem or the law requires it.</p>
+
+  <h2>The AI coach (Google Gemini)</h2>
+  <p>COACH plans sessions with Google Gemini, an AI service run by Google. <b>Nothing is sent to it until you allow it</b> on the “Your AI coach” screen; you can turn it off any time in Settings → AI Coach. When it's on, the app sends Gemini what the coach needs for each request: your recent workouts and goals, check-ins, coach chats, health readings, and any program photo you add.</p>
+  <ul>
+    <li><b>With your own Gemini API key</b>, requests go straight from your device to Google under <a href="https://ai.google.dev/gemini-api/terms">Google's Gemini API terms</a>. On free keys, Google may use what's sent to improve its products.</li>
+    <li><b>With COACH Pro</b>, requests go through COACH's server, which checks your subscription and passes the request on without keeping its content, to COACH's paid Gemini account. Google doesn't use paid-tier requests to improve its products. The server keeps only a count of your requests per day, to apply the daily limit.</li>
+  </ul>
+
+  <h2>Apple Health data</h2>
+  <p>Health data read from Apple Health is used only to coach you. It is never used for advertising or marketing, never sold, and never shared with anyone except as described above (Google Gemini, only with your consent, to plan your sessions). COACH doesn't write to Apple Health.</p>
+
+  <h2>Optional GitHub backup</h2>
+  <p>If you set it up, the app also saves a copy of your data — including health readings — to a GitHub repository you choose, using a token you provide. Anyone who can read that repository can read the backup, so use a private repository you own. You can turn it off in Settings → Cloud backup.</p>
+
+  <h2>Payments</h2>
+  <p>COACH Pro is sold through the App Store (Apple) on iPhone and through RevenueCat with Stripe on the website. They process the payment under their own privacy policies and tell us only your subscription status.</p>
+
+  <h2>What we don't do</h2>
+  <ul>
+    <li>No advertising, and no selling or renting of data.</li>
+    <li>No tracking across other apps or websites, and no third-party analytics.</li>
+  </ul>
+
+  <h2>Keeping and deleting your data</h2>
+  <p>We keep your data while your account exists. <b>Settings → Delete account</b> (in the app or on the website) permanently deletes your account, every workout, health reading, check-in, chat, saved workout and setting, and your sign-in. It can't be undone. Your GitHub backup repository, if you made one, is yours to delete on github.com. Subscriptions are managed by the store: cancel an App Store subscription in your iPhone's Settings → Apple ID → Subscriptions.</p>
+
+  <h2>Your rights</h2>
+  <p>You can see and export your data (Settings → Export workout log), correct it in the app, and delete it (Settings → Delete account). Depending on where you live (for example under the UK or EU GDPR) you also have rights to object to or restrict processing and to complain to your data-protection authority. Contact us through Settings → Send feedback for any request.</p>
+
+  <h2>Children</h2>
+  <p>COACH isn't meant for children under 16, and we don't knowingly collect their data.</p>
+
+  <h2>Changes</h2>
+  <p>If this policy changes in a way that matters, we'll say so in the app before it takes effect. The date at the top shows the latest version.</p>
+
+  <p class="meta" style="margin-top:40px"><a href="./terms.html">Terms of Service</a> · <a href="./">Open COACH</a></p>
+</main>
+</body>
+</html>

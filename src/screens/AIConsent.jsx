@@ -39,9 +39,9 @@ export default function AIConsent({ onDone }) {
           ))}
         </div>
         <p className="body consent__small">
-          It goes straight from your device to Google with your account's Gemini API key, under{' '}
+          With your own Gemini key it goes straight from your device to Google, under{' '}
           <a className="link" href="https://ai.google.dev/gemini-api/terms" target="_blank" rel="noopener noreferrer">Google's Gemini API terms</a>
-          {' '}— on free keys Google may use it to improve its products. Nothing is sent until you allow it, and you can turn it off any time in Settings → AI Coach.
+          {' '}— on free keys Google may use it to improve its products. With COACH Pro it goes through COACH's server, which passes it on without keeping it, to COACH's paid Gemini account — which Google doesn't use to improve its products. Nothing is sent until you allow it, and you can turn it off any time in Settings → AI Coach. <a className="link" href="./privacy.html" target="_blank" rel="noopener noreferrer">Privacy policy</a>
         </p>
         <button className="big-btn" onClick={() => answer(true)}>Allow the AI coach</button>
         <button className="ghost-btn consent__no" onClick={() => answer(false)}>Not now</button>

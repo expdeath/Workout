@@ -2930,6 +2930,30 @@ button.settings-row:hover {
   font-size: 16px;
 }
 
+.pro-offer {
+  padding: 14px;
+  background: linear-gradient(135deg, var(--amber-bg), transparent);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  border-radius: var(--radius);
+}
+
+.pro-offer__list {
+  list-style: none;
+  margin-top: 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--text-body);
+}
+
+.pro-offer__list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /* ── My workouts ─────────────────────────────────────────────────── */
 .wk-badges {
   display: flex;

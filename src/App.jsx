@@ -19,7 +19,7 @@ import {
   looksLikeHealthData,
   reparseHealthRows,
 } from './utils/healthIngest';
-import { getApiKey } from './utils/storage';
+import { aiReady } from './utils/storage';
 import {
   getAllSessions,
   sortSessions,
@@ -153,7 +153,7 @@ export default function App() {
       // asked once per account before anything goes to Gemini; then, with
       // no API key yet, Settings first
       if (getAIConsent() === null) setScreen('aiConsent');
-      else setScreen(getApiKey() ? 'home' : 'settings');
+      else setScreen(aiReady() ? 'home' : 'settings');
     })();
   }, []);
 
@@ -387,7 +387,7 @@ export default function App() {
       const cur = cloudState('weeklyReview');
       if (cur?.week === mondayOf(todayStr())) return; // already done this week
       const summary = lastWeekSummary(hist);
-      if (!summary || !getApiKey()) return;
+      if (!summary || !aiReady()) return;
       const text = await generateWeeklyReview(summary);
       const review = {
         week: mondayOf(todayStr()),
@@ -414,7 +414,7 @@ export default function App() {
       const ym = `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, '0')}`;
       const cur = cloudState('monthlyReport');
       if (cur?.month === ym) return; // already generated
-      if (!getApiKey()) return;
+      if (!aiReady()) return;
       const healthLog = await getAllHealth().catch(() => []);
       const sum = monthSummary(hist, healthLog, ym);
       if (!sum) return; // no sessions that month — nothing to report
@@ -857,7 +857,7 @@ export default function App() {
           />
         )}
 
-        {screen === 'aiConsent' && <AIConsent onDone={() => setScreen(getApiKey() ? 'home' : 'settings')} />}
+        {screen === 'aiConsent' && <AIConsent onDone={() => setScreen(aiReady() ? 'home' : 'settings')} />}
 
         {screen === 'workouts' && (
           <Workouts

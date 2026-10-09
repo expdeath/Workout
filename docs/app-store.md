@@ -10,6 +10,8 @@ What the app already does for App Review, and the steps that need you
 | **4.8 Login services** — a privacy-friendly option next to Google | Sign in with Apple: `Account/AppleSignIn.swift`, `Cloud.signInWithApple`, Login button. **Built but switched off** until the steps below. |
 | **5.1.1(v) Account deletion** in the app | Settings → Delete account (iOS + web). Re-confirms the sign-in, deletes every document of the account, the account, the allowlist entry and the Firebase sign-in; an Apple sign-in's token is revoked. Rules: `firestore.rules`. |
 | **5.1.2(i) Consent before sharing with third-party AI** | First launch asks before anything goes to Google Gemini (`AIConsentView.swift`, `src/screens/AIConsent.jsx`). Every Gemini request checks it (`Gemini.post`, `requireAIConsent`). Settings → AI Coach turns it on/off. Account state `aiConsent`. |
+| **Privacy policy + terms** | `public/privacy.html`, `public/terms.html` → https://expdeath.github.io/Workout/privacy.html and /terms.html; linked from Login, the consent screen, Settings → About and the Pro paywall. |
+| **3.1.2 Subscriptions** | COACH Pro paywall (`Screens/ProView.swift`): price, period, free trial, auto-renew wording, Restore purchases, Terms and Privacy links. Setup: docs/subscriptions.md. |
 | **Export compliance** | `ITSAppUsesNonExemptEncryption = NO` in Info.plist |
 | **Privacy manifest** | `ios/CoachApp/CoachApp/PrivacyInfo.xcprivacy` — UserDefaults (reason CA92.1), no tracking, the collected data types. |
 
@@ -41,21 +43,19 @@ accounts (different emails, often a private-relay one from Apple).
 Paste the current `firestore.rules` into Firebase console → Firestore →
 Rules → Publish. Account deletion needs them.
 
-### 4. Privacy policy
-A public page (it can be a GitHub Pages file) covering:
-- what's stored in Firebase/Firestore: account email and name, workouts,
-  check-ins, Apple Health readings, coach chats, saved workouts, settings;
-- that Apple Health data and the rest go to **Google Gemini** only after
-  the in-app consent, with the user's own Gemini key, under Google's terms;
-- the optional GitHub backup to the user's own repository;
-- that the app owner (admin) can read accounts' data;
-- how to delete everything: Settings → Delete account.
+### 4. Privacy policy and terms
+Done: https://expdeath.github.io/Workout/privacy.html and /terms.html.
+Before submitting, read them through and add your name (or business
+name) and a contact email — they currently point people to Settings →
+Send feedback. The terms assume the laws of England and Wales.
 
 ### 5. App Store Connect
 - **App Privacy** answers matching the manifest: Contact info (email,
   name), Health & Fitness, User ID, Photos, User Content, Product
-  Interaction — all *linked to the user*, *not used for tracking*,
-  purpose *App Functionality*.
+  Interaction, Purchases — all *linked to the user*, *not used for
+  tracking*, purpose *App Functionality*.
+- **COACH Pro**: the subscription product and a sandbox tester for the
+  reviewer (docs/subscriptions.md).
 - **Review notes**: a demo Google account with a working Gemini key and
   a few logged sessions, and a note that the AI coach needs the user's
   own free Gemini API key (Settings → AI Coach).
@@ -64,10 +64,7 @@ A public page (it can be a GitHub Pages file) covering:
 - Export compliance is answered in the app already
   (`ITSAppUsesNonExemptEncryption = NO`: standard HTTPS only).
 
-### Worth deciding before launch
-- **Gemini key**: new users must make their own key at
-  aistudio.google.com. A server that holds one key would be smoother but
-  needs the paid Firebase plan and costs per use.
-- **Firebase plan**: the free plan caps reads at 50,000/day across all
-  users; each app launch reads the account's whole history. Move to the
-  pay-as-you-go plan before a public launch.
+### Before launch
+- **COACH Pro** setup (server keys, RevenueCat, App Store product):
+  docs/subscriptions.md. It also moves Firebase to the pay-as-you-go plan,
+  which lifts the free plan's 50,000 reads/day cap.

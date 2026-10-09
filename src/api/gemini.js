@@ -16,6 +16,7 @@ import {
 } from '../utils/stats.js';
 import { logEvent, getAllHealth } from '../db/db.js';
 import { workoutBrief } from '../utils/workouts.js';
+import { cloudProActive, cloudIdToken, FUNCTIONS_BASE } from '../db/cloud.js';
 
 // ── Consent ──────────────────────────────────────────────────────
 // Nothing goes to Google Gemini until the athlete has said yes on the
@@ -30,6 +31,32 @@ export class AIConsentError extends Error {
 
 function requireAIConsent() {
   if (!hasAIConsent()) throw new AIConsentError();
+}
+
+/**
+ * One Gemini request. COACH Pro → the COACH server (functions/index.js),
+ * which adds the owner's key; otherwise straight to Google with the
+ * account's own key (already in init.headers). The server's own refusals
+ * (not Pro, consent off, today's limit) come back as a final Error, so the
+ * callers' model fallback doesn't retry them.
+ */
+async function geminiFetch(model, init) {
+  if (!cloudProActive()) {
+    return fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, init);
+  }
+  const r = await fetch(`${FUNCTIONS_BASE}/coach`, {
+    method: 'POST',
+    signal: init.signal,
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await cloudIdToken()}` },
+    body: JSON.stringify({ model, body: JSON.parse(init.body) }),
+  });
+  if ([401, 402, 403].includes(r.status)) {
+    const msg = (await r.json().catch(() => ({})))?.error?.message;
+    const e = new Error(msg || 'COACH Pro couldn’t answer — try again.');
+    e.final = true;
+    throw e;
+  }
+  return r;
 }
 
 // ── Workout database ─────────────────────────────────────────────
@@ -379,7 +406,7 @@ const supportsThinkingLevel = (model) => /^gemini-3\.[5-9]-flash$/.test(model);
 async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
   requireAIConsent();
   const apiKey = getApiKey();
-  if (!apiKey) {
+  if (!apiKey && !cloudProActive()) {
     throw new Error('No Gemini API key set. Go to Settings to add one.');
   }
 
@@ -391,8 +418,7 @@ async function callGemini(checkin, history, model = MODELS[0], healthLog = []) {
   let response;
   try {
     console.log(`[COACH] Calling Gemini API (model: ${model})...`);
-    response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    response = await geminiFetch(model,
       {
         method: 'POST',
         signal: AbortSignal.timeout(60000),
@@ -538,14 +564,13 @@ function sleep(ms) {
 async function callGeminiText(userMsg, maxTokens, eventType) {
   requireAIConsent();
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error('No API key');
+  if (!apiKey && !cloudProActive()) throw new Error('No API key');
 
   let lastErr;
   for (const model of MODELS.slice(0, 2)) {
     const startedAt = Date.now();
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      const response = await geminiFetch(model,
         {
           method: 'POST',
           signal: AbortSignal.timeout(20000),
@@ -611,7 +636,7 @@ function sessionDetail(s) {
 export async function askCoach(messages, { history = [], todayPlan = null, healthLog = [], focusSession = null } = {}) {
   requireAIConsent();
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
+  if (!apiKey && !cloudProActive()) throw new Error('No Gemini API key set — add it in Settings.');
 
   const recent = history
     .slice(-3)
@@ -634,8 +659,7 @@ CONTEXT — today's session: ${plan}. Recent: ${recent || 'no logged sessions'}.
   let lastErr;
   for (const model of MODELS.slice(0, 2)) {
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      const response = await geminiFetch(model,
         {
           method: 'POST',
           signal: AbortSignal.timeout(25000),
@@ -718,7 +742,7 @@ const INTENSIFY_SCHEMA = {
 export async function intensifyWorkout(today, history, healthLog = []) {
   requireAIConsent();
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error('No Gemini API key set — add it in Settings.');
+  if (!apiKey && !cloudProActive()) throw new Error('No Gemini API key set — add it in Settings.');
 
   const p = today.plan || {};
   const checkin = today.checkin || {};
@@ -781,8 +805,7 @@ Keep "why" under 10 words. Anchor any suggestedWeight on the logged history — 
   for (const model of MODELS.slice(0, 2)) {
     const startedAt = Date.now();
     try {
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      const response = await geminiFetch(model,
         {
           method: 'POST',
           signal: AbortSignal.timeout(25000),
@@ -928,6 +951,7 @@ export async function generateWorkoutPlan(checkin, history, onStatus) {
       if (onStatus && mi > 0) onStatus(`Trying ${model}…`);
       return await callGemini(checkin, history, model, healthLog);
     } catch (err) {
+      if (err.final) throw err; // the COACH server said no — another model won't change that
       // Model overloaded — try next model
       if (err.overloaded && mi < MODELS.length - 1) {
         failures.push(`${model}: overloaded`);
@@ -1029,7 +1053,7 @@ const WORKOUTS_SCHEMA = {
 export async function buildWorkouts({ text = '', image = null, source = 'me', history = [] }) {
   requireAIConsent();
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error('Add your Gemini API key in Settings first — the coach builds workouts with it.');
+  if (!apiKey && !cloudProActive()) throw new Error('Add your Gemini API key in Settings first — the coach builds workouts with it.');
   const settings = getAISettings();
   const known = [...new Set(history.flatMap((s) => (s.plan?.exercises || []).map((e) => e?.name?.trim()).filter(Boolean)))].slice(0, 80);
 
@@ -1060,7 +1084,7 @@ ${text.trim() || '(see the attached photo)'}`;
   for (const model of MODELS.slice(0, 2)) {
     const startedAt = Date.now();
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+      const response = await geminiFetch(model, {
         method: 'POST',
         signal: AbortSignal.timeout(60000),
         headers: { 'Content-Type': 'application/json', 'X-goog-api-key': apiKey },

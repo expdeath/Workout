@@ -50,6 +50,10 @@ export default function Login({ error: bootError, onSignedIn }) {
         <p className="body" style={{ marginTop: 16, fontSize: 12.5, color: 'var(--dim)' }}>
           Any Google account works — new here? Your account is created on first sign-in.
         </p>
+        <p className="body" style={{ marginTop: 10, fontSize: 12.5 }}>
+          <a className="link" href="./privacy.html" target="_blank" rel="noopener noreferrer">Privacy</a> ·{' '}
+          <a className="link" href="./terms.html" target="_blank" rel="noopener noreferrer">Terms</a>
+        </p>
       </div>
     </div>
   );

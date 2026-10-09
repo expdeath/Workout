@@ -43,6 +43,14 @@ import {
 } from 'firebase/firestore';
 import { encodeValue, decodeValue, docId, eventDocId } from './firestoreCodec.js';
 
+// ── COACH Pro ── server + payments (docs/subscriptions.md)
+/** Firebase Functions (functions/index.js): the Pro AI proxy and refreshPro. */
+export const FUNCTIONS_BASE = 'https://europe-west2-heath-9a322.cloudfunctions.net';
+/** RevenueCat public Web Billing key — empty until RevenueCat is set up;
+ *  then the website can sell Pro. (A public key: safe in the app.) */
+export const REVENUECAT_WEB_KEY = '';
+export const PRO_PRICE = { label: '$4.99', period: 'month', trialDays: 7, dailyLimit: 60 };
+
 // Public by design — access is enforced by firestore.rules + the allowlist.
 const firebaseConfig = {
   apiKey: 'AIzaSyDE2zTvTacbQn2vgSTDY0LvHB-Gr7xAhec',
@@ -72,6 +80,7 @@ const empty = () => ({
   state: new Map(), // key → value (decoded)
   account: null, // accounts/{id} doc
   shared: {}, // config/shared
+  pro: null, // entitlements/{id} — written only by the server
 });
 
 let mirror = empty();
@@ -170,6 +179,7 @@ export async function startSession(user) {
   const col = (name) => collection(db, acctPath(name));
 
   watch(doc(db, acctPath()), (s) => { mirror.account = s.exists() ? s.data() : null; }, 'account');
+  watch(doc(db, 'entitlements', current.accountId), (s) => { mirror.pro = s.exists() ? s.data() : null; }, 'pro');
   // the shared key is for invited accounts; self-serve ones bring their own
   if (!current.selfServe) watch(doc(db, 'config/shared'), (s) => { mirror.shared = s.exists() ? s.data() : {}; }, 'shared');
   watch(col('sessions'), (ch) => {
@@ -215,6 +225,23 @@ export const cloudState = (key, fallback = null) => (mirror.state.has(key) ? mir
 export const cloudStateKeys = () => [...mirror.state.keys()];
 export const cloudAccountDoc = () => mirror.account || {};
 export const cloudShared = () => mirror.shared || {};
+/** { pro, expiresAt, trial, willRenew, managementUrl, store } or null. */
+export const cloudPro = () => mirror.pro;
+export const cloudProActive = () => !!mirror.pro?.pro && (!mirror.pro.expiresAt || mirror.pro.expiresAt > Date.now());
+
+/** A fresh Firebase ID token for the server. */
+export const cloudIdToken = () => auth.currentUser?.getIdToken();
+
+/** Ask the server to re-read the subscription now (right after a purchase). */
+export async function cloudRefreshPro() {
+  const r = await fetch(`${FUNCTIONS_BASE}/refreshPro`, { method: 'POST', headers: { Authorization: `Bearer ${await cloudIdToken()}` } });
+  const status = await r.json();
+  if (r.ok) {
+    mirror.pro = status;
+    notify('pro');
+  }
+  return status;
+}
 
 // ── Writes (mirror now, Firestore in the background) ─────────────
 

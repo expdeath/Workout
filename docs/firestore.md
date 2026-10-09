@@ -62,8 +62,12 @@ in the console (deleting the entry would just let it sign up again).
 
 - Signed in + verified email + on the allowlist (self-made or owner-made)
   and not blocked, or nothing.
-- Users read/write only their own account; the owner (`admin: true`)
-  can read every account (as they could read every data repo).
+- Users read/write only their own account. Since 2026-10-09 the owner
+  (`admin: true`) **can't** read anyone's workouts, health data, check-ins
+  or chats — only the allowlist (names/emails), `feedback`, and
+  `entitlements` (COACH Pro status). The privacy policy promises this.
+- `entitlements/{accountId}` (COACH Pro) and `usage/{acct}_{day}` are
+  written only by the server (functions/, admin SDK); clients can't.
 - **Deletion wins**: a session can't be written while a `deletedIds`
   marker exists for it.
 - **Newer wins**: a session or `aiSettings` write with an older

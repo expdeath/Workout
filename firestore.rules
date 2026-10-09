@@ -27,15 +27,17 @@ service cloud.firestore {
     function invited() { return allowed() && entry().get('selfServe', false) != true; }
     function owns(acct) { return allowed() && entry().accountId == acct; }
     function isAdmin() { return allowed() && entry().get('admin', false) == true; }
-    // the owner can read every account, as they could read every data repo
-    function canRead(acct) { return owns(acct) || isAdmin(); }
+    // Each account's data is private to its owner — the admin can't read
+    // anyone's workouts, health data or chats (privacy policy), only the
+    // allowlist (names), feedback sent to them, and subscription status.
+    function canRead(acct) { return owns(acct); }
     function notNewer() {
       return resource == null
         || request.resource.data.get('updatedAt', 0) >= resource.data.get('updatedAt', 0);
     }
 
     match /allowlist/{mail} {
-      allow read: if signedIn() && mail == email();
+      allow read: if signedIn() && (mail == email() || isAdmin());
       // first sign-in: your own email → a fresh account named by your uid,
       // never admin; after that only the owner can change it
       allow create: if signedIn() && mail == email()
@@ -53,6 +55,13 @@ service cloud.firestore {
     match /config/shared {
       allow read: if invited();
       allow write: if isAdmin();
+    }
+
+    // COACH Pro status, written only by the server (functions/: the
+    // RevenueCat webhook) — never by a client
+    match /entitlements/{acct} {
+      allow read: if owns(acct) || isAdmin();
+      allow write: if false;
     }
 
     match /accounts/{acct} {
@@ -97,10 +106,10 @@ service cloud.firestore {
           && !(col == 'state' && id == 'aiSettings');
       }
 
-      // beta feedback: written by the user, read by the owner
+      // feedback: written by the user, read by them and the admin
       match /feedback/{id} {
         allow create: if owns(acct);
-        allow read: if canRead(acct);
+        allow read: if owns(acct) || isAdmin();
         allow delete: if owns(acct); // account deletion
       }
     }

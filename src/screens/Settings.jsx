@@ -7,7 +7,8 @@ import { AI_SHARED } from './AIConsent';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
 import { getSyncConfig, setSyncConfig, syncNow, getLastSync, getLastInbox, sendFeedback } from '../db/sync';
 import { getAccount, signOut, deleteAccount } from '../utils/account';
-import { cloudState } from '../db/cloud';
+import { cloudState, cloudProActive, cloudPro, onCloudChange } from '../db/cloud';
+import ProSection from './Pro';
 import { todaysHealth } from '../utils/healthIngest';
 import { parseHealthNumbers, fmtHealthLine } from '../utils/stats';
 import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/helpers';
@@ -69,6 +70,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
     gym: false,
     watch: false,
     alerts: false,
+    pro: false,
     about: false,
   }));
   const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
@@ -225,6 +227,9 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   const [confirmOut, setConfirmOut] = useState(false);
   const [outMsg, setOutMsg] = useState(''); // why sign-out refused
   const [aiOn, setAiOn] = useState(hasAIConsent);
+  // COACH Pro status comes from the server (entitlements/{id}) — redraw when it changes
+  const [, setProTick] = useState(0);
+  useEffect(() => onCloudChange((w) => w === 'pro' && setProTick((n) => n + 1)), []);
   // Delete account: a sheet that asks you to type DELETE
   const [deleting, setDeleting] = useState(null); // null | { typed, busy, error }
   const runDelete = async () => {
@@ -304,6 +309,8 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   // ── Collapsed status lines ──
   const coachStatus = !aiOn
     ? 'Off — nothing is sent to Google Gemini'
+    : cloudProActive()
+    ? 'Ready · COACH Pro'
     : getApiKey()
     ? getAISettings().profile ? 'Ready · profile set' : 'Ready · add your profile'
     : canSetApiKey()
@@ -345,6 +352,18 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
       <SectionHead title="Preferences" trailing="Coach logic" trailingColor="var(--muted)" />
       <RowGroup>
       <Section
+        id="pro"
+        title="COACH Pro"
+        icon="workspace_premium"
+        tint={cloudProActive() ? 'var(--green)' : 'var(--amber-text)'}
+        status={cloudProActive() ? (cloudPro()?.trial ? 'Active · free trial' : 'Active') : 'AI coach with no key to set up · 7 days free'}
+        open={open.pro}
+        onToggle={() => toggle('pro')}
+      >
+        <ProSection onChange={() => setProTick((n) => n + 1)} />
+      </Section>
+
+      <Section
         id="coach"
         title="AI Coach"
         icon="psychology"
@@ -381,7 +400,10 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
           </details>
         )}
 
-        {canSetApiKey() ? (
+        {cloudProActive() && (
+          <p className="body consent__small" style={{ marginTop: 8 }}>You're on COACH Pro — no key needed; the coach runs on COACH's server.</p>
+        )}
+        {canSetApiKey() && !cloudProActive() ? (
           <>
             <div className="q-label">{account.selfServe ? 'Your Gemini API key' : 'Gemini API key (shared)'}</div>
             <div className="settings-key-row">
@@ -778,6 +800,10 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
         <p className="body" style={{ color: 'var(--muted)' }}>
           COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.
         </p>
+        <p className="body" style={{ marginTop: 10 }}>
+          <a className="link" href="./privacy.html" target="_blank" rel="noopener noreferrer">Privacy policy</a> ·{' '}
+          <a className="link" href="./terms.html" target="_blank" rel="noopener noreferrer">Terms of service</a>
+        </p>
       </Section>
       </RowGroup>
     </>
@@ -820,6 +846,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
 
   if (desktop) {
     const nav = [
+      ['pro', 'COACH Pro', 'workspace_premium'],
       ['coach', 'AI Coach', 'psychology'],
       ['alerts', 'Alerts & reports', 'notifications'],
       ['watch', 'Apple Watch', 'watch'],

@@ -11,6 +11,7 @@ import {
   cloudAccountDoc,
   cloudSetOwnKey,
   currentAccount,
+  cloudProActive,
 } from '../db/cloud.js';
 
 export async function loadKey(key, fallback) {
@@ -27,6 +28,9 @@ export async function saveKey(key, value) {
 export function getApiKey() {
   return (currentAccount()?.selfServe ? cloudAccountDoc().geminiKey : cloudShared().geminiKey) || '';
 }
+
+/** Can the AI coach run at all? A key (own or shared), or COACH Pro. */
+export const aiReady = () => !!getApiKey() || cloudProActive();
 
 /** Can this account change its key? The owner (shared) or a self-serve account (own). */
 export const canSetApiKey = () => !!(currentAccount()?.admin || currentAccount()?.selfServe);

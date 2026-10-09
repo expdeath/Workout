@@ -12,3 +12,9 @@ gittoken*.docx
 
 # Office lock files (e.g. while the token .docx is open)
 ~$*
+
+# Firebase Functions: local emulator settings and secrets
+functions/.env.local
+functions/.secret.local
+functions/node_modules
+*-debug.log
