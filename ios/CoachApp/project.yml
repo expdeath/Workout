@@ -3,6 +3,7 @@ options:
   bundleIdPrefix: com.expdeath
   deploymentTarget:
     iOS: "17.0"
+    watchOS: "10.0"
 configs:
   Debug: debug
   Release: release
@@ -24,6 +25,8 @@ targets:
     deploymentTarget: "17.0"
     sources:
       - path: CoachApp
+      # the phone ↔ watch protocol (docs/watch.md), also in CoachWatch
+      - path: Shared
     entitlements:
       path: CoachApp/CoachApp.entitlements
       properties:
@@ -78,6 +81,8 @@ targets:
         # here so `xcodegen generate` doesn't wipe the team picked in Xcode.
         DEVELOPMENT_TEAM: WFR2GPT97L
     dependencies:
+      # the Apple Watch app, embedded in the iPhone app
+      - target: CoachWatch
       - package: Firebase
         product: FirebaseAuth
       - package: Firebase
@@ -86,6 +91,49 @@ targets:
         product: GoogleSignIn
       - package: RevenueCat
         product: RevenueCat
+  # COACH on the Apple Watch — the wrist half of a workout (docs/watch.md)
+  CoachWatch:
+    type: application
+    platform: watchOS
+    deploymentTarget: "10.0"
+    sources:
+      - path: CoachWatch
+      - path: Shared
+      - path: CoachApp/Resources/Fonts
+        buildPhase: resources
+    entitlements:
+      path: CoachWatch/CoachWatch.entitlements
+      properties:
+        com.apple.developer.healthkit: true
+        com.apple.developer.healthkit.access: []
+    info:
+      path: CoachWatch/Info.plist
+      properties:
+        CFBundleDisplayName: COACH
+        WKApplication: true
+        WKCompanionAppBundleIdentifier: com.expdeath.CoachApp
+        # needs the iPhone app: the phone runs the plan, the Watch logs it
+        WKRunsIndependentlyOfCompanionApp: false
+        # keeps running with the wrist down during a workout (rest-over taps)
+        WKBackgroundModes: [workout-processing]
+        NSHealthShareUsageDescription: COACH reads your heart rate and energy during a workout to show them on your wrist.
+        NSHealthUpdateUsageDescription: COACH saves the workouts you record on your Watch to Apple Health — time, energy and heart rate.
+        UIAppFonts:
+          - BarlowCondensed-Bold.ttf
+          - BarlowCondensed-SemiBold.ttf
+          - BarlowCondensed-Medium.ttf
+          - SpaceGrotesk-Regular.ttf
+          - SpaceGrotesk-Medium.ttf
+          - SpaceGrotesk-Bold.ttf
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.expdeath.CoachApp.watchkitapp
+        SWIFT_VERSION: "5.0"
+        SWIFT_DEFAULT_ACTOR_ISOLATION: MainActor
+        TARGETED_DEVICE_FAMILY: "4"
+        ASSETSCATALOG_COMPILER_APPICON_NAME: AppIcon
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: WFR2GPT97L
   CoachAppTests:
     type: bundle.unit-test
     platform: iOS

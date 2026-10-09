@@ -421,7 +421,7 @@ struct SettingsView: View {
             } else {
                 Text(HealthKitSync.requested
                      ? "Reads HRV, resting HR, sleep and more each time the app opens. Change access in iPhone Settings → Health."
-                     : "Read-only. COACH never writes to Health.")
+                     : "COACH reads your Watch's day, and saves only workouts you record with the COACH Watch app.")
                     .font(Theme.body(13)).foregroundStyle(Theme.muted)
                 Button(healthBusy ? "Reading Apple Health…" : (HealthKitSync.requested ? "Read Apple Health now" : "Connect Apple Health")) {
                     Task { await connectHealth() }
@@ -430,6 +430,12 @@ struct SettingsView: View {
                 .disabled(healthBusy)
                 if !healthMsg.isEmpty { Text(healthMsg).font(Theme.body(13.5)).foregroundStyle(Theme.amber) }
             }
+            // COACH on the Watch: log sets, rest and finish from the wrist
+            Text("COACH on your Watch").font(Theme.head(16, weight: .semibold)).padding(.top, 6)
+            Text(WatchSync.shared.watchAppInstalled
+                 ? "Installed. During a workout it shows the next set, logs it with a tap, runs the rest timer on your wrist and records heart rate. It opens by itself when you start a workout."
+                 : "Install COACH on your Apple Watch (Watch app → Available Apps) to log sets and run the rest timer from your wrist, without taking out your iPhone.")
+                .font(Theme.body(13)).foregroundStyle(WatchSync.shared.watchAppInstalled ? Theme.green : Theme.muted)
         }
     }
 

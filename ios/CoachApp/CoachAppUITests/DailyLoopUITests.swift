@@ -221,6 +221,10 @@ final class DailyLoopUITests: XCTestCase {
         XCTAssertTrue(button("Save gym setup").waitForExistence(timeout: 3))
         button("Close").tap()
         XCTAssertTrue(button("Save gym setup").waitForNonExistence(timeout: 5), "the sheet closed")
+        // the watch section explains the Watch app
+        text("Apple Watch & Health").tap()
+        XCTAssertTrue(text("COACH on your Watch").waitForExistence(timeout: 3))
+        button("Close").tap()
         // the list is taller than the screen (COACH Pro, Alerts & reports…) — scroll to it
         let feedback = text("Send feedback")
         // (isHittable is true even under the tab bar — check it's clear of it)

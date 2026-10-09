@@ -14,7 +14,11 @@ struct CoachApp: App {
         #if DEBUG
         DebugSeed.applyIfRequested()
         #endif
-        return AppState()
+        let app = AppState()
+        // the Watch app's link — set up at launch, including when the
+        // Watch wakes this app in the background to log a set
+        WatchSync.shared.attach(app)
+        return app
     }()
 
     var body: some Scene {

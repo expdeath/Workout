@@ -29,12 +29,6 @@ struct WorkoutView: View {
         var error: String?
     }
 
-    struct RestTimer: Equatable {
-        var endsAt: Date
-        var total: Double
-        var exName: String
-    }
-
     @State private var sheet: SheetState?
     @State private var swapDraft = ""
     @State private var confirmCancel: String? // "top" | "bottom"
@@ -42,7 +36,6 @@ struct WorkoutView: View {
     @State private var editingCue: Int?
     @State private var cueDraft = ""
     @State private var harder: HarderState?
-    @State private var timer: RestTimer?
     @State private var restTask: Task<Void, Never>?
     @State private var mediaVersion = 0 // bump to re-read thumbnails
     @State private var viewer: MediaStore.Item?
@@ -116,7 +109,7 @@ struct WorkoutView: View {
                 .buttonStyle(BigButtonStyle())
                 .padding(.top, 18)
 
-                Spacer().frame(height: timer == nil ? 24 : 96)
+                Spacer().frame(height: appState.rest == nil ? 24 : 96)
             }
             .padding(16)
         }
@@ -133,7 +126,8 @@ struct WorkoutView: View {
             guard let item, let name = pickFor else { return }
             Task { await savePicked(item, for: name) }
         }
-        .onDisappear { stopTimer() }
+        .onChange(of: appState.rest, initial: true) { _, rest in restChanged(rest) }
+        .onDisappear { restChanged(nil) } // leaving the screen stops the alerts, not the timer
         .alert(mediaError ?? "", isPresented: Binding(get: { mediaError != nil }, set: { if !$0 { mediaError = nil } })) {
             Button("OK", role: .cancel) {}
         }
@@ -160,7 +154,7 @@ struct WorkoutView: View {
             Text("Discard this session entirely?\(anyLogged ? " Your logged sets will be lost." : "")")
                 .font(Theme.body(13.5)).foregroundStyle(Theme.textBody)
             Spacer(minLength: 4)
-            Button("Discard") { stopTimer(); appState.cancelSession() }
+            Button("Discard") { appState.cancelSession() }
                 .font(Theme.head(14, weight: .bold)).foregroundStyle(Theme.red)
             Button("Keep") { confirmCancel = nil }
                 .font(Theme.head(14, weight: .bold)).foregroundStyle(Theme.muted)
@@ -630,50 +624,56 @@ struct WorkoutView: View {
         appState.updateSet(exI, setI, done: turningOn)
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
         guard turningOn, let ex = t.plan.exercises[safe: exI] else { return }
-        startTimer(seconds: Self.parseRestSeconds(ex.rest), exName: ex.name)
+        appState.startRest(seconds: Self.parseRestSeconds(ex.rest), exName: ex.name)
     }
 
-    private func startTimer(seconds: Double, exName: String) {
-        stopTimer()
-        let rest = RestTimer(endsAt: Date().addingTimeInterval(seconds), total: seconds, exName: exName)
-        timer = rest
-        // Settings → Alerts & reports decides which of these happen
-        let sound = Prefs.isOn("restSound"), buzz = Prefs.isOn("restVibrate")
-        if Prefs.isOn("keepAwake") { UIApplication.shared.isIdleTimerDisabled = true } // screen stays on while resting
-        // a real notification: fires even with the phone locked or in another app
-        let center = UNUserNotificationCenter.current()
-        if Prefs.isOn("restNotify") { center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            guard granted else { return }
-            let content = UNMutableNotificationContent()
-            content.title = "⏱ Rest over — GO"
-            content.body = "Next set: \(exName)"
-            content.sound = sound ? .default : nil
-            center.add(UNNotificationRequest(identifier: "rest-timer", content: content,
-                                             trigger: UNTimeIntervalNotificationTrigger(timeInterval: seconds, repeats: false)))
-        } }
-        restTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
-            guard !Task.isCancelled else { return }
-            if buzz { UINotificationFeedbackGenerator().notificationOccurred(.success) }
-            if sound { AudioServicesPlaySystemSound(1005) }
-            try? await Task.sleep(nanoseconds: 4_000_000_000)
-            guard !Task.isCancelled else { return }
-            timer = nil
-            UIApplication.shared.isIdleTimerDisabled = false
-        }
-    }
-
-    private func stopTimer() {
+    /// The rest timer lives in AppState (a set ticked on the Watch starts
+    /// it too); this view does the iPhone's part: screen on, notification,
+    /// buzz.
+    private func restChanged(_ rest: AppState.RestTimer?) {
         restTask?.cancel()
         restTask = nil
-        timer = nil
-        UIApplication.shared.isIdleTimerDisabled = false
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ["rest-timer"])
+        guard let rest else { UIApplication.shared.isIdleTimerDisabled = false; return }
+        // Settings → Alerts & reports decides which of these happen; a set
+        // logged on the Watch is the Watch's to announce — it taps the wrist
+        let phone = !rest.fromWatch
+        let sound = Prefs.isOn("restSound"), buzz = Prefs.isOn("restVibrate")
+        if phone && Prefs.isOn("keepAwake") { UIApplication.shared.isIdleTimerDisabled = true } // screen stays on while resting
+        let left = rest.endsAt.timeIntervalSinceNow
+        // a real notification: fires even with the phone locked or in another
+        // app — unless the COACH Watch app is in use, which buzzes for itself
+        // (a locked iPhone would mirror this one to the Watch: two alerts)
+        if phone, Prefs.isOn("restNotify"), !WatchSync.shared.watchActive, left > 0 {
+            let center = UNUserNotificationCenter.current()
+            let exName = rest.exName
+            center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                guard granted else { return }
+                let content = UNMutableNotificationContent()
+                content.title = "⏱ Rest over — GO"
+                content.body = "Next set: \(exName)"
+                content.sound = sound ? .default : nil
+                center.add(UNNotificationRequest(identifier: "rest-timer", content: content,
+                                                 trigger: UNTimeIntervalNotificationTrigger(timeInterval: left, repeats: false)))
+            }
+        }
+        restTask = Task { @MainActor in
+            if left > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(left * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                if phone && buzz { UINotificationFeedbackGenerator().notificationOccurred(.success) }
+                if phone && sound { AudioServicesPlaySystemSound(1005) }
+            }
+            try? await Task.sleep(nanoseconds: 4_000_000_000)
+            guard !Task.isCancelled else { return }
+            UIApplication.shared.isIdleTimerDisabled = false
+            if appState.rest == rest { appState.stopRest() }
+        }
     }
 
     @ViewBuilder
     private var restBar: some View {
-        if let timer {
+        if let timer = appState.rest {
             TimelineView(.periodic(from: .now, by: 0.25)) { ctx in
                 let remaining = Int(ceil(timer.endsAt.timeIntervalSince(ctx.date)))
                 let frac = max(0, min(1, Double(remaining) / timer.total))
@@ -689,7 +689,7 @@ struct WorkoutView: View {
                         Text(remaining <= 0 ? "Next set · \(timer.exName)" : timer.exName)
                             .font(Theme.body(14)).foregroundStyle(Theme.muted).lineLimit(1)
                         Spacer()
-                        Button("Skip") { stopTimer() }
+                        Button("Skip") { appState.stopRest() }
                             .font(Theme.head(15, weight: .semibold)).textCase(.uppercase).foregroundStyle(Theme.muted)
                     }
                     .padding(.horizontal, 18)

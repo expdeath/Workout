@@ -102,6 +102,18 @@ final class AppState {
 
     var ci = Checkin()
     var fin = FinishInfo()
+    /// Lives here, not in WorkoutView, so a set ticked on the Watch starts
+    /// it too and the Watch shows the same countdown.
+    var rest: RestTimer?
+
+    /// The rest timer between sets. `fromWatch`: started by a set logged on
+    /// the Watch — the Watch taps the wrist, so the iPhone stays quiet.
+    struct RestTimer: Equatable {
+        var endsAt: Date
+        var total: Double
+        var exName: String
+        var fromWatch = false
+    }
 
     var muscleGap: (group: String, lastDaysAgo: Int)? { Stats.biggestMuscleGap(history) }
 
@@ -227,6 +239,7 @@ final class AppState {
         adoptLegacyDeviceSettings()
         loadActive()
         loadStateFromCloud()
+        WatchSync.shared.publish(force: true)
         pruneOldHealthText()
         LocalStore.shared.logEvent(type: "app_open", data: ["sessions": .number(Double(history.count))])
         HealthIngest.reparseRows() // parser upgrades backfill old rows
@@ -265,6 +278,7 @@ final class AppState {
     private func persistToday(_ t: Session?) {
         todayPlan = t
         Cloud.shared.setState("today", t.flatMap { try? JSONValue.encoding($0) })
+        WatchSync.shared.publish()
     }
 
     // MARK: - Cloud state (shared with the web app, same keys)
@@ -321,7 +335,7 @@ final class AppState {
     private func cloudChanged(_ what: String) {
         switch what {
         case "sessions": loadActive()
-        case "state": loadStateFromCloud(); stateTick += 1
+        case "state": loadStateFromCloud(); stateTick += 1; WatchSync.shared.publish()
         case "pro": stateTick += 1
         default: break
         }
@@ -494,6 +508,7 @@ final class AppState {
             )
             persistToday(t)
             screen = .workout
+            WatchSync.shared.workoutStarted(sessionType: plan.sessionType)
         } catch {
             LocalStore.shared.logEvent(type: "generation_failed", data: ["message": .string(error.localizedDescription)])
             self.error = error.localizedDescription.isEmpty
@@ -631,10 +646,32 @@ final class AppState {
         return true
     }
 
+    // MARK: - Rest timer
+
+    func startRest(seconds: Double, exName: String, startedAt: Date = Date(), fromWatch: Bool = false) {
+        rest = RestTimer(endsAt: startedAt.addingTimeInterval(seconds), total: seconds, exName: exName, fromWatch: fromWatch)
+        WatchSync.shared.publish()
+    }
+
+    func extendRest(seconds: Int) {
+        guard var r = rest else { return }
+        r.endsAt = r.endsAt.addingTimeInterval(Double(seconds))
+        r.total += Double(seconds)
+        rest = r
+        WatchSync.shared.publish()
+    }
+
+    func stopRest() {
+        guard rest != nil else { return }
+        rest = nil
+        WatchSync.shared.publish()
+    }
+
     // MARK: - Finish / cancel
 
     func finishSession() async {
         guard var t = todayPlan else { return }
+        rest = nil
         let durationMin: Int? = {
             guard t.startedAt > 0 else { return nil }
             let mins = Int(((Date().timeIntervalSince1970 * 1000 - t.startedAt) / 60000).rounded())
@@ -678,6 +715,7 @@ final class AppState {
 
     func cancelSession() {
         LocalStore.shared.logEvent(type: "session_cancelled", data: [:])
+        rest = nil
         persistToday(nil)
         screen = .home
     }

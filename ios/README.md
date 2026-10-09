@@ -195,6 +195,29 @@ A bottom sheet, reachable from most screens via a floating action
 button (`AppState.chatOpen`, already exists). Calls `Gemini.askCoach`
 (already built) with a running message list.
 
+## Apple Watch app (`CoachApp/CoachWatch/`)
+
+Log sets, run the rest timer and finish from the wrist; heart rate and a
+workout saved to Apple Health. Spec and protocol:
+[`../docs/watch.md`](../docs/watch.md) (the Wear OS app on the android
+branch speaks the same JSON).
+
+- `CoachWatch` is a watchOS 10 app target embedded in `CoachApp`
+  (`project.yml`); `Shared/` (`WatchLink.swift`, `WatchHealth.swift`) is
+  compiled into both.
+- The iPhone owns the workout: `Sync/WatchSync.swift` sends state over
+  WatchConnectivity and applies the Watch's commands through `AppState`.
+  The rest timer now lives in `AppState.rest` so either device can start it.
+- Generating a workout calls `HKHealthStore.startWatchApp`, which opens
+  COACH on the Watch with its workout session already running.
+- Signing: the Watch app has its own bundle id
+  (`com.expdeath.CoachApp.watchkitapp`) and HealthKit entitlement; with the
+  free Personal Team that's one more app id to provision.
+- Simulator: pair a Watch with an iPhone (`xcrun simctl pair`). iPhone →
+  Watch state arrives; the Watch → iPhone queued `transferUserInfo` path
+  was not delivered on the simulator pair in testing — verify on devices.
+  Canned states: `xcrun simctl launch <watch> com.expdeath.CoachApp.watchkitapp -COACH_DEBUG_SEED workout|rest|idle|done`.
+
 ## Gotchas future work needs to know about
 
 ### Lenient decoding is load-bearing, not optional
