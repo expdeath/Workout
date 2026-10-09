@@ -13,8 +13,9 @@ import {
   lastPerformance,
   suggestNextWeight,
   mondayOf,
+  muscleGroupOf,
 } from './stats.js';
-import { daysAgoStr, todayStr, fmtDate } from './helpers.js';
+import { daysAgoStr, todayStr, fmtDate, setLogged } from './helpers.js';
 import { estimateSessionCalories } from './calories.js';
 
 // ── Readiness pill ──
@@ -137,6 +138,31 @@ export function averageRPE(plan) {
 
 /** 12400 → "12.4k" */
 export const kgShort = (kg) => (kg >= 1000 ? `${(kg / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(kg));
+
+// ── Muscle × week heatmap (desktop Progress) ──
+
+const MUSCLE_ORDER = ['Chest', 'Back', 'Legs', 'Shoulders', 'Arms', 'Core'];
+
+/** Sets logged per muscle group per week, oldest week first.
+ *  → { weeks: ['YYYY-MM-DD' Mondays], rows: [{ group, sets: [n per week] }], max } */
+export function muscleWeeks(history, n = 8) {
+  const thisMonday = mondayOf(todayStr());
+  const weeks = Array.from({ length: n }, (_, i) =>
+    new Date(new Date(thisMonday + 'T12:00:00').getTime() - (n - 1 - i) * 7 * 86400000).toISOString().slice(0, 10)
+  );
+  const col = new Map(weeks.map((w, i) => [w, i]));
+  const rows = new Map(MUSCLE_ORDER.map((g) => [g, Array(n).fill(0)]));
+  for (const s of history) {
+    const i = col.get(mondayOf(s.date));
+    if (i == null) continue;
+    (s.plan?.exercises || []).forEach((ex, e) => {
+      const row = rows.get(muscleGroupOf(ex?.name));
+      if (row) row[i] += (s.log?.[e] || []).filter(setLogged).length;
+    });
+  }
+  const out = [...rows].map(([group, sets]) => ({ group, sets }));
+  return { weeks, rows: out, max: Math.max(1, ...out.flatMap((r) => r.sets)) };
+}
 
 // ── Milestones ──
 

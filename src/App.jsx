@@ -754,7 +754,7 @@ export default function App() {
   return (
     <ShellContext.Provider value={shell}>
     <div className="app">
-      <div className={`frame${isTab ? ' frame--tabs' : ''}${screen === 'home' ? ' frame--wide' : ''}`}>
+      <div className={`frame${isTab ? ' frame--tabs frame--wide' : ''}`}>
         {screen === 'home' && (
           <Home
             todayPlan={todayPlan}

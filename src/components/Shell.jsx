@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import Icon from './Icon';
 import { TABS } from './TabBar';
 import { ago } from '../utils/dashboard';
@@ -74,6 +74,55 @@ export function TabHeader({ title }) {
         </button>
       </div>
     </header>
+  );
+}
+
+const DESKTOP = '(min-width: 1024px)';
+
+/** True on desktop-width windows — tab screens switch to their wide layout. */
+export function useDesktop() {
+  const [on, setOn] = useState(() => typeof window !== 'undefined' && !!window.matchMedia?.(DESKTOP).matches);
+  useEffect(() => {
+    const mq = window.matchMedia?.(DESKTOP);
+    if (!mq) return undefined;
+    const onChange = (e) => setOn(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return on;
+}
+
+/** Desktop page head: kicker line, big title, a one-line summary, actions on the right. */
+export function PageHero({ kicker, title, sub, children }) {
+  return (
+    <div className="dash-hero">
+      <div style={{ minWidth: 0 }}>
+        {kicker && <div className="page-kicker">{kicker}</div>}
+        <h1 className="hero-title">{title}</h1>
+        {sub && <p className="page-sub">{sub}</p>}
+      </div>
+      {children && <div className="dash-hero__actions">{children}</div>}
+    </div>
+  );
+}
+
+/** Desktop stat card: caps label + icon, a big number, a note, optional footer. */
+export function KpiCard({ label, icon, value, unit, note, noteColor = 'var(--muted)', children }) {
+  return (
+    <div className="card kpi">
+      <div className="row-between">
+        <span className="caps">{label}</span>
+        {icon && <Icon name={icon} size={18} style={{ color: 'var(--amber-text)' }} />}
+      </div>
+      <div className="kpi__row">
+        <span className="hero-title kpi__value">
+          {value}
+          {unit && <span className="kpi__unit">{unit}</span>}
+        </span>
+        {note && <span className="caps kpi__note" style={{ color: noteColor }}>{note}</span>}
+      </div>
+      {children && <div className="kpi__foot">{children}</div>}
+    </div>
   );
 }
 

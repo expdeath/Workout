@@ -44,10 +44,10 @@ function niceTicks(max) {
 const fmtN = (n) =>
   n >= 10000 ? `${Math.round(n / 1000)}k` : n.toLocaleString();
 
-function Tooltip({ x, y, lines }) {
+function Tooltip({ x, y, lines, vw = W }) {
   const w = 8 + Math.max(...lines.map((l) => l.length)) * 6.4;
   const h = 14 * lines.length + 8;
-  const tx = Math.max(PAD.l, Math.min(x - w / 2, W - PAD.r - w));
+  const tx = Math.max(PAD.l, Math.min(x - w / 2, vw - PAD.r - w));
   const ty = y - h - 10 < 2 ? y + 12 : y - h - 10;
   return (
     <g pointerEvents="none">
@@ -63,23 +63,24 @@ function Tooltip({ x, y, lines }) {
   );
 }
 
-function useNearest(count, x0, dx) {
+function useNearest(count, x0, dx, vw = W) {
   const [active, setActive] = useState(null);
   const svgRef = useRef(null);
   const onMove = (e) => {
     const rect = svgRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * W;
+    const x = ((e.clientX - rect.left) / rect.width) * vw;
     const i = Math.round((x - x0) / dx);
     setActive(Math.max(0, Math.min(count - 1, i)));
   };
   return { active, svgRef, onMove, clear: () => setActive(null) };
 }
 
-/** Single-series line: points = [{ label, value }], unit e.g. "kg". */
-export function LineChart({ points, unit = '', color = 'var(--amber)' }) {
+/** Single-series line: points = [{ label, value }], unit e.g. "kg".
+ *  width/height set the drawing's proportions (wide desktop cards). */
+export function LineChart({ points, unit = '', color = 'var(--amber)', width: vw = W, height: vh = H }) {
   const gradId = useId();
-  const plotW = W - PAD.l - PAD.r;
-  const plotH = H - PAD.t - PAD.b;
+  const plotW = vw - PAD.l - PAD.r;
+  const plotH = vh - PAD.t - PAD.b;
   const max = Math.max(...points.map((p) => p.value));
   const min = Math.min(...points.map((p) => p.value));
   const lo = Math.max(0, min - (max - min || max * 0.2) * 0.25);
@@ -93,18 +94,18 @@ export function LineChart({ points, unit = '', color = 'var(--amber)' }) {
   const yOf = (v) => PAD.t + plotH - ((v - lo) / (top - lo || 1)) * plotH;
   const dx = points.length > 1 ? plotW / (points.length - 1) : 0;
   const xOf = (i) => (points.length > 1 ? PAD.l + i * dx : PAD.l + plotW / 2);
-  const { active, svgRef, onMove, clear } = useNearest(points.length, PAD.l, dx || plotW);
+  const { active, svgRef, onMove, clear } = useNearest(points.length, PAD.l, dx || plotW, vw);
 
   const path = smoothPath(points.map((p, i) => [xOf(i), yOf(p.value)]));
   const area = `${path} L${xOf(points.length - 1)},${yOf(lo)} L${xOf(0)},${yOf(lo)} Z`;
   const last = points.length - 1;
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', touchAction: 'pan-y' }}
+    <svg ref={svgRef} viewBox={`0 0 ${vw} ${vh}`} style={{ width: '100%', display: 'block', touchAction: 'pan-y' }}
       onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={clear}>
       {ticks.filter((t) => t >= lo).map((t) => (
         <g key={t}>
-          <line x1={PAD.l} x2={W - PAD.r} y1={yOf(t)} y2={yOf(t)} stroke={GRID} strokeWidth="1" />
+          <line x1={PAD.l} x2={vw - PAD.r} y1={yOf(t)} y2={yOf(t)} stroke={GRID} strokeWidth="1" />
           <text x={PAD.l - 6} y={yOf(t) + 3.5} textAnchor="end" fontSize="10"
             fontFamily={FONT} fill={INK_MUTED} style={{ fontVariantNumeric: 'tabular-nums' }}>
             {fmtN(t)}
@@ -120,28 +121,28 @@ export function LineChart({ points, unit = '', color = 'var(--amber)' }) {
       <path d={area} fill={`url(#${gradId})`} />
       <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
       {active != null && (
-        <line x1={xOf(active)} x2={xOf(active)} y1={PAD.t} y2={H - PAD.b} stroke={GRID} strokeWidth="1" />
+        <line x1={xOf(active)} x2={xOf(active)} y1={PAD.t} y2={vh - PAD.b} stroke={GRID} strokeWidth="1" />
       )}
       {points.map((p, i) =>
         i === last || i === active ? (
           <circle key={i} cx={xOf(i)} cy={yOf(p.value)} r="4.5" fill={color} stroke={SURFACE} strokeWidth="2" />
         ) : null
       )}
-      <text x={PAD.l} y={H - 8} fontSize="10" fontFamily={FONT} fill={INK_MUTED}>
+      <text x={PAD.l} y={vh - 8} fontSize="10" fontFamily={FONT} fill={INK_MUTED}>
         {points[0].label}
       </text>
-      <text x={W - PAD.r} y={H - 8} textAnchor="end" fontSize="10" fontFamily={FONT} fill={INK_MUTED}>
+      <text x={vw - PAD.r} y={vh - 8} textAnchor="end" fontSize="10" fontFamily={FONT} fill={INK_MUTED}>
         {points[last].label}
       </text>
       {active == null && (
-        <text x={Math.min(xOf(last) + 8, W - 2)} y={yOf(points[last].value) - 8}
+        <text x={Math.min(xOf(last) + 8, vw - 2)} y={yOf(points[last].value) - 8}
           textAnchor="end" fontSize="12" fontWeight="700" fontFamily={FONT} fill="#F8FAFC">
           {fmtN(points[last].value)}{unit}
         </text>
       )}
       {active != null && (
         <Tooltip x={xOf(active)} y={yOf(points[active].value)}
-          lines={[points[active].label, `${fmtN(points[active].value)}${unit}`]} />
+          lines={[points[active].label, `${fmtN(points[active].value)}${unit}`]} vw={vw} />
       )}
     </svg>
   );
@@ -199,34 +200,34 @@ export function TrainingHeatmap({ days, weeks = 16, cellHeight }) {
 }
 
 /** Single-series columns: bars = [{ label, value }], unit e.g. "kg". */
-export function BarChart({ bars, unit = '', color = 'var(--chart-amber)' }) {
-  const plotW = W - PAD.l - PAD.r;
-  const plotH = H - PAD.t - PAD.b;
+export function BarChart({ bars, unit = '', color = 'var(--chart-amber)', width: vw = W, height: vh = H }) {
+  const plotW = vw - PAD.l - PAD.r;
+  const plotH = vh - PAD.t - PAD.b;
   const ticks = niceTicks(Math.max(...bars.map((b) => b.value), 1));
   const top = ticks[ticks.length - 1];
   const yOf = (v) => PAD.t + plotH - (v / top) * plotH;
   const band = plotW / bars.length;
   const bw = Math.min(24, band - 8);
   const xOf = (i) => PAD.l + i * band + (band - bw) / 2;
-  const { active, svgRef, onMove, clear } = useNearest(bars.length, PAD.l + band / 2, band);
+  const { active, svgRef, onMove, clear } = useNearest(bars.length, PAD.l + band / 2, band, vw);
   const last = bars.length - 1;
 
   // Rounded top (4px), square baseline
   const barPath = (i, v) => {
     const x = xOf(i);
     const y = yOf(v);
-    const h = H - PAD.b - y;
+    const h = vh - PAD.b - y;
     const r = Math.min(4, h);
     if (h <= 0) return '';
-    return `M${x},${H - PAD.b} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${H - PAD.b} Z`;
+    return `M${x},${vh - PAD.b} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${vh - PAD.b} Z`;
   };
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', display: 'block', touchAction: 'pan-y' }}
+    <svg ref={svgRef} viewBox={`0 0 ${vw} ${vh}`} style={{ width: '100%', display: 'block', touchAction: 'pan-y' }}
       onPointerMove={onMove} onPointerDown={onMove} onPointerLeave={clear}>
       {ticks.map((t) => (
         <g key={t}>
-          <line x1={PAD.l} x2={W - PAD.r} y1={yOf(t)} y2={yOf(t)} stroke={GRID} strokeWidth="1" />
+          <line x1={PAD.l} x2={vw - PAD.r} y1={yOf(t)} y2={yOf(t)} stroke={GRID} strokeWidth="1" />
           <text x={PAD.l - 6} y={yOf(t) + 3.5} textAnchor="end" fontSize="10"
             fontFamily={FONT} fill={INK_MUTED} style={{ fontVariantNumeric: 'tabular-nums' }}>
             {fmtN(t)}
@@ -237,7 +238,7 @@ export function BarChart({ bars, unit = '', color = 'var(--chart-amber)' }) {
         <path key={i} d={barPath(i, b.value)} fill={color} opacity={active == null || active === i ? 1 : 0.45} />
       ))}
       {bars.map((b, i) => (
-        <text key={i} x={xOf(i) + bw / 2} y={H - 8} textAnchor="middle" fontSize="9.5"
+        <text key={i} x={xOf(i) + bw / 2} y={vh - 8} textAnchor="middle" fontSize="9.5"
           fontFamily={FONT} fill={INK_MUTED}>
           {b.label}
         </text>
@@ -250,7 +251,7 @@ export function BarChart({ bars, unit = '', color = 'var(--chart-amber)' }) {
       )}
       {active != null && (
         <Tooltip x={xOf(active) + bw / 2} y={yOf(bars[active].value)}
-          lines={[bars[active].label, `${fmtN(bars[active].value)}${unit}`]} />
+          lines={[bars[active].label, `${fmtN(bars[active].value)}${unit}`]} vw={vw} />
       )}
     </svg>
   );

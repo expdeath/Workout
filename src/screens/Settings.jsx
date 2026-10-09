@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Icon from '../components/Icon';
-import { TabHeader, SectionHead, SettingsRow, RowGroup, PanelSheet, Avatar, StatusPill, useShell } from '../components/Shell';
+import { TabHeader, SectionHead, SettingsRow, RowGroup, PanelSheet, Avatar, StatusPill, IconWell, PageHero, useShell, useDesktop } from '../components/Shell';
 import { weeklyTarget } from '../utils/dashboard';
 import { getApiKey, setApiKey, canSetApiKey, getAISettings, setAISettings } from '../utils/storage';
 import { exportAll, importAll, countEvents, logEvent } from '../db/db';
@@ -13,8 +13,26 @@ import { todayStr, parsePlates, DEFAULT_BAR_KG, DEFAULT_PLATES } from '../utils/
 // Raw shortcut payload → compact readable summary for the Watch card
 const fmtWatchData = (raw) => fmtHealthLine(parseHealthNumbers(raw));
 
-/** One settings row; its form opens in a sheet. */
-function Section({ title, status, icon, tint, value, open, onToggle, children }) {
+// Desktop shows every section as an open card (with a left-hand nav) instead of rows + sheets.
+const DeskContext = React.createContext(false);
+
+/** One settings row; its form opens in a sheet (desktop: an always-open card). */
+function Section({ id, title, status, icon, tint, value, open, onToggle, children }) {
+  if (React.useContext(DeskContext)) {
+    return (
+      <section className="card set-card" id={`set-${id}`}>
+        <div className="set-card__head">
+          <IconWell icon={icon} tint={tint} />
+          <span className="settings-row__text">
+            <span className="hero-title" style={{ fontSize: 22 }}>{title}</span>
+            {status && <span className="settings-row__sub">{status}</span>}
+          </span>
+          {value != null && <span className="caps settings-row__value">{value}</span>}
+        </div>
+        {children}
+      </section>
+    );
+  }
   return (
     <>
       <SettingsRow icon={icon} tint={tint} title={title} subtitle={status} value={value} onClick={onToggle} />
@@ -28,6 +46,7 @@ function Section({ title, status, icon, tint, value, open, onToggle, children })
 }
 
 export default function Settings({ onClearHistory, onDataImported, onSynced, sessionCount }) {
+  const desktop = useDesktop();
   const [key, setKey] = useState(getApiKey());
   const [showKey, setShowKey] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -201,6 +220,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
   const [feedbackMsg, setFeedbackMsg] = useState('');
   const [sendingFb, setSendingFb] = useState(false);
   const [confirmOut, setConfirmOut] = useState(false);
+  const [outMsg, setOutMsg] = useState(''); // why sign-out refused
 
   const handleSendFeedback = async () => {
     setSendingFb(true);
@@ -224,7 +244,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
     logEvent('signed_out', { name: account?.name });
     signOut().then((refusal) => {
       if (refusal) {
-        setFeedbackMsg(refusal);
+        setOutMsg(refusal);
         setConfirmOut(false);
       }
     });
@@ -256,33 +276,32 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
       : 'Live sync · no GitHub backup';
   const watchReceived = todaysHealth();
 
-  return (
-    <div className="screen screen--slide-in">
-      <TabHeader title="Settings" />
+  const profileCard = account && (
+    <button className="profile-card" aria-label="Edit profile" onClick={() => openSheet('profile')}>
+      <span style={{ position: 'relative' }}>
+        <Avatar name={displayName} size={54} />
+        <span className="profile-card__online" />
+      </span>
+      <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: 18 }}>
+          {displayName}
+          {account.admin && <Icon name="verified" size={16} fill style={{ color: 'var(--amber-text)' }} />}
+        </span>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
+          <StatusPill text={account.admin ? 'Admin' : 'Member'} color="var(--amber-text)" dot={false} />
+          <span style={{ fontSize: 12.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.email}</span>
+        </span>
+      </span>
+      <span className="icon-well" style={{ borderRadius: '50%', color: 'var(--muted)' }}><Icon name="edit" size={18} /></span>
+    </button>
+  );
 
-      {account && (
-        <button className="profile-card" aria-label="Edit profile" onClick={() => openSheet('profile')}>
-          <span style={{ position: 'relative' }}>
-            <Avatar name={displayName} size={54} />
-            <span className="profile-card__online" />
-          </span>
-          <span style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: 18 }}>
-              {displayName}
-              {account.admin && <Icon name="verified" size={16} fill style={{ color: 'var(--amber-text)' }} />}
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 5 }}>
-              <StatusPill text={account.admin ? 'Admin' : 'Member'} color="var(--amber-text)" dot={false} />
-              <span style={{ fontSize: 12.5, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{account.email}</span>
-            </span>
-          </span>
-          <span className="icon-well" style={{ borderRadius: '50%', color: 'var(--muted)' }}><Icon name="edit" size={18} /></span>
-        </button>
-      )}
-
+  const groups = (
+    <>
       <SectionHead title="Preferences" trailing="Coach logic" trailingColor="var(--muted)" />
       <RowGroup>
       <Section
+        id="coach"
         title="AI Coach"
         icon="psychology"
         status={coachStatus}
@@ -374,6 +393,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
       <SectionHead title="Devices & sensors" trailing={watchReceived ? 'All synced' : null} trailingColor="var(--green)" />
       <RowGroup>
       <Section
+        id="watch"
         title="Apple Watch"
         icon="watch"
         tint="var(--green)"
@@ -481,6 +501,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
         </details>
       </Section>
       <Section
+        id="gym"
         title="Barbell & plate setup"
         icon="scale"
         value={`${parseFloat(gym.barKg) || DEFAULT_BAR_KG}kg bar`}
@@ -517,6 +538,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
       <SectionHead title="Data & account" trailing="Cloud vault" trailingColor="var(--muted)" />
       <RowGroup>
       <Section
+        id="sync"
         title="Cloud backup"
         icon="cloud"
         tint="var(--green)"
@@ -574,6 +596,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
 
       </Section>
       <Section
+        id="data"
         title="Export workout log"
         icon="upload"
         status="CSV · JSON backup · import"
@@ -631,7 +654,7 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
       </Section>
 
       {account && (
-        <Section title="Send feedback" icon="chat_bubble" status="Straight to Abhi" open={open.account} onToggle={() => toggle('account')}>
+        <Section id="account" title="Send feedback" icon="chat_bubble" status="Straight to Abhi" open={open.account} onToggle={() => toggle('account')}>
           <div className="q-label" style={{ marginTop: 0 }}>Send feedback to Abhi</div>
           <textarea
             className="input textarea"
@@ -655,24 +678,69 @@ export default function Settings({ onClearHistory, onDataImported, onSynced, ses
           )}
         </Section>
       )}
-      <Section title="About COACH" icon="info" tint="var(--muted)" open={open.about} onToggle={() => toggle('about')}>
+      <Section id="about" title="About COACH" icon="info" tint="var(--muted)" open={open.about} onToggle={() => toggle('about')}>
         <p className="body" style={{ color: 'var(--muted)' }}>
           COACH plans each session with Google Gemini from your check-in, history and recovery data. Your log lives in Firestore, backed up to your GitHub repo.
         </p>
       </Section>
       </RowGroup>
+    </>
+  );
 
-      {account && (
-        <>
-          <button className="outline-btn outline-btn--danger" style={{ width: '100%', justifyContent: 'center', marginTop: 20, padding: 12 }} onClick={handleSignOut}>
-            <Icon name="logout" size={18} /> {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
-          </button>
-          {feedbackMsg && !open.account && <p className="body" style={{ marginTop: 8, color: 'var(--amber-text)' }}>{feedbackMsg}</p>}
-          <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--dim)' }}>
-            Signing out clears this device, including exercise photos. Your log stays in the cloud.
-          </p>
-        </>
-      )}
+  const signOutBlock = account && (
+    <>
+      <button className="outline-btn outline-btn--danger" style={{ width: '100%', justifyContent: 'center', marginTop: 20, padding: 12 }} onClick={handleSignOut}>
+        <Icon name="logout" size={18} /> {confirmOut ? 'Tap again — this wipes this device' : 'Sign out'}
+      </button>
+      {outMsg && <p className="body" style={{ marginTop: 8, color: 'var(--amber-text)' }}>{outMsg}</p>}
+      <p className="body" style={{ marginTop: 8, fontSize: 12.5, color: 'var(--dim)' }}>
+        Signing out clears this device, including exercise photos. Your log stays in the cloud.
+      </p>
+    </>
+  );
+
+  if (desktop) {
+    const nav = [
+      ['coach', 'AI Coach', 'psychology'],
+      ['watch', 'Apple Watch', 'watch'],
+      ['gym', 'Barbell & plates', 'scale'],
+      ['sync', 'Cloud backup', 'cloud'],
+      ['data', 'Export & import', 'upload'],
+      ...(account ? [['account', 'Send feedback', 'chat_bubble']] : []),
+      ['about', 'About COACH', 'info'],
+    ];
+    return (
+      <div className="screen screen--fade-in">
+        <TabHeader title="Settings" />
+        <PageHero kicker={account?.email} title="Settings" sub="Coach setup, devices, backups and your data — changes save to your account." />
+        <DeskContext.Provider value={true}>
+          <div className="settings-desk">
+            <aside className="settings-nav">
+              {profileCard}
+              <nav className="settings-nav__links" aria-label="Settings sections">
+                {nav.map(([id, label, icon]) => (
+                  <button key={id} className="settings-nav__link" onClick={() => document.getElementById(`set-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>
+                    <Icon name={icon} size={18} /> {label}
+                  </button>
+                ))}
+              </nav>
+              {signOutBlock}
+            </aside>
+            <div className="settings-main">{groups}</div>
+          </div>
+        </DeskContext.Provider>
+      </div>
+    );
+  }
+
+  return (
+    <div className="screen screen--slide-in">
+      <TabHeader title="Settings" />
+      {profileCard}
+
+      {groups}
+
+      {signOutBlock}
       <div className="caps" style={{ textAlign: 'center', fontSize: 11, color: 'var(--dim)', marginTop: 18 }}>COACH · web</div>
 
     </div>
