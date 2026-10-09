@@ -17,6 +17,7 @@ import {
 } from './stats.js';
 import { daysAgoStr, todayStr, fmtDate, setLogged } from './helpers.js';
 import { estimateSessionCalories } from './calories.js';
+import { getAISettings } from './storage.js';
 
 // ── Readiness pill ──
 
@@ -171,7 +172,8 @@ export function ladders(history) {
   const tonnes = Math.floor(history.reduce((a, s) => a + sessionVolume(s), 0) / 1000);
   return [
     { key: 'sessions', icon: 'calendar_month', value: history.length, steps: [10, 25, 50, 100, 250], title: (n) => `${n} Sessions` },
-    { key: 'streak', icon: 'local_fire_department', value: weekStats(history).streak, steps: [2, 4, 8, 12, 26], title: (n) => `${n} Wk Streak` },
+    // the streak against your own weekly target — the same number the streak stat shows
+    { key: 'streak', icon: 'local_fire_department', value: weekStats(history, weeklyTarget(getAISettings())).streak, steps: [2, 4, 8, 12, 26], title: (n) => `${n} Wk Streak` },
     { key: 'tonnes', icon: 'scale', value: tonnes, steps: [5, 10, 25, 50, 100], title: (n) => `${n}T Lifted` },
     { key: 'heaviest', icon: 'military_tech', value: heaviest, steps: [40, 60, 80, 100, 140], title: (n) => `${n} kg Lift` },
   ];
