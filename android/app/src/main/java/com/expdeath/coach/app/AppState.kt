@@ -137,6 +137,7 @@ class AppState(private val debugStart: Screen? = null) {
             boot()
         } catch (e: Exception) {
             if (e is Cloud.CloudError.Cancelled || e is CancellationException) return@launch // closing Google's sheet isn't an error
+            android.util.Log.w("COACH", "sign-in failed", e)
             loginError = message(e)
         }
     }
@@ -200,8 +201,12 @@ class AppState(private val debugStart: Screen? = null) {
         return null
     }
 
-    private fun message(e: Exception): String =
-        if (e is Cloud.CloudError) e.message ?: "" else "Couldn't open your account — check your connection and try again."
+    private fun message(e: Exception): String = when (e) {
+        is Cloud.CloudError -> e.message ?: ""
+        // Firebase refused the Google identity — show why, it's rarely the connection
+        is com.google.firebase.auth.FirebaseAuthException -> "Couldn't sign in: ${e.message}"
+        else -> "Couldn't open your account — check your connection and try again."
+    }
 
     suspend fun boot() {
         Account.current()?.accountId?.let { acct -> scope.launch { Subscriptions.start(acct) } }

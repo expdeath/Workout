@@ -191,8 +191,15 @@ object Cloud {
         val result = try {
             CredentialManager.create(activity).getCredential(activity, request)
         } catch (e: androidx.credentials.exceptions.GetCredentialCancellationException) {
+            Log.w(TAG, "Google sign-in cancelled: ${e.message}", e)
+            // Google reports a rejected app (its signing key not registered for
+            // this project) as a "cancellation" right after the account is
+            // picked — say so instead of silently going back to the button
+            if (isConfigRejection(e.message)) throw CloudError.SignInFailed(NOT_REGISTERED)
             throw CloudError.Cancelled()
         } catch (e: androidx.credentials.exceptions.GetCredentialException) {
+            Log.w(TAG, "Google sign-in failed: ${e.type} ${e.message}", e)
+            if (isConfigRejection(e.message)) throw CloudError.SignInFailed(NOT_REGISTERED)
             throw CloudError.SignInFailed("Google sign-in failed: ${e.message ?: e.type}")
         }
         val cred = result.credential
@@ -201,6 +208,16 @@ object Cloud {
         }
         val idToken = GoogleIdTokenCredential.createFrom(cred.data).idToken
         return GoogleAuthProvider.getCredential(idToken, null)
+    }
+
+    private const val NOT_REGISTERED = "Google turned this sign-in down: this copy of the app isn't registered with COACH's Google project yet " +
+        "(its signing key's SHA-1 must be added in Firebase → Project settings → Android app). Nothing is wrong with your account."
+
+    /** Google's "developer console not set up" / "account reauth failed" answers.
+     *  Not code 16 alone: Google uses it for a real cancel too. */
+    internal fun isConfigRejection(message: String?): Boolean {
+        val m = message ?: return false
+        return Regex("""\b(10|28444)\b|reauth|developer console|not set up|DEVELOPER_ERROR""", RegexOption.IGNORE_CASE).containsMatchIn(m)
     }
 
     /** Sign in with Apple through Firebase's web flow (AppleSignIn.kt).
