@@ -14,6 +14,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "204447158862-hha2d5ivk0vrs9eu66qbr7vk8nqkrld5.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.expdeath.coach",
+            "certificate_hash": "0a4a0da6f7a49e51b2db7671732b6ddd481fa384"
+          }
+        },
+        {
           "client_id": "204447158862-1q03247j9e4l4ifcpb872491mksp52ku.apps.googleusercontent.com",
           "client_type": 3
         }
