@@ -1,0 +1,46 @@
+{
+  "project_info": {
+    "project_number": "204447158862",
+    "project_id": "heath-9a322",
+    "storage_bucket": "heath-9a322.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:204447158862:android:f8e0ac80e3963ea19e291f",
+        "android_client_info": {
+          "package_name": "com.expdeath.coach"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "204447158862-1q03247j9e4l4ifcpb872491mksp52ku.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDsygXAcdYWJz6sedUk-D5TvIRpyHcLp90"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "204447158862-1q03247j9e4l4ifcpb872491mksp52ku.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "204447158862-bke918l3c9frv4d9l9jb4tmeebckejsc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "health"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

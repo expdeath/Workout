@@ -83,8 +83,9 @@ reports a developer-configuration error.
    `0A:4A:0D:A6:F7:A4:9E:51:B2:DB:76:71:73:2B:6D:DD:48:1F:A3:84`
    (Add the release key's SHA-1 too when there is one:
    `keytool -list -v -keystore <release.jks>`.)
-3. Download `google-services.json` into `android/app/`. The build picks it up
-   automatically (the plugin is applied only when the file exists).
+3. `android/app/google-services.json` is in the repo (added 2026-10-10). Re-download
+   it after adding a fingerprint: it then lists an Android OAuth client
+   (`client_type: 1`). Without that client, Google sign-in is rejected.
 4. Authentication → Sign-in method → Google must stay enabled. It already is
    for the web app.
 
